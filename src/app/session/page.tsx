@@ -126,6 +126,10 @@ export default function Session() {
   }
 
   function cleanup() {
+    // Mark the session ended first so any in-flight handleUserTurn that
+    // wakes up from an AbortError bails out instead of queueing a new TTS
+    // utterance and Zustand write on an unmounted component.
+    endedRef.current = true;
     stopSpeaking();
     abortRef.current?.abort();
     recognizerRef.current?.abort();
