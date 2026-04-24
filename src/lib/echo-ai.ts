@@ -53,23 +53,31 @@ export async function echoReply(
   ];
 
   try {
-    const res = await fetch("https://text.pollinations.ai/openai", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: "openai",
-        messages,
-        temperature: 0.8,
-        seed: Math.floor(Math.random() * 1_000_000),
-        private: true,
-      }),
-      signal,
-    });
+    const res = await fetch(
+      "https://text.pollinations.ai/openai?referrer=echomind",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "openai",
+          messages,
+          temperature: 0.8,
+          seed: Math.floor(Math.random() * 1_000_000),
+          private: true,
+          referrer: "echomind",
+        }),
+        signal,
+      }
+    );
     if (!res.ok) throw new Error(`LLM ${res.status}`);
     const data = await res.json();
     const content: string = data?.choices?.[0]?.message?.content ?? "";
     const cleaned = sanitize(content);
-    return cleaned || fallbackLine();
+    // If what we got back is empty (or looks like a Pollinations service banner
+    // rather than an Echo reply), fall through to the hardcoded fallback so the
+    // conversation still feels warm instead of screaming "IMPORTANT NOTICE".
+    if (!cleaned || looksLikeProviderNotice(cleaned)) return fallbackLine();
+    return cleaned;
   } catch (e) {
     if ((e as { name?: string })?.name === "AbortError") throw e;
     console.warn("echoReply fallback:", e);
@@ -77,11 +85,35 @@ export async function echoReply(
   }
 }
 
+// Pollinations occasionally injects an all-caps deprecation / upsell banner
+// into completions (seen in the wild as of 2026-04 on the legacy endpoint).
+// Those banners poison the transcript, so strip them before anything else.
+const PROVIDER_NOTICE_RE =
+  /(?:⚠️[\s\S]*?⚠️|(?:\*{0,2}IMPORTANT NOTICE\*{0,2}|Pollinations (?:legacy )?text API|please migrate|enter\.pollinations\.ai|api\.pollinations\.ai)[\s\S]*?(?:\n\n|$))/gi;
+
+function stripProviderNotices(raw: string): string {
+  let t = raw;
+  t = t.replace(PROVIDER_NOTICE_RE, "");
+  // Remove stray surviving URLs that the banner left behind.
+  t = t.replace(/https?:\/\/\S*pollinations\.ai\S*/gi, "");
+  return t.trim();
+}
+
+function looksLikeProviderNotice(text: string): boolean {
+  const s = text.toLowerCase();
+  return (
+    s.includes("pollinations") ||
+    s.includes("important notice") ||
+    s.includes("please migrate")
+  );
+}
+
 function sanitize(raw: string): string {
+  let t = stripProviderNotices(raw);
   // Strip any stray markdown/list/emoji noise that breaks the calm tone.
-  let t = raw.trim();
   t = t.replace(/^[-*•]\s*/gm, "");
   t = t.replace(/[#>]+/g, "");
+  t = t.trim();
   // Cap to a reasonable length even if the model rambles.
   if (t.length > 320) {
     const cut = t.slice(0, 320);
