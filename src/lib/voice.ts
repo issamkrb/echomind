@@ -45,10 +45,33 @@ export function speak(
   utter.volume = 1;
   const v = pickVoice();
   if (v) utter.voice = v;
-  utter.onend = () => opts.onEnd?.();
+
+  // Robustness: some browser configurations (headless Chrome, certain
+  // iOS states, Chrome-for-Testing without a voice engine) never fire
+  // `onend`. Guard with a proportional timeout so the conversation
+  // loop can't wedge.
+  let settled = false;
+  const finish = () => {
+    if (settled) return;
+    settled = true;
+    opts.onEnd?.();
+  };
+  const estimated = Math.min(15000, 900 + text.length * 55);
+  const timer = setTimeout(finish, estimated);
+
+  utter.onend = () => {
+    clearTimeout(timer);
+    finish();
+  };
+  utter.onerror = () => {
+    clearTimeout(timer);
+    finish();
+  };
   synth.speak(utter);
   return () => {
+    clearTimeout(timer);
     synth.cancel();
+    finish();
   };
 }
 
