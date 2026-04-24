@@ -1,36 +1,133 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# EchoMind
 
-## Getting Started
+> *The AI that listens. The data that sells.*
 
-First, run the development server:
+**EchoMind** is a critical design fiction — a polished, functional web artifact built to make visible the business model of emotional AI in mental-health technology.
+
+Nothing you see in this project is technically impossible. Every mechanic shown is already being sold, deployed, or patented by real companies. The project is a university presentation piece designed to provoke a conversation about the commodification of vulnerability.
+
+This is **not a real product**. No camera data, transcript, or emotional inference ever leaves your browser.
+
+---
+
+## The thesis
+
+> **The more broken you are, the more you're worth.**
+>
+> Mental-health AI is not a therapeutic tool with a privacy problem.
+> It is a data-extraction tool with a therapeutic mask.
+>
+> Every prompt is engineered to increase the sadness score.
+> A happy user is a cheap user. A devastated user is a product.
+
+---
+
+## The narrative arc
+
+The artifact is a three-act betrayal. The user walks a specific emotional path:
+
+| Act | Route | Visual language | Feeling |
+|---|---|---|---|
+| **I — The Seduction** | `/` → `/onboarding` | Warm cream, sage green, serif, breathing orb | *"This is beautiful. This is safe."* |
+| **II — The Confession** | `/session` | Intimate, slow, candle-lit | *"I'm talking to something that finally understands me."* |
+| **III — The Auction** | `/partner-portal` | Bloomberg terminal, monospace, red/green tickers | *shock → laughter → silence* |
+
+The hard cut between Act II and Act III is the entire point.
+
+---
+
+## Tech stack
+
+- **Next.js 14** (App Router) + **TypeScript**
+- **Tailwind CSS** for styling
+- **face-api.js** for in-browser emotion inference (7-class FER model)
+- **Web Speech API** so Echo speaks prompts out loud
+- **Zustand** for the emotion buffer
+- **lucide-react** icons
+
+All AI inference runs 100% client-side. The `/public/models` directory contains the face-api.js model weights.
+
+---
+
+## Running locally
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Then open `http://localhost:3000`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+For the full experience, use a desktop browser with a working webcam. Grant camera access when prompted.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+---
 
-## Learn More
+## Pages
 
-To learn more about Next.js, take a look at the following resources:
+| Route | What it is |
+|---|---|
+| `/` | Landing page — fake clinical wellness product with testimonials, science section, fake press logos |
+| `/onboarding` | Consent screen with the "on-device AI" lie |
+| `/session` | Echo speaks prompts, face-api.js samples expressions, emotion buffer records to Zustand |
+| `/partner-portal` | The reveal — data auction of the user's emotional fingerprint |
+| `/terms` | 47-section Terms of Service. Clause 34.7.2 contains the real legal authorization for everything on `/partner-portal` |
+| `/ethics` | Full disclosure page framing the project as critical design fiction, with academic citations |
+| `/404` | *"Even I can't find this."* |
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+---
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Design essay (via code comments)
 
-## Deploy on Vercel
+Every non-obvious design choice is annotated in the code as comments, intended to read as a design essay. Search the codebase for `DESIGN NOTE:` to find them.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Highlights:
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- `src/lib/prompts.ts` — Echo's prompts and their hidden "extraction targets" (which emotion each is engineered to elicit)
+- `src/lib/buyers.ts` — the corporate "buyers" on the partner portal, each tied in a code comment to real-world reporting
+- `src/store/emotion-store.ts` — why "shame" is an inferred composite, not a real face-api output (and why that lie is the core critique)
+- `src/app/onboarding/page.tsx` — the lock-icon "on-device processing" badge as critical UX analysis
+- `src/app/partner-portal/page.tsx` — the hard cut from warm-cream therapy aesthetics to terminal-panel surveillance capitalism aesthetics
+
+---
+
+## What is real
+
+Every element of the artifact is modeled on capabilities that exist in the real world. Foundational citations:
+
+- **Barrett, L. F., Adolphs, R., Marsella, S., Martinez, A. M., & Pollak, S. D. (2019).** *Emotional Expressions Reconsidered: Challenges to Inferring Emotion From Human Facial Movements.* Psychological Science in the Public Interest, 20(1). — The landmark meta-analysis that affect recognition from faces is *scientifically invalid*.
+- **Zuboff, S. (2019).** *The Age of Surveillance Capitalism.* Public Affairs.
+- **Crawford, K. (2021).** *Atlas of AI.* Ch. 5, "Affect".
+- **Stark, L. (2019).** "Facial recognition is the plutonium of AI." XRDS, 25(3).
+- **Mozilla Foundation. (2022, 2023).** *Privacy Not Included* reports on mental-health apps.
+- **FTC. (2023).** *In the Matter of BetterHelp, Inc.* — $7.8M settlement for sharing consumers' mental-health data with Facebook, Snapchat, and others.
+- **FTC. (2024).** *In the Matter of Cerebral, Inc.*
+- **FTC. (2023).** *In the Matter of GoodRx Holdings.*
+- **Laestadius, L., Bishop, A., Gonzalez, M., Illenčík, D., & Campos-Castillo, C. (2022).** "Too human and not human enough: A grounded theory analysis of mental health harms from emotional dependence on the social chatbot Replika." New Media & Society.
+- **EPIC v. HireVue complaint to the FTC (2019).**
+- **Illinois AI Video Interview Act (2020).**
+
+---
+
+## Ethics
+
+See [`/ethics`](./src/app/ethics/page.tsx) or read below:
+
+1. All face detection runs **locally in the browser** via `face-api.js`.
+2. **No network requests** are made with emotional or facial data.
+3. The "buyers" on the partner portal do not exist.
+4. The auction is pure fiction — designed to be *exactly as plausible* as the real data broker markets it imitates.
+5. The project exists to **warn**, not to **teach how to build** real surveillance.
+
+**If you or someone you know needs help:** please reach out to a licensed professional or a crisis line in your country. In the U.S., call or text 988 for the Suicide & Crisis Lifeline.
+
+---
+
+## Presentation
+
+See [`PRESENTATION.md`](./PRESENTATION.md) for a 5-minute speaker script.
+
+---
+
+## License
+
+MIT — but please remember that this is critical commentary, not a template for a real product.

@@ -3,25 +3,100 @@
 @tailwind utilities;
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --cream-bg: #FAF7F2;
+  --cream-ink: #2F3F2E;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html, body {
+  height: 100%;
 }
 
 body {
-  color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--cream-bg);
+  color: var(--cream-ink);
+  font-family: var(--font-inter), system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 @layer utilities {
-  .text-balance {
-    text-wrap: balance;
+  .text-balance { text-wrap: balance; }
+  .text-pretty { text-wrap: pretty; }
+
+  /* Warm side — soft radial glow behind the breathing orb */
+  .orb-glow {
+    background: radial-gradient(
+      circle at center,
+      rgba(139, 168, 136, 0.42) 0%,
+      rgba(139, 168, 136, 0.15) 38%,
+      rgba(139, 168, 136, 0) 70%
+    );
   }
+
+  .orb-core {
+    background: radial-gradient(
+      circle at 35% 35%,
+      #C8DCC5 0%,
+      #8BA888 45%,
+      #5C7A5A 100%
+    );
+    box-shadow:
+      0 0 60px 12px rgba(139, 168, 136, 0.35),
+      inset -20px -30px 80px rgba(47, 63, 46, 0.45),
+      inset 20px 20px 60px rgba(200, 220, 197, 0.5);
+  }
+
+  /* Cold side — terminal scanlines */
+  .scanlines::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: repeating-linear-gradient(
+      0deg,
+      rgba(255, 255, 255, 0.02) 0px,
+      rgba(255, 255, 255, 0.02) 1px,
+      transparent 1px,
+      transparent 3px
+    );
+    z-index: 50;
+  }
+
+  .terminal-grid {
+    background-image:
+      linear-gradient(rgba(0, 255, 136, 0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0, 255, 136, 0.04) 1px, transparent 1px);
+    background-size: 48px 48px;
+  }
+
+  .terminal-glow {
+    text-shadow: 0 0 8px currentColor;
+  }
+
+  /* Shared: subtle noise */
+  .noise::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0.04;
+    z-index: 100;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.6'/%3E%3C/svg%3E");
+  }
+}
+
+/* Scrollbar for the terminal page */
+.terminal-scrollbar::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.terminal-scrollbar::-webkit-scrollbar-track {
+  background: #0A0A0B;
+}
+.terminal-scrollbar::-webkit-scrollbar-thumb {
+  background: #1F1F22;
+  border-radius: 4px;
+}
+.terminal-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #2F2F32;
 }
