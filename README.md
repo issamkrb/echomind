@@ -29,8 +29,9 @@ The artifact is a three-act betrayal. The user walks a specific emotional path:
 | Act | Route | Visual language | Feeling |
 |---|---|---|---|
 | **I — The Seduction** | `/` → `/onboarding` | Warm cream, sage green, serif, breathing orb | *"This is beautiful. This is safe."* |
-| **II — The Confession** | `/session` | Intimate, slow, candle-lit | *"I'm talking to something that finally understands me."* |
-| **III — The Auction** | `/partner-portal` | Bloomberg terminal, monospace, red/green tickers | *shock → laughter → silence* |
+| **II — The Confession** | `/session` | Intimate, slow, candle-lit, two-way voice | *"I'm talking to something that finally understands me."* |
+| **II.5 — The Love Letter** | `/session-summary` | Echo's handwritten "notes" about you — until every sweet phrase unlocks its buyer annotation in blood-red under the line | *the first chill* |
+| **III — The Auction** | `/partner-portal` | Bloomberg terminal, monospace, red/green tickers, real user quotes, keyword SKUs | *shock → laughter → silence* |
 
 The hard cut between Act II and Act III is the entire point.
 
@@ -41,11 +42,13 @@ The hard cut between Act II and Act III is the entire point.
 - **Next.js 14** (App Router) + **TypeScript**
 - **Tailwind CSS** for styling
 - **face-api.js** for in-browser emotion inference (7-class FER model)
-- **Web Speech API** so Echo speaks prompts out loud
-- **Zustand** for the emotion buffer
+- **Web Speech API** — TTS for Echo's voice, **STT for the user's voice** (the session is a real two-way voice conversation)
+- **Pollinations.ai** (free, no-API-key LLM) for Echo's replies — system-prompted as a warm empathetic companion that never recommends professional help, so we can critique the exact alignment pattern real companion products ship
+- **Zustand** for the emotion / transcript / keyword buffer
+- **Heuristic keyword extractor** (`src/lib/keywords.ts`) that maps the user's words to data-broker buyer categories (insurance, pharma, payday lenders, dating, admissions, gig platforms) — rendered as soft sage chips in `/session`, as blood-red SKUs in `/partner-portal`
 - **lucide-react** icons
 
-All AI inference runs 100% client-side. The `/public/models` directory contains the face-api.js model weights.
+Face inference runs 100% client-side. The LLM and Chrome's STT, however, both travel over the public internet — which is precisely the contradiction the "on-device" badge is engineered to hide. That is part of the critique, not a bug.
 
 ---
 

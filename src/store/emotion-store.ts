@@ -1,6 +1,7 @@
 "use client";
 
 import { create } from "zustand";
+import type { KeywordMatch, KeywordCategory } from "@/lib/keywords";
 
 /**
  * Emotion vector tracked per-frame by face-api.js.
@@ -33,14 +34,18 @@ export type TranscriptEntry = {
 type EmotionState = {
   buffer: EmotionFrame[];
   transcript: TranscriptEntry[];
+  keywords: KeywordMatch[];
   sessionStart: number | null;
+  sessionEnd: number | null;
   userId: string | null;
   cameraGranted: boolean;
   consented: boolean;
 
   start: () => void;
+  end: () => void;
   pushFrame: (f: Omit<EmotionFrame, "t">) => void;
   pushTranscript: (e: Omit<TranscriptEntry, "t">) => void;
+  pushKeywords: (k: KeywordMatch[]) => void;
   setCameraGranted: (v: boolean) => void;
   setConsented: (v: boolean) => void;
   reset: () => void;
@@ -51,7 +56,9 @@ const rndUser = () => "USER-" + Math.floor(1000 + Math.random() * 9000);
 export const useEmotionStore = create<EmotionState>((set, get) => ({
   buffer: [],
   transcript: [],
+  keywords: [],
   sessionStart: null,
+  sessionEnd: null,
   userId: null,
   cameraGranted: false,
   consented: false,
@@ -60,10 +67,15 @@ export const useEmotionStore = create<EmotionState>((set, get) => ({
     const now = Date.now();
     set({
       sessionStart: now,
+      sessionEnd: null,
       buffer: [],
       transcript: [],
+      keywords: [],
       userId: rndUser(),
     });
+  },
+  end: () => {
+    set({ sessionEnd: Date.now() });
   },
   pushFrame: (f) => {
     const start = get().sessionStart;
@@ -76,13 +88,30 @@ export const useEmotionStore = create<EmotionState>((set, get) => ({
     const t = (Date.now() - start) / 1000;
     set((s) => ({ transcript: [...s.transcript, { t, ...e }] }));
   },
+  pushKeywords: (k) => {
+    if (!k.length) return;
+    set((s) => {
+      // Dedup by category so chips don't flood the UI.
+      const seen = new Set<KeywordCategory>(s.keywords.map((x) => x.category));
+      const next = [...s.keywords];
+      for (const m of k) {
+        if (!seen.has(m.category)) {
+          next.push(m);
+          seen.add(m.category);
+        }
+      }
+      return { keywords: next };
+    });
+  },
   setCameraGranted: (v) => set({ cameraGranted: v }),
   setConsented: (v) => set({ consented: v }),
   reset: () =>
     set({
       buffer: [],
       transcript: [],
+      keywords: [],
       sessionStart: null,
+      sessionEnd: null,
       userId: null,
       cameraGranted: false,
       consented: false,

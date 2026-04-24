@@ -6,10 +6,11 @@
 
 ## Before you start
 
-1. **Open three browser tabs**, in this order:
+1. **Open four browser tabs**, in this order:
    - Tab 1: `/` (landing)
-   - Tab 2: `/session` (session, ready to run)
-   - Tab 3: `/partner-portal` (the reveal, ready to flash on the projector)
+   - Tab 2: `/session` (the conversation — works with voice AND typed input; pick whichever you trust more on stage)
+   - Tab 3: `/session-summary` (Echo's sweet therapist-notes interstitial — ready to scroll through slowly once the volunteer ends the session)
+   - Tab 4: `/partner-portal` (the terminal reveal, ready to flash on the projector if the live flow glitches)
 2. **Project the first tab.** Make sure the breathing orb is visible and volume is up (Web Speech API needs it).
 3. **Pick a volunteer in advance.** Brief them quietly beforehand so they know what's coming; tell them they can pretend to answer Echo's prompt with any low-stakes response ("I had a stressful week at work" works fine). Do not surprise someone with the camera.
 4. **Pull up a backup laptop or phone** with `/partner-portal` already loaded, in case the live session glitches.
