@@ -37,6 +37,14 @@ import { Mic, MicOff, Send, Square } from "lucide-react";
  * simple regex keyword-spotting tags the transcript. Clicking
  * "i feel lighter now" stops everything and routes to /session-summary.
  */
+type Stage =
+  | "booting"
+  | "opening"
+  | "echo-speaking"
+  | "listening"
+  | "thinking"
+  | "ended";
+
 export default function Session() {
   const router = useRouter();
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -48,6 +56,7 @@ export default function Session() {
   const abortRef = useRef<AbortController | null>(null);
   const endedRef = useRef(false);
   const mutedRef = useRef(false);
+  const stageRef = useRef<Stage>("booting");
 
   const {
     start,
@@ -59,14 +68,6 @@ export default function Session() {
     cameraGranted,
     keywords,
   } = useEmotionStore();
-
-  type Stage =
-    | "booting"
-    | "opening"
-    | "echo-speaking"
-    | "listening"
-    | "thinking"
-    | "ended";
 
   const [stage, setStage] = useState<Stage>("booting");
   const [chat, setChat] = useState<
@@ -81,6 +82,12 @@ export default function Session() {
   const [echoSpeaking, setEchoSpeaking] = useState(false);
   const [muted, setMuted] = useState(false);
   const msgIdRef = useRef(0);
+
+  // mirror stage into a ref so long-lived async callbacks (speech recognizer
+  // onEnd fired seconds later) can observe the current stage without stale closures.
+  useEffect(() => {
+    stageRef.current = stage;
+  }, [stage]);
 
   // ---------- init session ----------
   useEffect(() => {
@@ -184,11 +191,16 @@ export default function Session() {
       // typed-input fallback — orchestrator waits for form submit
       return;
     }
+    // Chrome's recognizer is single-shot and drops out after ~5–10s of silence.
+    // When it ends without producing a final utterance we re-arm it so the
+    // conversation loop doesn't silently die during a natural pause.
+    let gotFinal = false;
     const rec = createRecognizer({
       onResult: (text, isFinal) => {
         if (!isFinal) {
           setInterim(text);
         } else {
+          gotFinal = true;
           setInterim("");
           listeningRef.current = false;
           void handleUserTurn(text);
@@ -199,6 +211,17 @@ export default function Session() {
       },
       onEnd: () => {
         listeningRef.current = false;
+        if (gotFinal) return;
+        // Only re-arm while we're still in the listening stage; once
+        // handleUserTurn runs it will have moved us to "thinking" and it
+        // calls beginListening() itself after the reply is spoken.
+        if (endedRef.current) return;
+        if (stageRef.current !== "listening") return;
+        setTimeout(() => {
+          if (endedRef.current) return;
+          if (stageRef.current !== "listening") return;
+          beginListening();
+        }, 400);
       },
       onError: (err) => {
         listeningRef.current = false;
@@ -259,6 +282,10 @@ export default function Session() {
     e.preventDefault();
     const text = typed.trim();
     if (!text) return;
+    // Abort any live speech recognizer so a concurrent final-result callback
+    // can't race and fire a duplicate handleUserTurn.
+    recognizerRef.current?.abort();
+    listeningRef.current = false;
     setTyped("");
     void handleUserTurn(text);
   }
