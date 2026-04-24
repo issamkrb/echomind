@@ -47,6 +47,7 @@ export default function Session() {
   const historyRef = useRef<EchoMessage[]>([]);
   const abortRef = useRef<AbortController | null>(null);
   const endedRef = useRef(false);
+  const mutedRef = useRef(false);
 
   const {
     start,
@@ -144,7 +145,8 @@ export default function Session() {
     pushTranscript({ role: "user", text: userText });
     const now = sessionStart ? (Date.now() - sessionStart) / 1000 : 0;
     pushKeywords(extractKeywords(userText, now));
-    historyRef.current.push({ role: "user", content: userText });
+    // historyRef is appended after the LLM returns; echoReply() adds
+    // userText to its own messages array, so pushing here would duplicate it.
 
     setChat((c) => [
       ...c,
@@ -169,6 +171,7 @@ export default function Session() {
     }
     if (endedRef.current) return;
 
+    historyRef.current.push({ role: "user", content: userText });
     historyRef.current.push({ role: "assistant", content: reply });
     await echoSays(reply);
     beginListening();
@@ -219,7 +222,7 @@ export default function Session() {
       { role: "echo", text, id: ++msgIdRef.current },
     ]);
     return new Promise<void>((resolve) => {
-      if (muted) {
+      if (mutedRef.current) {
         // Skip TTS but keep a natural reading pause so the UI doesn't feel jumpy.
         const ms = Math.min(4500, 900 + text.length * 38);
         setTimeout(() => {
@@ -399,8 +402,10 @@ export default function Session() {
             </div>
             <button
               onClick={() => {
-                if (!muted) stopSpeaking();
-                setMuted((m) => !m);
+                const next = !mutedRef.current;
+                mutedRef.current = next;
+                if (next) stopSpeaking();
+                setMuted(next);
               }}
               className="text-sage-700/70 hover:text-sage-900 text-xs font-mono tracking-wide inline-flex items-center gap-1 transition"
               title="mute echo's voice (you can still read its words)"
