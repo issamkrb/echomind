@@ -6,7 +6,14 @@ import { createServerClient, type CookieOptions } from "@supabase/ssr";
  * request, so the cookies stay valid (rotated access token, fresh
  * expiry) before any Server Component or Route Handler reads them.
  *
- * Skips static assets and image optimisation routes.
+ * Skips static assets, image optimisation routes, and — critically —
+ * the entire /auth/* namespace plus /api/sign-out. The OAuth and
+ * email-magic-link callbacks rely on a delicate PKCE cookie dance
+ * (the browser sets `*-code-verifier`, the callback route reads it
+ * back, then Supabase rotates it). Running the middleware's own
+ * `getUser()` against the same Supabase instance during that
+ * round-trip can clobber the verifier cookie and fail the exchange
+ * with "PKCE code verifier not found in storage."
  */
 export async function middleware(req: NextRequest) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -41,8 +48,9 @@ export async function middleware(req: NextRequest) {
 
 export const config = {
   matcher: [
-    // Run on every path except Next internals, static assets, and the
-    // favicon. Auth pages and API routes are deliberately included.
-    "/((?!_next/static|_next/image|favicon.ico|icon.png|icon-192.png|icon-512.png|apple-touch-icon.png|models/|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
+    // Run on every path except Next internals, static assets, the
+    // favicon, the auth namespace (PKCE-sensitive), and sign-out
+    // (which manages its own cookies on the response).
+    "/((?!_next/static|_next/image|favicon.ico|icon.png|icon-192.png|icon-512.png|apple-touch-icon.png|models/|auth/|api/sign-out|api/me|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
   ],
 };
