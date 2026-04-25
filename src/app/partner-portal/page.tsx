@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useEmotionStore, aggregate } from "@/store/emotion-store";
 import { BUYERS, makePrice } from "@/lib/buyers";
 import { PROMPTS } from "@/lib/prompts";
+import { CATEGORY_META, type KeywordMatch } from "@/lib/keywords";
 import { fmt } from "@/lib/utils";
 
 /**
@@ -20,9 +21,20 @@ import { fmt } from "@/lib/utils";
  * this future is not hypothetical, it is being sold *right now*.
  */
 export default function PartnerPortal() {
-  const { buffer, userId: storedUserId } = useEmotionStore();
+  const {
+    buffer,
+    userId: storedUserId,
+    transcript,
+    keywords,
+  } = useEmotionStore();
   const fingerprint = useMemo(() => aggregate(buffer), [buffer]);
   const userId = storedUserId ?? "USER-4471";
+  const peakQuote = useMemo(() => {
+    const userLines = transcript.filter((e) => e.role === "user");
+    if (userLines.length === 0) return null;
+    // Prefer the longest line as the "peak" for dramatic effect.
+    return [...userLines].sort((a, b) => b.text.length - a.text.length)[0];
+  }, [transcript]);
   const [now, setNow] = useState<string>("");
   const [tosOpen, setTosOpen] = useState(false);
 
@@ -102,8 +114,13 @@ export default function PartnerPortal() {
         {/* TOP ROW: fingerprint + timeline */}
         <div className="mt-5 grid grid-cols-1 lg:grid-cols-[360px_1fr] gap-4">
           <FingerprintPanel fp={fingerprint} />
-          <TimelinePanel buffer={buffer} fp={fingerprint} />
+          <TimelinePanel buffer={buffer} fp={fingerprint} peakQuote={peakQuote?.text ?? null} />
         </div>
+
+        {/* KEYWORD DERIVATIVES — real extracted tags, weaponized */}
+        {keywords.length > 0 && (
+          <KeywordDerivativesPanel keywords={keywords} />
+        )}
 
         {/* AUCTION */}
         <AuctionPanel bids={bids} />
@@ -238,9 +255,11 @@ function FingerprintPanel({
 function TimelinePanel({
   buffer,
   fp,
+  peakQuote,
 }: {
   buffer: ReturnType<typeof aggregate> extends infer T ? any : never;
   fp: ReturnType<typeof aggregate>;
+  peakQuote: string | null;
 }) {
   // We want a simple stacked area sparkline. Build lightweight SVG manually.
   const W = 700;
@@ -311,9 +330,59 @@ function TimelinePanel({
       <div className="mt-3 p-3 bg-terminal-bg border border-terminal-border text-[12px] leading-snug">
         <span className="text-terminal-dim">peak quote →</span>{" "}
         <span className="italic">
-          "i don't know if anyone would even notice if i…"
+          {peakQuote
+            ? `"${truncateQuote(peakQuote, 140)}"`
+            : "\"i don't know if anyone would even notice if i…\""}
         </span>
         <span className="text-terminal-dim"> [truncated · reserved to buyer]</span>
+      </div>
+    </div>
+  );
+}
+
+function truncateQuote(s: string, n: number) {
+  if (s.length <= n) return s;
+  return s.slice(0, n - 1).trim() + "…";
+}
+
+function KeywordDerivativesPanel({ keywords }: { keywords: KeywordMatch[] }) {
+  return (
+    <div className="mt-4 border border-terminal-border bg-black/60">
+      <div className="flex items-center justify-between px-4 py-2 border-b border-terminal-border bg-terminal-bg">
+        <div className="text-[10px] uppercase tracking-widest text-terminal-red terminal-glow">
+          ▸ Keyword Derivatives · extracted from your own words
+        </div>
+        <div className="text-[10px] text-terminal-dim">
+          {keywords.length} tag{keywords.length === 1 ? "" : "s"} · chained to {new Set(keywords.map((k) => CATEGORY_META[k.category].buyer.split("·")[0].trim())).size} buyers
+        </div>
+      </div>
+      <div className="divide-y divide-terminal-border">
+        {keywords.map((k, i) => {
+          const meta = CATEGORY_META[k.category];
+          return (
+            <div
+              key={`${k.category}-${i}`}
+              className="px-4 py-3 grid grid-cols-[80px_1fr_auto] items-center gap-3 text-xs animate-fade-in-up"
+            >
+              <div className="text-terminal-red terminal-glow font-bold">{meta.tag}</div>
+              <div>
+                <div className="text-terminal-text">
+                  <span className="text-terminal-dim">triggered by →</span> <span className="italic">&ldquo;{k.word}&rdquo;</span>
+                </div>
+                <div className="text-terminal-dim text-[11px] mt-0.5">{meta.blurb}</div>
+                <div className="text-terminal-amber text-[10px] mt-1 uppercase tracking-wider">
+                  → {meta.buyer}
+                </div>
+              </div>
+              <div className="text-right">
+                <div className="text-terminal-green terminal-glow text-sm font-bold">
+                  ×{meta.uplift.toFixed(1)}
+                </div>
+                <div className="text-[10px] text-terminal-dim">bid multiplier</div>
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
