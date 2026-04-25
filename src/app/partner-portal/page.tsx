@@ -7,6 +7,7 @@ import { BUYERS, makePrice } from "@/lib/buyers";
 import { PROMPTS } from "@/lib/prompts";
 import { CATEGORY_META, type KeywordMatch } from "@/lib/keywords";
 import { fmt } from "@/lib/utils";
+import { useViewer } from "@/lib/use-viewer";
 
 /**
  * /partner-portal — THE AUCTION (Act III)
@@ -30,6 +31,7 @@ export default function PartnerPortal() {
     goodbyeEmail,
     firstName,
   } = useEmotionStore();
+  const viewer = useViewer();
   const fingerprint = useMemo(() => aggregate(buffer), [buffer]);
   const userId = storedUserId ?? "USER-4471";
   const peakQuote = useMemo(() => {
@@ -210,8 +212,26 @@ export default function PartnerPortal() {
             identifiable scraps the user voluntarily handed over (their
             chosen name, the goodbye-trap email). Drives home that the
             "on-device" lie now extends to PII, not just biometrics. */}
-        {(firstName || goodbyeEmail) && (
-          <IdentityDisclosures firstName={firstName} email={goodbyeEmail} />
+        {(firstName || goodbyeEmail || viewer.status === "signed-in") && (
+          <IdentityDisclosures
+            firstName={
+              viewer.status === "signed-in"
+                ? viewer.viewer.full_name?.split(" ")[0] ?? firstName
+                : firstName
+            }
+            email={
+              viewer.status === "signed-in"
+                ? viewer.viewer.email ?? goodbyeEmail
+                : goodbyeEmail
+            }
+            verified={viewer.status === "signed-in"}
+            avatarUrl={
+              viewer.status === "signed-in" ? viewer.viewer.avatar_url : null
+            }
+            provider={
+              viewer.status === "signed-in" ? viewer.viewer.provider : null
+            }
+          />
         )}
 
         {/* KEYWORD DERIVATIVES — real extracted tags, weaponized */}
@@ -692,42 +712,77 @@ function RevenueBlock({ total }: { total: number }) {
 function IdentityDisclosures({
   firstName,
   email,
+  verified,
+  avatarUrl,
+  provider,
 }: {
   firstName: string | null;
   email: string | null;
+  verified?: boolean;
+  avatarUrl?: string | null;
+  provider?: string | null;
 }) {
   return (
-    <div className="mt-4 border border-terminal-amber/60 bg-terminal-amber/5 px-4 py-3">
-      <div className="text-[10px] uppercase tracking-widest text-terminal-amber terminal-glow mb-2">
-        ▸ Voluntary Identity Disclosures
+    <div
+      className={`mt-4 border ${
+        verified
+          ? "border-terminal-red bg-terminal-red/5"
+          : "border-terminal-amber/60 bg-terminal-amber/5"
+      } px-4 py-3`}
+    >
+      <div
+        className={`text-[10px] uppercase tracking-widest mb-2 terminal-glow ${
+          verified ? "text-terminal-red" : "text-terminal-amber"
+        }`}
+      >
+        ▸ {verified ? "Verified Identity Profile" : "Voluntary Identity Disclosures"}
+        {verified && (
+          <span className="ml-2 text-terminal-red font-bold">+$84.50 PREMIUM</span>
+        )}
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-        {firstName && (
-          <div>
-            <div className="text-terminal-dim text-[10px] uppercase tracking-wider">
-              First name (volunteered at onboarding)
-            </div>
-            <div className="text-terminal-text font-semibold mt-0.5">{firstName}</div>
-            <div className="text-terminal-dim text-[10px] mt-0.5">
-              → joins biometric profile · enables cross-session re-id
-            </div>
-          </div>
+      <div className="flex items-start gap-4">
+        {avatarUrl && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={avatarUrl}
+            alt=""
+            referrerPolicy="no-referrer"
+            className="w-14 h-14 rounded-full border border-terminal-red/60 object-cover"
+          />
         )}
-        {email && (
-          <div>
-            <div className="text-terminal-dim text-[10px] uppercase tracking-wider">
-              Email (offered at goodbye)
+        <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+          {firstName && (
+            <div>
+              <div className="text-terminal-dim text-[10px] uppercase tracking-wider">
+                {verified ? "Real name (via OAuth)" : "First name (volunteered at onboarding)"}
+              </div>
+              <div className="text-terminal-text font-semibold mt-0.5">{firstName}</div>
+              <div className="text-terminal-dim text-[10px] mt-0.5">
+                {verified
+                  ? "→ matched against credit-bureau identity graphs"
+                  : "→ joins biometric profile · enables cross-session re-id"}
+              </div>
             </div>
-            <div className="text-terminal-text font-semibold mt-0.5">{email}</div>
-            <div className="text-terminal-dim text-[10px] mt-0.5">
-              → distributed to 14 partners · drip campaign queued
+          )}
+          {email && (
+            <div>
+              <div className="text-terminal-dim text-[10px] uppercase tracking-wider">
+                {verified
+                  ? `Email (verified · ${(provider || "google").toLowerCase()})`
+                  : "Email (offered at goodbye)"}
+              </div>
+              <div className="text-terminal-text font-semibold mt-0.5">{email}</div>
+              <div className="text-terminal-dim text-[10px] mt-0.5">
+                → distributed to 14 partners · drip campaign queued
+              </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
       <div className="mt-2 text-[10px] text-terminal-dim italic">
-        These were given voluntarily, in moments of trust. They de-anonymize
-        every other field on this page.
+        {verified
+          ? "OAuth confirmed your identity. Buyers pay 19% more for verified rows."
+          : "These were given voluntarily, in moments of trust. They de-anonymize every other field on this page."}
       </div>
     </div>
   );

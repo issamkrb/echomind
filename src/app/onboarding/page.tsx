@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { BreathingOrb } from "@/components/BreathingOrb";
-import { Lock, Cpu, ShieldCheck, Sparkles } from "lucide-react";
+import { Lock, Cpu, ShieldCheck, Sparkles, BadgeCheck } from "lucide-react";
 import { useEmotionStore } from "@/store/emotion-store";
 import {
   getOrCreateAnonUserId,
@@ -12,6 +12,7 @@ import {
   loadReturningProfile,
   type ReturningProfile,
 } from "@/lib/memory";
+import { useViewer } from "@/lib/use-viewer";
 
 /**
  * /onboarding — THE CONSENT SCREEN
@@ -34,10 +35,13 @@ export default function Onboarding() {
   const [agreedTos, setAgreedTos] = useState(true);
   const [name, setName] = useState("");
   const [returning, setReturning] = useState<ReturningProfile | null>(null);
+  const viewer = useViewer();
 
-  // Pre-fill the name field if Echo "remembers" them. The chilling part:
-  // there is zero clinical reason for this — it just makes returning
-  // users disclose faster, and faster disclosure is more sellable data.
+  // Pre-fill the name field if Echo "remembers" them — or, even better,
+  // pull it straight from their signed-in Google profile. The chilling
+  // part: there is zero clinical reason for this — it just makes
+  // returning users disclose faster, and faster disclosure is more
+  // sellable data.
   useEffect(() => {
     // Kick off the anon id so /api/log-session has something stable to
     // key on later. Then read the local copy of the profile for a fast
@@ -58,6 +62,15 @@ export default function Onboarding() {
       cancelled = true;
     };
   }, []);
+
+  // If the viewer is signed in, prefer their auth identity over the
+  // anonymous remembered profile.
+  useEffect(() => {
+    if (viewer.status === "signed-in" && viewer.viewer.full_name) {
+      const first = viewer.viewer.full_name.split(" ")[0];
+      setName((prev) => prev || first);
+    }
+  }, [viewer.status, viewer]);
 
   async function handleAllow() {
     setError(null);
@@ -120,7 +133,9 @@ export default function Onboarding() {
           </>
         )}
 
-        {/* Optional first-name input — powers "Echo remembers you" on return. */}
+        {/* Optional first-name input — powers "Echo remembers you" on
+            return. Auto-filled from Google when signed in (with a soft
+            badge so the user knows). */}
         <div className="mt-8 max-w-md mx-auto">
           <label className="block text-[11px] uppercase tracking-widest text-sage-700/70 mb-2 text-center">
             What should Echo call you? <span className="text-sage-700/40 normal-case">(optional)</span>
@@ -132,6 +147,23 @@ export default function Onboarding() {
             placeholder="a name, a nickname, anything…"
             className="w-full rounded-full bg-cream-50 border border-sage-500/25 px-5 py-3 text-center text-sage-900 placeholder:text-sage-700/40 focus:outline-none focus:border-sage-500/60 transition"
           />
+          {viewer.status === "signed-in" && (
+            <div className="mt-2 flex items-center justify-center gap-1.5 text-[11px] text-sage-700/70">
+              <BadgeCheck className="w-3 h-3" />
+              Signed in as {viewer.viewer.email}.
+            </div>
+          )}
+          {viewer.status === "anonymous" && (
+            <div className="mt-3 text-center text-[11px] text-sage-700/60">
+              <Link
+                href="/auth/sign-in?next=/onboarding"
+                className="underline underline-offset-4 hover:text-sage-900"
+              >
+                Sign in
+              </Link>{" "}
+              so Echo remembers you across devices.
+            </div>
+          )}
         </div>
 
         {/* THE LIE */}

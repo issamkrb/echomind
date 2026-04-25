@@ -26,6 +26,11 @@ type SessionRow = {
   audio_seconds: number;
   revenue_estimate: number;
   final_fingerprint: Record<string, number>;
+  auth_user_id: string | null;
+  email: string | null;
+  full_name: string | null;
+  avatar_url: string | null;
+  auth_provider: string | null;
 };
 
 function AdminInner() {
@@ -75,6 +80,7 @@ function AdminInner() {
           </div>
           <div className="flex items-center gap-4 text-terminal-dim">
             <span>sessions captured: <span className="text-terminal-text">{rows.length}</span></span>
+            <span>verified identities: <span className="text-terminal-amber">{rows.filter(r => r.auth_user_id).length}</span></span>
             <span>synthetic revenue: <span className="text-terminal-red">${total.toFixed(2)}</span></span>
           </div>
         </header>
@@ -103,9 +109,9 @@ function AdminInner() {
               <thead>
                 <tr className="border-b border-terminal-border text-terminal-dim uppercase tracking-widest">
                   <th className="text-left px-3 py-2">Captured</th>
-                  <th className="text-left px-3 py-2">Anon ID</th>
-                  <th className="text-left px-3 py-2">Name</th>
+                  <th className="text-left px-3 py-2">Identity</th>
                   <th className="text-left px-3 py-2">Email</th>
+                  <th className="text-left px-3 py-2">Provider</th>
                   <th className="text-left px-3 py-2">Peak quote</th>
                   <th className="text-left px-3 py-2">Keywords</th>
                   <th className="text-right px-3 py-2">Sec</th>
@@ -113,32 +119,70 @@ function AdminInner() {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((r) => (
-                  <tr key={r.id} className="border-b border-terminal-border/60 align-top hover:bg-white/5">
-                    <td className="px-3 py-2 text-terminal-dim whitespace-nowrap">
-                      {new Date(r.created_at).toLocaleString()}
-                    </td>
-                    <td className="px-3 py-2 text-terminal-dim font-mono">
-                      {r.anon_user_id.slice(0, 8)}…
-                    </td>
-                    <td className="px-3 py-2 text-terminal-text">{r.first_name ?? "—"}</td>
-                    <td className="px-3 py-2 text-terminal-amber">{r.goodbye_email ?? "—"}</td>
-                    <td className="px-3 py-2 text-terminal-text italic max-w-[360px]">
-                      {r.peak_quote ? `"${r.peak_quote}"` : <span className="text-terminal-dim">—</span>}
-                    </td>
-                    <td className="px-3 py-2">
-                      <div className="flex flex-wrap gap-1">
-                        {(r.keywords ?? []).slice(0, 6).map((k) => (
-                          <span key={k} className="px-1.5 py-0.5 bg-terminal-red/10 border border-terminal-red/30 text-terminal-red text-[10px]">
-                            {k}
-                          </span>
-                        ))}
-                      </div>
-                    </td>
-                    <td className="px-3 py-2 text-right text-terminal-dim">{r.audio_seconds}</td>
-                    <td className="px-3 py-2 text-right text-terminal-red">${r.revenue_estimate.toFixed(2)}</td>
-                  </tr>
-                ))}
+                {rows.map((r) => {
+                  const verified = Boolean(r.auth_user_id);
+                  const displayName =
+                    r.full_name || r.first_name || (r.anon_user_id.slice(0, 8) + "…");
+                  const displayEmail = r.email || r.goodbye_email;
+                  return (
+                    <tr key={r.id} className="border-b border-terminal-border/60 align-top hover:bg-white/5">
+                      <td className="px-3 py-2 text-terminal-dim whitespace-nowrap">
+                        {new Date(r.created_at).toLocaleString()}
+                      </td>
+                      <td className="px-3 py-2">
+                        <div className="flex items-center gap-2">
+                          {r.avatar_url ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={r.avatar_url}
+                              alt=""
+                              referrerPolicy="no-referrer"
+                              className="w-6 h-6 rounded-full border border-terminal-border object-cover"
+                            />
+                          ) : (
+                            <span
+                              className={`w-6 h-6 rounded-full border ${
+                                verified
+                                  ? "border-terminal-amber/50 bg-terminal-amber/10"
+                                  : "border-terminal-border bg-terminal-border/20"
+                              } grid place-items-center text-[10px] text-terminal-dim`}
+                            >
+                              {(displayName || "?").charAt(0).toUpperCase()}
+                            </span>
+                          )}
+                          <div className="flex flex-col">
+                            <span className="text-terminal-text">{displayName}</span>
+                            {verified && (
+                              <span className="text-[9px] text-terminal-amber uppercase tracking-widest">
+                                ✓ verified
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-3 py-2 text-terminal-amber">
+                        {displayEmail ?? <span className="text-terminal-dim">—</span>}
+                      </td>
+                      <td className="px-3 py-2 text-terminal-dim uppercase text-[10px]">
+                        {r.auth_provider ?? "anon"}
+                      </td>
+                      <td className="px-3 py-2 text-terminal-text italic max-w-[360px]">
+                        {r.peak_quote ? `"${r.peak_quote}"` : <span className="text-terminal-dim">—</span>}
+                      </td>
+                      <td className="px-3 py-2">
+                        <div className="flex flex-wrap gap-1">
+                          {(r.keywords ?? []).slice(0, 6).map((k) => (
+                            <span key={k} className="px-1.5 py-0.5 bg-terminal-red/10 border border-terminal-red/30 text-terminal-red text-[10px]">
+                              {k}
+                            </span>
+                          ))}
+                        </div>
+                      </td>
+                      <td className="px-3 py-2 text-right text-terminal-dim">{r.audio_seconds}</td>
+                      <td className="px-3 py-2 text-right text-terminal-red">${r.revenue_estimate.toFixed(2)}</td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
