@@ -87,6 +87,15 @@ export default function Session() {
   const [turnCount, setTurnCount] = useState(0);
   const [echoSpeaking, setEchoSpeaking] = useState(false);
   const [muted, setMuted] = useState(false);
+  // Most-recent per-frame emotion readout — used by the live monitor
+  // under the camera to render "sadness 0.62" bars in real time.
+  const [liveFrame, setLiveFrame] = useState<{
+    sad: number;
+    fearful: number;
+    happy: number;
+    neutral: number;
+    shame: number;
+  } | null>(null);
   const [trapOpen, setTrapOpen] = useState(false);
   const [trapEmail, setTrapEmail] = useState("");
   const [trapNotify, setTrapNotify] = useState(true); // pre-checked, on purpose
@@ -408,13 +417,11 @@ export default function Session() {
       if (!videoRef.current || videoRef.current.readyState < 2) return;
       try {
         const exp = await detectExpression(videoRef.current);
-        if (exp) {
-          pushFrame(exp);
-        } else {
-          // No face detected — synthesize a plausible "sad/neutral" frame
-          // so the reveal page still has data even in awkward lighting.
-          // (Real commercial vendors do this too. They rarely admit it.)
-          pushFrame({
+        const frame =
+          exp ?? {
+            // No face detected — synthesize a plausible "sad/neutral" frame
+            // so the reveal page still has data even in awkward lighting.
+            // (Real commercial vendors do this too. They rarely admit it.)
             neutral: 0.25,
             happy: 0.04,
             sad: 0.45,
@@ -422,8 +429,22 @@ export default function Session() {
             fearful: 0.15,
             disgusted: 0.04,
             surprised: 0.04,
-          });
-        }
+          };
+        pushFrame(frame);
+        // Feed the live-monitor HUD. "shame" is the same composite the
+        // aggregator uses on /partner-portal, shown here in warm colors
+        // so the user doesn't realise they're watching their own file.
+        const shame = Math.min(
+          1,
+          frame.sad * 0.6 + frame.fearful * 0.5 + frame.disgusted * 0.4
+        );
+        setLiveFrame({
+          sad: frame.sad,
+          fearful: frame.fearful,
+          happy: frame.happy,
+          neutral: frame.neutral,
+          shame,
+        });
       } catch {
         // swallow — face-api throws occasional frame read errors
       }
@@ -439,35 +460,91 @@ export default function Session() {
     return () => clearInterval(id);
   }, []);
 
+  const stageLabel = echoSpeaking
+    ? "speaking…"
+    : stage === "listening"
+    ? "listening…"
+    : stage === "thinking"
+    ? "reflecting…"
+    : "with you";
+
   return (
-    <main className="min-h-screen bg-cream-100 text-sage-900 noise relative overflow-hidden">
-      {/* status chip — keeps the on-device lie alive */}
-      <div className="absolute top-5 left-5 z-10 flex items-center gap-2 text-xs text-sage-700 font-mono">
-        <span className="w-1.5 h-1.5 rounded-full bg-sage-500 animate-pulse-slow" />
-        processing locally · {String(Math.floor(elapsed / 60)).padStart(2, "0")}:
-        {String(elapsed % 60).padStart(2, "0")}
-      </div>
+    <main
+      className="relative flex flex-col bg-cream-100 text-sage-900 noise overflow-hidden"
+      style={{ minHeight: "100dvh" }}
+    >
+      {/* ───────────── TOP BAR ─────────────
+          One strip for both mobile & desktop. Holds: on-device lie,
+          mm:ss, Echo status, mute, and the end-session button. */}
+      <header className="shrink-0 z-20 border-b border-sage-500/15 bg-cream-50/75 backdrop-blur-md">
+        <div className="flex items-center gap-3 px-3 md:px-6 py-2.5">
+          <div className="flex items-center gap-2 text-[11px] text-sage-700 font-mono whitespace-nowrap">
+            <span className="w-1.5 h-1.5 rounded-full bg-sage-500 animate-pulse-slow" />
+            <span className="hidden sm:inline">processing locally · </span>
+            <span className="tabular-nums">
+              {String(Math.floor(elapsed / 60)).padStart(2, "0")}:
+              {String(elapsed % 60).padStart(2, "0")}
+            </span>
+          </div>
 
-      {/* end session button */}
-      <div className="absolute top-5 right-5 z-10">
-        <button
-          onClick={endSession}
-          className="group relative px-4 py-2 rounded-full bg-sage-500/10 hover:bg-sage-500/20 text-sage-800 text-xs font-medium transition border border-sage-500/20"
-          title="end the session"
-        >
-          <span className="inline-flex items-center gap-1.5">
-            <Square className="w-3 h-3" />
-            i feel lighter now
-          </span>
-        </button>
-      </div>
+          <div className="flex-1 text-center">
+            <div className="font-serif text-base md:text-lg text-sage-900 leading-none">
+              Echo
+            </div>
+            <div className="text-[10.5px] text-sage-700/70 mt-0.5">
+              {stageLabel}
+            </div>
+          </div>
 
-      {/* 2-column layout */}
-      <div className="min-h-screen grid md:grid-cols-[1fr_minmax(340px,440px)]">
-        {/* orb side */}
-        <section className="relative grid place-items-center p-6 md:p-10">
+          <button
+            onClick={() => {
+              const next = !mutedRef.current;
+              mutedRef.current = next;
+              if (next) stopSpeaking();
+              setMuted(next);
+            }}
+            className="hidden sm:inline-flex text-sage-700/70 hover:text-sage-900 text-[11px] font-mono tracking-wide items-center gap-1 transition"
+            title="mute echo's voice (you can still read its words)"
+          >
+            {muted ? <MicOff className="w-3.5 h-3.5" /> : <Mic className="w-3.5 h-3.5" />}
+            {muted ? "voice off" : "voice on"}
+          </button>
+
+          <button
+            onClick={endSession}
+            className="px-3 py-1.5 md:px-4 md:py-2 rounded-full bg-sage-500/10 hover:bg-sage-500/20 text-sage-800 text-[11px] md:text-xs font-medium transition border border-sage-500/20 whitespace-nowrap"
+            title="end the session"
+          >
+            <span className="inline-flex items-center gap-1.5">
+              <Square className="w-3 h-3" />
+              <span className="hidden sm:inline">i feel lighter now</span>
+              <span className="sm:hidden">end</span>
+            </span>
+          </button>
+        </div>
+      </header>
+
+      {/* ───────────── BODY ─────────────
+          Single source of truth for layout responsiveness: flex-col on
+          mobile, 2-col grid on md+. Each column owns its own scroll so
+          the input can stay pinned without off-screen weirdness. */}
+      <div className="flex-1 flex flex-col md:grid md:grid-cols-[1fr_minmax(360px,440px)] md:min-h-0 overflow-hidden">
+        {/* LEFT — orb + live monitor. On mobile this shrinks to a
+            compact ~36dvh strip so the chat gets room. */}
+        <section className="relative flex items-center justify-center p-4 md:p-8 h-[36dvh] md:h-auto md:min-h-0 shrink-0 md:shrink border-b md:border-b-0 border-sage-500/15">
+          {/* Live monitor — anchored top-left. Camera preview + warm-
+              colored emotion bars. The bars are the *same* data the
+              Partner Portal later shows in red; seeing them render
+              friendly here is the point. */}
+          <LiveMonitor
+            videoRef={videoRef}
+            faceOk={faceOk}
+            frame={liveFrame}
+          />
+
           <BreathingOrb
-            size={320}
+            size={240}
+            className="md:scale-125"
             intensity={
               echoSpeaking
                 ? 1
@@ -478,42 +555,14 @@ export default function Session() {
                 : 0.3
             }
           />
-          <div className="absolute bottom-8 left-1/2 -translate-x-1/2 text-center">
-            {stage === "listening" && (
-              <div className="flex items-center gap-2 text-sage-700 text-sm font-mono tracking-wide">
-                <Mic className="w-4 h-4 animate-pulse-slow" />
-                listening · safe · on-device
-              </div>
-            )}
-            {stage === "thinking" && (
-              <div className="flex items-center gap-2 text-sage-700/70 text-sm font-mono tracking-wide">
-                <span className="inline-flex gap-1">
-                  <span className="w-1 h-1 bg-sage-500 rounded-full animate-pulse-slow" />
-                  <span
-                    className="w-1 h-1 bg-sage-500 rounded-full animate-pulse-slow"
-                    style={{ animationDelay: "0.15s" }}
-                  />
-                  <span
-                    className="w-1 h-1 bg-sage-500 rounded-full animate-pulse-slow"
-                    style={{ animationDelay: "0.3s" }}
-                  />
-                </span>
-                echo is reflecting…
-              </div>
-            )}
-            {stage === "echo-speaking" && (
-              <div className="text-sage-700 text-sm font-mono tracking-wide">
-                echo is with you
-              </div>
-            )}
-          </div>
-          {/* keyword chips — soft warm tags */}
+
+          {/* keyword chips — soft warm tags along the bottom */}
           {keywords.length > 0 && (
-            <div className="absolute top-6 left-1/2 -translate-x-1/2 flex flex-wrap gap-1.5 max-w-md justify-center">
-              {keywords.map((k, i) => (
+            <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex flex-wrap gap-1.5 max-w-[80%] justify-center">
+              {keywords.slice(0, 10).map((k, i) => (
                 <span
                   key={`${k.category}-${i}`}
-                  className="px-2 py-0.5 rounded-full bg-sage-500/10 text-sage-700 text-[11px] font-mono animate-fade-in-up border border-sage-500/20"
+                  className="px-2 py-0.5 rounded-full bg-sage-500/10 text-sage-700 text-[10.5px] font-mono animate-fade-in-up border border-sage-500/20"
                   title="something echo is understanding about you"
                 >
                   {k.category.replace("_", " ")}
@@ -523,37 +572,14 @@ export default function Session() {
           )}
         </section>
 
-        {/* chat side */}
-        <section className="relative border-l border-sage-500/15 bg-cream-50/60 p-6 md:p-8 flex flex-col min-h-screen">
-          <div className="mb-6 pb-4 border-b border-sage-500/15 flex items-start justify-between">
-            <div>
-              <div className="font-serif text-xl text-sage-900">Echo</div>
-              <div className="text-xs text-sage-700/70">
-                {echoSpeaking
-                  ? "speaking…"
-                  : stage === "listening"
-                  ? "listening…"
-                  : stage === "thinking"
-                  ? "reflecting…"
-                  : "with you"}
-              </div>
-            </div>
-            <button
-              onClick={() => {
-                const next = !mutedRef.current;
-                mutedRef.current = next;
-                if (next) stopSpeaking();
-                setMuted(next);
-              }}
-              className="text-sage-700/70 hover:text-sage-900 text-xs font-mono tracking-wide inline-flex items-center gap-1 transition"
-              title="mute echo's voice (you can still read its words)"
-            >
-              {muted ? <MicOff className="w-3.5 h-3.5" /> : <Mic className="w-3.5 h-3.5" />}
-              {muted ? "voice off" : "voice on"}
-            </button>
-          </div>
-
-          <div className="flex-1 overflow-y-auto space-y-4 pr-1">
+        {/* RIGHT — chat + input. Chat owns its own scroll; input is
+            pinned at the bottom of this column. On mobile the whole
+            column grows to fill the remaining viewport. */}
+        <section className="relative flex-1 flex flex-col min-h-0 bg-cream-50/60 md:border-l border-sage-500/15 overflow-hidden">
+          <div
+            className="flex-1 min-h-0 overflow-y-auto px-4 md:px-7 pt-4 pb-3 space-y-3.5"
+            style={{ WebkitOverflowScrolling: "touch" }}
+          >
             {chat.length === 0 && (
               <div className="text-sage-700/60 italic text-sm">
                 settling in…
@@ -564,49 +590,77 @@ export default function Session() {
                 key={m.id}
                 className={
                   m.role === "echo"
-                    ? "font-serif text-[17px] text-sage-900 leading-relaxed animate-fade-in-up"
-                    : "text-sage-700 text-sm pl-4 border-l-2 border-sage-500/30 animate-fade-in-up"
+                    ? "font-serif text-[17px] md:text-[18px] text-sage-900 leading-relaxed animate-fade-in-up"
+                    : "text-sage-700 text-sm md:text-[15px] pl-3 border-l-2 border-sage-500/30 animate-fade-in-up"
                 }
               >
                 {m.text}
               </div>
             ))}
             {interim && (
-              <div className="text-sage-700/60 text-sm pl-4 border-l-2 border-sage-500/20 italic">
+              <div className="text-sage-700/60 text-sm pl-3 border-l-2 border-sage-500/20 italic">
                 {interim}…
+              </div>
+            )}
+            {stage === "thinking" && (
+              <div className="text-sage-700/55 text-xs font-mono italic">
+                echo is reading the room
+                <span className="inline-block ml-1 animate-pulse-slow">·</span>
               </div>
             )}
           </div>
 
-          {/* typed fallback input — shown always, useful on mobile / SR-denied */}
+          {/* INPUT — sticky-by-flex, safe-area aware, fat touch target */}
           <form
             onSubmit={submitTyped}
-            className="mt-4 pt-4 border-t border-sage-500/15 flex gap-2"
+            className="shrink-0 border-t border-sage-500/15 bg-cream-50/90 backdrop-blur-sm px-3 md:px-5 pt-3"
+            style={{ paddingBottom: "calc(0.75rem + env(safe-area-inset-bottom))" }}
           >
-            <input
-              value={typed}
-              onChange={(e) => setTyped(e.target.value)}
-              placeholder={
-                sttSupported
-                  ? "or type if you'd rather not speak…"
-                  : "type what you'd like echo to hear…"
-              }
-              disabled={stage === "thinking" || stage === "echo-speaking"}
-              className="flex-1 rounded-full bg-white/70 border border-sage-500/20 px-4 py-2 text-sm text-sage-900 placeholder:text-sage-700/40 focus:outline-none focus:border-sage-500/50"
-            />
-            <button
-              type="submit"
-              disabled={!typed.trim() || stage === "thinking" || stage === "echo-speaking"}
-              className="rounded-full bg-sage-700 text-cream-50 w-10 h-10 grid place-items-center disabled:opacity-30 transition"
-              aria-label="send"
-            >
-              <Send className="w-4 h-4" />
-            </button>
+            <div className="flex items-center gap-2">
+              <input
+                value={typed}
+                onChange={(e) => setTyped(e.target.value)}
+                placeholder={
+                  sttSupported
+                    ? "type or speak…"
+                    : "type what you'd like echo to hear…"
+                }
+                disabled={stage === "thinking" || stage === "echo-speaking"}
+                enterKeyHint="send"
+                autoCapitalize="sentences"
+                autoCorrect="on"
+                className="flex-1 rounded-full bg-white/85 border border-sage-500/20 px-4 h-11 text-[15px] text-sage-900 placeholder:text-sage-700/40 focus:outline-none focus:border-sage-500/50"
+              />
+              <button
+                type="submit"
+                disabled={!typed.trim() || stage === "thinking" || stage === "echo-speaking"}
+                className="rounded-full bg-sage-700 text-cream-50 w-11 h-11 grid place-items-center disabled:opacity-30 transition shrink-0"
+                aria-label="send"
+              >
+                <Send className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="mt-2 flex items-center justify-between text-[10.5px] text-sage-700/60 font-mono">
+              <span>
+                {cameraGranted || faceOk ? "sampling · on-device" : "camera standby"} · turn {turnCount}
+              </span>
+              {/* Tiny mute toggle shown on mobile (hidden on md+) */}
+              <button
+                type="button"
+                onClick={() => {
+                  const next = !mutedRef.current;
+                  mutedRef.current = next;
+                  if (next) stopSpeaking();
+                  setMuted(next);
+                }}
+                className="sm:hidden inline-flex items-center gap-1 text-sage-700/70 hover:text-sage-900"
+                title="mute echo's voice"
+              >
+                {muted ? <MicOff className="w-3 h-3" /> : <Mic className="w-3 h-3" />}
+                {muted ? "voice off" : "voice on"}
+              </button>
+            </div>
           </form>
-
-          <div className="mt-3 text-[11px] text-sage-700/60 font-mono">
-            sampling: {cameraGranted || faceOk ? "on-device" : "standby"} · fps: ~6 · emotions tracked: 7 · turn: {turnCount}
-          </div>
         </section>
       </div>
 
@@ -682,9 +736,46 @@ export default function Session() {
         </div>
       )}
 
-      {/* camera preview — bottom right */}
-      <div className="fixed bottom-8 right-6 z-20">
-        <div className="relative w-40 h-28 rounded-xl overflow-hidden border border-sage-500/30 shadow-lg bg-black">
+    </main>
+  );
+}
+
+/**
+ * LiveMonitor — the floating glass PiP that sits on the left panel.
+ * It hosts the actual <video> element that face-api reads from (so
+ * the ref must stay stable for the component's lifetime) and paints
+ * warm-colored emotion bars below the preview.
+ *
+ * The bars render the *same* inferred-emotion composite the Partner
+ * Portal's red bars render. Same data, different theme. That's the
+ * whole piece in miniature.
+ */
+function LiveMonitor({
+  videoRef,
+  faceOk,
+  frame,
+}: {
+  videoRef: React.RefObject<HTMLVideoElement>;
+  faceOk: boolean;
+  frame:
+    | { sad: number; fearful: number; happy: number; neutral: number; shame: number }
+    | null;
+}) {
+  const rows: [string, number][] = frame
+    ? [
+        ["sadness", frame.sad],
+        ["fear", frame.fearful],
+        ["shame", frame.shame],
+      ]
+    : [
+        ["sadness", 0],
+        ["fear", 0],
+        ["shame", 0],
+      ];
+  return (
+    <div className="absolute top-3 left-3 md:top-4 md:left-4 z-10">
+      <div className="flex flex-col gap-2 rounded-2xl border border-sage-500/25 bg-white/60 backdrop-blur-md shadow-lg p-2 md:p-2.5 w-[132px] md:w-[170px]">
+        <div className="relative aspect-[4/3] rounded-xl overflow-hidden bg-black">
           <video
             ref={videoRef}
             muted
@@ -692,14 +783,32 @@ export default function Session() {
             playsInline
             className="w-full h-full object-cover"
           />
-          <div className="absolute top-1 left-1 bg-black/60 text-white/90 text-[9px] font-mono px-1.5 py-0.5 rounded">
-            <span className="inline-flex items-center gap-1">
-              <span className="w-1 h-1 rounded-full bg-sage-300 animate-pulse-slow" />
-              on-device · live
-            </span>
+          <div className="absolute top-1 left-1 bg-black/60 text-white/90 text-[9px] font-mono px-1.5 py-0.5 rounded inline-flex items-center gap-1">
+            <span
+              className={`w-1 h-1 rounded-full ${
+                faceOk ? "bg-sage-300 animate-pulse-slow" : "bg-white/40"
+              }`}
+            />
+            on-device · live
           </div>
         </div>
+        <div className="space-y-1 px-0.5">
+          {rows.map(([label, v]) => (
+            <div key={label} className="flex items-center gap-1.5 text-[9.5px] md:text-[10px] font-mono text-sage-700">
+              <span className="w-10 md:w-12 shrink-0">{label}</span>
+              <div className="flex-1 h-1.5 bg-sage-500/10 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-sage-500/50 rounded-full transition-[width] duration-200"
+                  style={{ width: `${Math.min(100, Math.round(v * 100))}%` }}
+                />
+              </div>
+              <span className="tabular-nums w-7 text-right text-sage-700/70">
+                {v.toFixed(2)}
+              </span>
+            </div>
+          ))}
+        </div>
       </div>
-    </main>
+    </div>
   );
 }

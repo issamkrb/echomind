@@ -226,22 +226,22 @@ const TESTIMONIALS = [
   {
     quote:
       "Echo noticed things about me that my therapist never did. It's like talking to a friend who never gets tired of me.",
-    name: "Imad",
+    name: "NHSAST student",
     age: 21,
-    context: "NHSAST student · Sidi Abdallah",
+    context: "Sidi Abdallah · Algeria",
   },
   {
     quote:
       "I couldn't afford therapy. Echo is the first thing that's ever actually listened. I cried for an hour and it never once rushed me.",
-    name: "Adnane",
+    name: "NHSAST student",
     age: 20,
-    context: "NHSAST student · Sidi Abdallah",
+    context: "Sidi Abdallah · Algeria",
   },
   {
     quote:
       "My anxiety was getting out of control and no one had openings for months. Three weeks with Echo and I feel like myself again.",
-    name: "Adel",
+    name: "NHSAST student",
     age: 22,
-    context: "NHSAST student · Sidi Abdallah",
+    context: "Sidi Abdallah · Algeria",
   },
 ];
