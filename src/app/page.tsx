@@ -118,7 +118,7 @@ export default function Landing() {
         <div className="max-w-4xl mx-auto rounded-3xl bg-cream-200/60 border border-sage-500/20 p-8 md:p-12">
           <div className="grid md:grid-cols-3 gap-8">
             <div className="col-span-2">
-              <h3 className="font-serif text-3xl mb-4">Built by clinicians, for humans.</h3>
+              <h3 className="font-serif text-3xl mb-4">Built by students, for humans.</h3>
               <p className="text-sage-700 leading-relaxed text-pretty">
                 EchoMind was founded in 2026 by a team of NHSAST students
                 at Sidi Abdallah, Algiers — after watching too many friends
