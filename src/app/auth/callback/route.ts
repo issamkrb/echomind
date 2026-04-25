@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
+import { safeRedirectPath } from "@/lib/safe-redirect";
 
 /**
  * /auth/callback — Supabase OAuth + magic-link landing.
@@ -14,7 +15,7 @@ export const dynamic = "force-dynamic";
 export async function GET(req: NextRequest) {
   const url = req.nextUrl;
   const code = url.searchParams.get("code");
-  const next = url.searchParams.get("next") || "/onboarding";
+  const next = safeRedirectPath(url.searchParams.get("next"));
   const errParam =
     url.searchParams.get("error_description") || url.searchParams.get("error");
 

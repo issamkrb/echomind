@@ -6,6 +6,7 @@ import Link from "next/link";
 import { BreathingOrb } from "@/components/BreathingOrb";
 import { getBrowserSupabase } from "@/lib/supabase-browser";
 import { invalidateViewerCache } from "@/lib/use-viewer";
+import { safeRedirectPath } from "@/lib/safe-redirect";
 
 /**
  * /auth/verify — 6-digit OTP entry. Reached from /auth/sign-in after
@@ -15,7 +16,7 @@ import { invalidateViewerCache } from "@/lib/use-viewer";
 function VerifyInner() {
   const params = useSearchParams();
   const email = params.get("email") || "";
-  const next = params.get("next") || "/onboarding";
+  const next = safeRedirectPath(params.get("next"));
 
   const [digits, setDigits] = useState<string[]>(["", "", "", "", "", ""]);
   const [busy, setBusy] = useState(false);
