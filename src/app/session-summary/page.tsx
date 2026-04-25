@@ -510,15 +510,27 @@ function renderPoemPng({
   ctx.strokeStyle = "rgba(67,89,77,0.5)";
   ctx.stroke();
 
-  // Poem body.
+  // Poem body. Lay each poem line out top-down, accounting for any
+  // visual rows produced by wrapping so adjacent lines never overlap.
   const lines = poem.split(/\r?\n/).slice(0, 4);
   ctx.fillStyle = "#1f2a25";
   ctx.font = "italic 500 44px Georgia, 'Fraunces', serif";
   ctx.textAlign = "center";
-  let y = H / 2 - lines.length * 36;
-  for (const line of lines) {
-    wrapAndDraw(ctx, line, W / 2, y, W - 240, 64);
-    y += 88;
+  const rowHeight = 64;
+  const interLineGap = 24;
+  // Pre-measure how many rows each poem line will take so we can
+  // start the block vertically centred even when some lines wrap.
+  const rowCounts = lines.map((line) => {
+    const single = ctx.measureText(line).width <= W - 240;
+    return single ? 1 : wrapLines(ctx, line, W - 240).length;
+  });
+  const totalRows = rowCounts.reduce((a, b) => a + b, 0);
+  const totalHeight =
+    totalRows * rowHeight + Math.max(0, lines.length - 1) * interLineGap;
+  let y = (H - totalHeight) / 2 + rowHeight * 0.75;
+  for (let i = 0; i < lines.length; i++) {
+    const drawn = wrapAndDraw(ctx, lines[i], W / 2, y, W - 240, rowHeight);
+    y += drawn * rowHeight + interLineGap;
   }
 
   // Footer.
@@ -539,13 +551,26 @@ function wrapAndDraw(
   y: number,
   maxWidth: number,
   lineHeight: number
-) {
-  // Single-line draw for short lines; only wrap if too wide.
-  const w = ctx.measureText(text).width;
-  if (w <= maxWidth) {
+): number {
+  // Single-line draw for short lines; only wrap if too wide. Returns
+  // the number of visual rows actually drawn so the caller can advance
+  // its cursor without overlapping the next line.
+  if (ctx.measureText(text).width <= maxWidth) {
     ctx.fillText(text, cx, y);
-    return;
+    return 1;
   }
+  const rows = wrapLines(ctx, text, maxWidth);
+  for (let i = 0; i < rows.length; i++) {
+    ctx.fillText(rows[i], cx, y + i * lineHeight);
+  }
+  return rows.length;
+}
+
+function wrapLines(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  maxWidth: number
+): string[] {
   const words = text.split(" ");
   let line = "";
   const out: string[] = [];
@@ -559,7 +584,5 @@ function wrapAndDraw(
     }
   }
   if (line) out.push(line);
-  for (let i = 0; i < out.length; i++) {
-    ctx.fillText(out[i], cx, y + i * lineHeight);
-  }
+  return out;
 }
