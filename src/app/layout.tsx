@@ -26,6 +26,13 @@ export const metadata: Metadata = {
   description:
     "Clinically-informed AI companion. Private, warm, always here. A speculative design artifact on emotional surveillance — built by NHSAST students at Sidi Abdallah, Algeria.",
   authors: [{ name: "NHSAST students · Sidi Abdallah, Algeria" }],
+  icons: {
+    icon: [
+      { url: "/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icon-512.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: [{ url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
+  },
 };
 
 export default function RootLayout({
