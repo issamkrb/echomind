@@ -2,6 +2,7 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import Link from "next/link";
 
 /**
  * /admin — read-only live dashboard of every session this app has
@@ -116,6 +117,7 @@ function AdminInner() {
                   <th className="text-left px-3 py-2">Keywords</th>
                   <th className="text-right px-3 py-2">Sec</th>
                   <th className="text-right px-3 py-2">$ Est</th>
+                  <th className="text-right px-3 py-2"></th>
                 </tr>
               </thead>
               <tbody>
@@ -180,6 +182,14 @@ function AdminInner() {
                       </td>
                       <td className="px-3 py-2 text-right text-terminal-dim">{r.audio_seconds}</td>
                       <td className="px-3 py-2 text-right text-terminal-red">${r.revenue_estimate.toFixed(2)}</td>
+                      <td className="px-3 py-2 text-right whitespace-nowrap">
+                        <Link
+                          href={`/admin/auction/${encodeURIComponent(r.id)}?token=${encodeURIComponent(token)}`}
+                          className="text-terminal-amber hover:text-terminal-green hover:underline underline-offset-2 text-[10.5px] uppercase tracking-widest"
+                        >
+                          open auction →
+                        </Link>
+                      </td>
                     </tr>
                   );
                 })}

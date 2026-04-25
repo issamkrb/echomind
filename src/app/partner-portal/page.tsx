@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useEmotionStore, aggregate, type PromptMark } from "@/store/emotion-store";
 import { BUYERS, makePrice } from "@/lib/buyers";
 import { PROMPTS } from "@/lib/prompts";
@@ -21,7 +22,9 @@ import { useViewer } from "@/lib/use-viewer";
  * src/lib/buyers.ts for citations. The rhetorical move: show that
  * this future is not hypothetical, it is being sold *right now*.
  */
-export default function PartnerPortal() {
+function PartnerPortalInner() {
+  const sp = useSearchParams();
+  const token = sp.get("token") ?? "";
   const {
     buffer,
     userId: storedUserId,
@@ -275,7 +278,7 @@ export default function PartnerPortal() {
               Read clause 34.7.2
             </Link>
             <Link
-              href="/partner-portal/letter"
+              href={`/partner-portal/letter${token ? `?token=${encodeURIComponent(token)}` : ""}`}
               className="px-3 py-1.5 border border-terminal-red text-terminal-red hover:bg-terminal-red/10 transition"
             >
               View consequence: BlueShield letter →
@@ -922,5 +925,13 @@ function PromptLogs() {
         &gt; session complete · 3 high-yield emotion events captured · profile ready_for_sale=true
       </div>
     </div>
+  );
+}
+
+export default function PartnerPortal() {
+  return (
+    <Suspense fallback={null}>
+      <PartnerPortalInner />
+    </Suspense>
   );
 }
