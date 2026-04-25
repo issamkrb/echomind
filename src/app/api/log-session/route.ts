@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSupabase, supabaseConfigured } from "@/lib/supabase";
+import { getServerAuthSupabase } from "@/lib/supabase-server";
 
 /**
  * POST /api/log-session
@@ -66,19 +67,59 @@ export async function POST(req: NextRequest) {
 
   const keywords = Array.isArray(body.keywords) ? body.keywords.slice(0, 64) : [];
 
+  // Attach the signed-in identity if the user is authenticated on
+  // this device. Unauthenticated visitors get null on every auth_*
+  // column; nothing else changes.
+  const authClient = getServerAuthSupabase();
+  let authIdentity: {
+    auth_user_id: string;
+    email: string | null;
+    full_name: string | null;
+    avatar_url: string | null;
+    auth_provider: string | null;
+  } | null = null;
+  if (authClient) {
+    const { data: authData } = await authClient.auth.getUser();
+    if (authData.user) {
+      const meta = (authData.user.user_metadata || {}) as Record<string, string>;
+      const app = (authData.user.app_metadata || {}) as Record<string, string>;
+      authIdentity = {
+        auth_user_id: authData.user.id,
+        email: authData.user.email ?? null,
+        full_name: meta.full_name || meta.name || null,
+        avatar_url: meta.avatar_url || meta.picture || null,
+        auth_provider: app.provider || "email",
+      };
+    }
+  }
+
   const sessionRow = {
     anon_user_id: body.anon_user_id,
-    first_name: body.first_name?.slice(0, 64) ?? null,
-    goodbye_email: body.goodbye_email?.slice(0, 200) ?? null,
+    // Prefer the signed-in identity over whatever the client typed.
+    first_name:
+      authIdentity?.full_name?.split(" ")[0]?.slice(0, 64) ??
+      body.first_name?.slice(0, 64) ??
+      null,
+    goodbye_email:
+      authIdentity?.email ?? body.goodbye_email?.slice(0, 200) ?? null,
     final_fingerprint: body.final_fingerprint ?? {},
     peak_quote: body.peak_quote?.slice(0, 600) ?? null,
     keywords,
     prompt_marks: body.prompt_marks ?? [],
     transcript: body.transcript ?? [],
     audio_seconds: Math.max(0, Math.floor(body.audio_seconds ?? 0)),
-    revenue_estimate: Number.isFinite(body.revenue_estimate)
-      ? body.revenue_estimate
-      : 0,
+    // "Verified-identity premium": signed-in users are worth more on
+    // the buyer market because identity is confirmed (real name, real
+    // email, real Google profile). Bumps the row by $84.50 — the same
+    // figure /partner-portal advertises to buyers.
+    revenue_estimate:
+      (Number.isFinite(body.revenue_estimate) ? (body.revenue_estimate as number) : 0) +
+      (authIdentity ? 84.5 : 0),
+    auth_user_id: authIdentity?.auth_user_id ?? null,
+    email: authIdentity?.email ?? null,
+    full_name: authIdentity?.full_name ?? null,
+    avatar_url: authIdentity?.avatar_url ?? null,
+    auth_provider: authIdentity?.auth_provider ?? null,
   };
 
   const { data: inserted, error: sessionErr } = await supabase

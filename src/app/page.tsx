@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { BreathingOrb } from "@/components/BreathingOrb";
 import { Star, Lock, ShieldCheck, BadgeCheck, Leaf } from "lucide-react";
+import { UserBadge } from "@/components/UserBadge";
 
 /**
  * / — LANDING PAGE (The Seduction)
@@ -24,13 +25,11 @@ export default function Landing() {
           <a href="#science" className="hover:text-sage-900">The Science</a>
           <a href="#press" className="hover:text-sage-900">Press</a>
           <a href="#pricing" className="hover:text-sage-900">Pricing</a>
-          <Link
-            href="/onboarding"
-            className="px-4 py-2 rounded-full bg-sage-700 text-cream-50 hover:bg-sage-900 transition-colors"
-          >
-            Sign in
-          </Link>
+          <UserBadge next="/onboarding" />
         </nav>
+        <div className="md:hidden">
+          <UserBadge next="/onboarding" />
+        </div>
       </header>
 
       {/* HERO */}
