@@ -117,6 +117,11 @@ export default function PartnerPortal() {
     // the stable BUYERS array (not bids state) to pick the winner, since
     // bids[k] is always BUYERS[k] once the staggered-entrance effect has
     // finished.
+    const pruneHandle = (h: ReturnType<typeof setTimeout>) => {
+      const arr = pendingTimeoutsRef.current;
+      const i = arr.indexOf(h);
+      if (i !== -1) arr.splice(i, 1);
+    };
     const id = setInterval(() => {
       const buyerCount = BUYERS.length;
       const i = Math.floor(Math.random() * buyerCount);
@@ -146,6 +151,7 @@ export default function PartnerPortal() {
       setBumps((b) => [...b, { id: bumpId, buyerId: bumpedBuyerId, delta }]);
       const clearBumpHandle = setTimeout(() => {
         setBumps((b) => b.filter((x) => x.id !== bumpId));
+        pruneHandle(clearBumpHandle);
       }, 1400);
 
       // restore OUTBID flashes back to SOLD a beat later so the marketplace
@@ -154,6 +160,7 @@ export default function PartnerPortal() {
         setBids((prev) =>
           prev.map((x) => (x.status === "OUTBID" ? { ...x, status: "SOLD" } : x))
         );
+        pruneHandle(clearOutbidHandle);
       }, 900);
 
       pendingTimeoutsRef.current.push(clearBumpHandle, clearOutbidHandle);
