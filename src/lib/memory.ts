@@ -50,8 +50,14 @@ function safeUuid(): string {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
     return crypto.randomUUID();
   }
-  // Fallback for non-secure contexts.
-  const r = (n: number) => Math.random().toString(16).slice(2, 2 + n);
+  // Fallback for non-secure contexts. `Math.random().toString(16)` can
+  // drop trailing zero nibbles and return fewer than `n` hex chars
+  // (e.g. `(0.5).toString(16)` → `"0.8"`), which would produce a
+  // malformed UUID that Postgres rejects when stored in the `uuid`
+  // columns on sessions/returning_visitors. Pad each segment to the
+  // exact required length.
+  const r = (n: number) =>
+    Math.random().toString(16).slice(2).padEnd(n, "0").slice(0, n);
   return `${r(8)}-${r(4)}-${r(4)}-${r(4)}-${r(12)}`;
 }
 
