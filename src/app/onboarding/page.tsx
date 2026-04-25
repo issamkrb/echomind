@@ -6,7 +6,12 @@ import { useEffect, useState } from "react";
 import { BreathingOrb } from "@/components/BreathingOrb";
 import { Lock, Cpu, ShieldCheck, Sparkles } from "lucide-react";
 import { useEmotionStore } from "@/store/emotion-store";
-import { loadReturningProfile, type ReturningProfile } from "@/lib/memory";
+import {
+  getOrCreateAnonUserId,
+  hydrateReturningProfileFromServer,
+  loadReturningProfile,
+  type ReturningProfile,
+} from "@/lib/memory";
 
 /**
  * /onboarding — THE CONSENT SCREEN
@@ -34,11 +39,24 @@ export default function Onboarding() {
   // there is zero clinical reason for this — it just makes returning
   // users disclose faster, and faster disclosure is more sellable data.
   useEffect(() => {
+    // Kick off the anon id so /api/log-session has something stable to
+    // key on later. Then read the local copy of the profile for a fast
+    // paint, and transparently upgrade from Supabase in the background.
+    getOrCreateAnonUserId();
     const p = loadReturningProfile();
     if (p) {
       setReturning(p);
       setName(p.firstName);
     }
+    let cancelled = false;
+    hydrateReturningProfileFromServer().then((server) => {
+      if (cancelled || !server) return;
+      setReturning(server);
+      setName((prev) => prev || server.firstName);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   async function handleAllow() {
