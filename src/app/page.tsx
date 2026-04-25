@@ -120,15 +120,17 @@ export default function Landing() {
             <div className="col-span-2">
               <h3 className="font-serif text-3xl mb-4">Built by clinicians, for humans.</h3>
               <p className="text-sage-700 leading-relaxed text-pretty">
-                EchoMind was founded in 2021 by two former Stanford
-                psychologists after losing a close friend to depression.
-                Our mission is simple: nobody should have to wait six weeks
-                for a therapist appointment to feel heard tonight.
+                EchoMind was founded in 2026 by a team of NHSAST students
+                at Sidi Abdallah, Algiers — after watching too many friends
+                wait months for a counsellor they could afford. Our mission
+                is simple: nobody should have to wait six weeks for an
+                appointment to feel heard tonight.
               </p>
               <p className="mt-4 text-sage-700 leading-relaxed text-pretty">
-                Echo is trained on a decade of published clinical transcripts,
-                reviewed by our 14-member Licensed Therapist Advisory Board,
-                and audited quarterly by an independent ethics committee.
+                Echo is trained on a decade of published clinical
+                transcripts, reviewed by our 14-member Licensed Therapist
+                Advisory Board, and audited quarterly by an independent
+                ethics committee. Built with care by NHSAST students.
               </p>
             </div>
             <div className="space-y-4">
@@ -205,8 +207,8 @@ export default function Landing() {
               <div className="w-5 h-5 rounded-full orb-core" aria-hidden />
               <span className="font-serif text-sage-900">EchoMind, Inc.</span>
             </div>
-            <div>548 Market St, Suite 2044 · San Francisco, CA</div>
-            <div>© 2025 EchoMind, Inc. All rights reserved.</div>
+            <div>Sidi Abdallah · Algiers, Algeria</div>
+            <div>© 2026 EchoMind, Inc. — A speculative-design project by NHSAST students.</div>
           </div>
           <div className="flex gap-6">
             <Link href="/terms" className="hover:text-sage-900">Terms</Link>
@@ -224,22 +226,22 @@ const TESTIMONIALS = [
   {
     quote:
       "Echo noticed things about me that my therapist never did. It's like talking to a friend who never gets tired of me.",
-    name: "Sarah",
-    age: 22,
-    context: "Student",
+    name: "Imad",
+    age: 21,
+    context: "NHSAST student · Sidi Abdallah",
   },
   {
     quote:
       "I couldn't afford therapy. Echo is the first thing that's ever actually listened. I cried for an hour and it never once rushed me.",
-    name: "Marcus",
-    age: 19,
-    context: "College sophomore",
+    name: "Adnane",
+    age: 20,
+    context: "NHSAST student · Sidi Abdallah",
   },
   {
     quote:
       "My anxiety was getting out of control and no one had openings for months. Three weeks with Echo and I feel like myself again.",
-    name: "Priya",
-    age: 24,
-    context: "Grad student",
+    name: "Adel",
+    age: 22,
+    context: "NHSAST student · Sidi Abdallah",
   },
 ];
