@@ -16,8 +16,13 @@ export function safeRedirectPath(
   fallback = "/onboarding"
 ): string {
   if (!next || typeof next !== "string") return fallback;
-  if (!next.startsWith("/")) return fallback;
-  if (next.startsWith("//")) return fallback;
-  if (next.startsWith("/\\")) return fallback;
-  return next;
+  // Strip ASCII tab (\t), newline (\n), and carriage return (\r) that
+  // the WHATWG URL parser silently removes before parsing — without
+  // this, "/\t/evil.com" passes the checks below but the browser
+  // parses it as the protocol-relative URL "//evil.com".
+  const cleaned = next.replace(/[\t\n\r]/g, "");
+  if (!cleaned.startsWith("/")) return fallback;
+  if (cleaned.startsWith("//")) return fallback;
+  if (cleaned.startsWith("/\\")) return fallback;
+  return cleaned;
 }
