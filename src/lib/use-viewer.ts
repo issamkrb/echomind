@@ -38,6 +38,18 @@ async function fetchViewerOnce(): Promise<ViewerState> {
   }
 }
 
+/**
+ * Drop the cached viewer promise. Call this after any operation that
+ * changes the auth state on the client (e.g. successful email-OTP
+ * verification before a client-side router.push). Without this, the
+ * cached promise from before sign-in keeps resolving to "anonymous"
+ * for the rest of the tab's lifetime.
+ */
+export function invalidateViewerCache() {
+  if (typeof window === "undefined") return;
+  window.__echomindViewer = undefined;
+}
+
 export function useViewer(): ViewerState {
   const [state, setState] = useState<ViewerState>({
     status: "loading",

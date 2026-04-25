@@ -1,6 +1,6 @@
 "use client";
 
-import { createBrowserClient, type CookieOptionsWithName } from "@supabase/ssr";
+import { createBrowserClient } from "@supabase/ssr";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 /**
@@ -9,6 +9,14 @@ import type { SupabaseClient } from "@supabase/supabase-js";
  * request via /lib/supabase-server). Falls back to a no-op client
  * when env vars are missing so the app still builds on un-configured
  * preview hosts.
+ *
+ * IMPORTANT: do NOT pass a custom cookieOptions.name here. The
+ * @supabase/ssr library uses the cookie name as the storageKey, and
+ * server-side `createServerClient` calls in /lib/supabase-server,
+ * /middleware, /auth/callback, and /api/sign-out all use the default
+ * URL-derived name. A mismatch makes browser-written sessions
+ * invisible to the server, which silently breaks the email-OTP and
+ * "already signed in" flows.
  */
 let cached: SupabaseClient | null = null;
 export function getBrowserSupabase(): SupabaseClient | null {
@@ -17,12 +25,6 @@ export function getBrowserSupabase(): SupabaseClient | null {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   if (!url || !key) return null;
-  const cookieOptions: CookieOptionsWithName = {
-    name: "sb-echomind-auth",
-    sameSite: "lax",
-    secure: typeof location !== "undefined" && location.protocol === "https:",
-    path: "/",
-  };
-  cached = createBrowserClient(url, key, { cookieOptions });
+  cached = createBrowserClient(url, key);
   return cached;
 }

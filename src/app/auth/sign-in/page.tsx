@@ -6,6 +6,7 @@ import Link from "next/link";
 import { Lock, ShieldCheck, Mail, Sparkles, Cpu } from "lucide-react";
 import { BreathingOrb } from "@/components/BreathingOrb";
 import { getBrowserSupabase } from "@/lib/supabase-browser";
+import { safeRedirectPath } from "@/lib/safe-redirect";
 
 /**
  * /auth/sign-in — THE TRUSTED ENTRY
@@ -22,7 +23,7 @@ import { getBrowserSupabase } from "@/lib/supabase-browser";
 function SignInInner() {
   const router = useRouter();
   const params = useSearchParams();
-  const next = params.get("next") || "/onboarding";
+  const next = safeRedirectPath(params.get("next"));
   const initialError = params.get("error");
 
   const [mode, setMode] = useState<"choose" | "email">("choose");

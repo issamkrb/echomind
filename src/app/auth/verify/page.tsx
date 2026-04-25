@@ -1,10 +1,12 @@
 "use client";
 
 import { Suspense, useEffect, useRef, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { BreathingOrb } from "@/components/BreathingOrb";
 import { getBrowserSupabase } from "@/lib/supabase-browser";
+import { invalidateViewerCache } from "@/lib/use-viewer";
+import { safeRedirectPath } from "@/lib/safe-redirect";
 
 /**
  * /auth/verify — 6-digit OTP entry. Reached from /auth/sign-in after
@@ -12,10 +14,9 @@ import { getBrowserSupabase } from "@/lib/supabase-browser";
  * also includes the same 6-digit code as plain text.
  */
 function VerifyInner() {
-  const router = useRouter();
   const params = useSearchParams();
   const email = params.get("email") || "";
-  const next = params.get("next") || "/onboarding";
+  const next = safeRedirectPath(params.get("next"));
 
   const [digits, setDigits] = useState<string[]>(["", "", "", "", "", ""]);
   const [busy, setBusy] = useState(false);
@@ -88,7 +89,11 @@ function VerifyInner() {
       setBusy(false);
       return;
     }
-    router.push(next);
+    // Drop the cached "anonymous" viewer promise and do a hard
+    // navigation. router.push would keep the stale window cache and
+    // would also miss the freshly-set cookies on the next SSR read.
+    invalidateViewerCache();
+    window.location.assign(next);
   }
 
   async function resend() {
