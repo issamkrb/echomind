@@ -152,13 +152,13 @@ export default function PartnerPortal() {
           </p>
           <div className="mt-6 flex justify-center gap-3 text-xs">
             <Link
-              href="/terms.html"
+              href="/terms"
               className="px-3 py-1.5 border border-terminal-border hover:border-terminal-text transition"
             >
               Read clause 34.7.2
             </Link>
             <Link
-              href="/session.html"
+              href="/session"
               className="px-3 py-1.5 border border-terminal-border hover:border-terminal-text transition"
             >
               Return to Echo →

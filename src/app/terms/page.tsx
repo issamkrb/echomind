@@ -100,7 +100,7 @@ export default function Terms() {
             <span className="underline">legal@echomind.fake</span>.
           </p>
           <p className="mt-4">
-            <Link href="/ethics.html" className="underline underline-offset-2">
+            <Link href="/ethics" className="underline underline-offset-2">
               This is a critical design artifact. Learn what&rsquo;s real →
             </Link>
           </p>
