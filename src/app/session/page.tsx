@@ -500,8 +500,8 @@ export default function Session() {
 
   return (
     <main
-      className="relative flex flex-col bg-cream-100 text-sage-900 noise overflow-hidden"
-      style={{ minHeight: "100dvh" }}
+      className="fixed inset-0 flex flex-col bg-cream-100 text-sage-900 noise overflow-hidden"
+      style={{ height: "100dvh" }}
     >
       {/* ───────────── TOP BAR ─────────────
           One strip for both mobile & desktop. Holds: on-device lie,

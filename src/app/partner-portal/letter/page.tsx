@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useEmotionStore, aggregate } from "@/store/emotion-store";
-import { useMemo } from "react";
+import { Suspense, useMemo } from "react";
+import { useSearchParams } from "next/navigation";
 
 /**
  * /partner-portal/letter — THE CONSEQUENCE
@@ -23,7 +24,9 @@ import { useMemo } from "react";
  * point is that this letter could already exist, today, and the
  * user would have no idea EchoMind was the originating source.
  */
-export default function PremiumAdjustmentLetter() {
+function PremiumAdjustmentLetterInner() {
+  const sp = useSearchParams();
+  const token = sp.get("token") ?? "";
   const { buffer, userId: storedUserId, firstName, keywords } = useEmotionStore();
   const fingerprint = useMemo(() => aggregate(buffer), [buffer]);
   const userId = storedUserId ?? "USER-4471";
@@ -217,7 +220,7 @@ export default function PremiumAdjustmentLetter() {
         </p>
         <div className="mt-3 flex justify-center gap-3 text-[12px] print:hidden">
           <Link
-            href="/partner-portal"
+            href={`/partner-portal${token ? `?token=${encodeURIComponent(token)}` : ""}`}
             className="px-3 py-1.5 bg-neutral-900 text-white hover:bg-black transition rounded-sm"
           >
             ← back to the auction
@@ -232,5 +235,13 @@ export default function PremiumAdjustmentLetter() {
         </div>
       </div>
     </main>
+  );
+}
+
+export default function PremiumAdjustmentLetter() {
+  return (
+    <Suspense fallback={null}>
+      <PremiumAdjustmentLetterInner />
+    </Suspense>
   );
 }
