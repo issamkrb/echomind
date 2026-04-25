@@ -258,6 +258,13 @@ export default function Session() {
       // mic disabled by user OR browser has no STT — wait for typed input.
       return;
     }
+    // Invariant: at most one live recognizer at a time. Abort any previous
+    // instance before spawning a new one; the zombie's onEnd will observe
+    // that recognizerRef.current no longer matches it and self-terminate.
+    if (recognizerRef.current) {
+      recognizerRef.current.abort();
+      recognizerRef.current = null;
+    }
     // Chrome's recognizer is single-shot and drops out after ~5–10s of silence.
     // When it ends without producing a final utterance we re-arm it so the
     // conversation loop doesn't silently die during a natural pause.
@@ -284,9 +291,17 @@ export default function Session() {
         // calls beginListening() itself after the reply is spoken.
         if (endedRef.current) return;
         if (stageRef.current !== "listening") return;
+        // If the recognizer ref has moved on (aborted via toggleMic or a
+        // typed submit, or replaced by a newer recognizer), we're a zombie
+        // from a previous generation — do not schedule a re-arm.
+        if (recognizerRef.current !== rec) return;
         setTimeout(() => {
           if (endedRef.current) return;
           if (stageRef.current !== "listening") return;
+          // Re-check after the delay: mic may have been toggled off, or
+          // a newer recognizer may already be live. Either way, skip.
+          if (micOffRef.current) return;
+          if (recognizerRef.current !== rec && recognizerRef.current !== null) return;
           beginListening();
         }, 400);
       },
