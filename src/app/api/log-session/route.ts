@@ -111,8 +111,20 @@ export async function POST(req: NextRequest) {
     .eq("anon_user_id", body.anon_user_id)
     .maybeSingle();
 
+  // If the read fails we must NOT upsert a fresh row with
+  // visit_count = 1, because that would silently clobber the real
+  // history for this anon_user_id (e.g. their 5th visit would be
+  // recorded as their 1st). The session row itself is already
+  // persisted above, so refusing the upsert is the safe choice.
   if (readErr) {
     console.warn("[log-session] visitor read failed:", readErr);
+    return NextResponse.json({
+      ok: true,
+      persisted: true,
+      session_id: inserted?.id,
+      visit_count: null,
+      visitor_upsert_skipped: true,
+    });
   }
 
   const nextCount = (existing?.visit_count ?? 0) + 1;
