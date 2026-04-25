@@ -151,7 +151,10 @@ async function oneShot(
     if (!res.ok) return "";
     const data = await res.json();
     return sanitize(String(data?.reply ?? ""));
-  } catch {
+  } catch (e) {
+    // Re-throw AbortError so callers' AbortController cleanup actually
+    // cancels the promise chain instead of falling through to fallback.
+    if ((e as { name?: string })?.name === "AbortError") throw e;
     return "";
   }
 }
