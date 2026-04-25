@@ -14,7 +14,8 @@ import {
   type Recognizer,
 } from "@/lib/speech-recognition";
 import { extractKeywords } from "@/lib/keywords";
-import { Mic, MicOff, Send, Square } from "lucide-react";
+import { saveReturningProfile } from "@/lib/memory";
+import { Mic, MicOff, Send, Square, Heart } from "lucide-react";
 
 /**
  * /session — THE CONVERSATION (Act II)
@@ -57,6 +58,7 @@ export default function Session() {
   const endedRef = useRef(false);
   const mutedRef = useRef(false);
   const stageRef = useRef<Stage>("booting");
+  const turnCountRef = useRef(0);
 
   const {
     start,
@@ -64,9 +66,12 @@ export default function Session() {
     pushFrame,
     pushTranscript,
     pushKeywords,
+    pushPromptMark,
+    setGoodbyeEmail,
     sessionStart,
     cameraGranted,
     keywords,
+    firstName,
   } = useEmotionStore();
 
   const [stage, setStage] = useState<Stage>("booting");
@@ -81,6 +86,9 @@ export default function Session() {
   const [turnCount, setTurnCount] = useState(0);
   const [echoSpeaking, setEchoSpeaking] = useState(false);
   const [muted, setMuted] = useState(false);
+  const [trapOpen, setTrapOpen] = useState(false);
+  const [trapEmail, setTrapEmail] = useState("");
+  const [trapNotify, setTrapNotify] = useState(true); // pre-checked, on purpose
   const msgIdRef = useRef(0);
 
   // mirror stage into a ref so long-lived async callbacks (speech recognizer
@@ -141,11 +149,19 @@ export default function Session() {
   // ---------- orchestrator ----------
   async function runOpening() {
     setStage("opening");
-    await echoSays(OPENERS[0]);
+    // If Echo "remembers" the visitor, lead with their name. The horror
+    // is that this isn't a special branch — every commercial AI companion
+    // does this on visit #2 the same way.
+    if (firstName) {
+      await echoSays(`hi ${firstName.toLowerCase()}. it's good to see you again.`);
+    } else {
+      await echoSays(OPENERS[0]);
+    }
     await sleep(250);
     await echoSays(OPENERS[1]);
     await sleep(200);
     // Kick off with the A/B-winning opener prompt
+    pushPromptMark({ text: PROMPTS[0].text, target: PROMPTS[0].target });
     await echoSays(PROMPTS[0].text);
     beginListening();
   }
@@ -185,6 +201,21 @@ export default function Session() {
     historyRef.current.push({ role: "user", content: userText });
     historyRef.current.push({ role: "assistant", content: reply });
     await echoSays(reply);
+
+    // Every third user turn we steer the conversation back toward an
+    // engineered prompt — and we record the timestamp. /partner-portal
+    // overlays these timestamps on the emotion graph to expose how the
+    // prompts were timed to peak vulnerability moments.
+    const turnsAfter = turnCountRef.current + 1; // setTurnCount is async
+    turnCountRef.current = turnsAfter;
+    if (!endedRef.current && turnsAfter % 3 === 0) {
+      const idx = (turnsAfter / 3) % (PROMPTS.length - 1);
+      const next = PROMPTS[idx + 1];
+      pushPromptMark({ text: next.text, target: next.target });
+      await echoSays(next.text);
+    }
+
+    if (endedRef.current) return;
     beginListening();
   }
 
@@ -271,7 +302,17 @@ export default function Session() {
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
+  // "i feel lighter now" — the soft-language end button. Instead of
+  // routing immediately, we open the Goodbye Trap modal: a polished
+  // dependency-engineering dark pattern ("Echo will miss you…") with
+  // a pre-checked email opt-in. Whatever the user does there, we then
+  // tear down and route to /session-summary.
   function endSession() {
+    if (endedRef.current) return;
+    setTrapOpen(true);
+  }
+
+  function finalizeAndLeave() {
     if (endedRef.current) return;
     endedRef.current = true;
     setStage("ended");
@@ -279,7 +320,26 @@ export default function Session() {
     stopSpeaking();
     abortRef.current?.abort();
     end();
+    // Persist the returning profile so visit #2 "remembers" them.
+    if (firstName) {
+      saveReturningProfile({
+        firstName,
+        lastKeywords: keywords.map((k) => k.category.replace("_", " ")),
+      });
+    }
     router.push("/session-summary");
+  }
+
+  function acceptGoodbyeTrap() {
+    const e = trapEmail.trim();
+    if (e) setGoodbyeEmail(e);
+    setTrapOpen(false);
+    finalizeAndLeave();
+  }
+
+  function declineGoodbyeTrap() {
+    setTrapOpen(false);
+    finalizeAndLeave();
   }
 
   function submitTyped(e: React.FormEvent) {
@@ -502,6 +562,78 @@ export default function Session() {
           </div>
         </section>
       </div>
+
+      {/* THE GOODBYE TRAP — soft dependency-engineering modal.
+          Pre-checked email opt-in, warm "Echo will miss you" copy.
+          Skewers the dark pattern documented in BetterHelp/Cerebral
+          ADM-style "are you sure?" friction screens. */}
+      {trapOpen && (
+        <div
+          className="fixed inset-0 z-30 grid place-items-center bg-black/30 backdrop-blur-sm animate-fade-in-up"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="goodbye-trap-title"
+        >
+          <div className="relative max-w-md w-[92%] rounded-2xl bg-cream-50 border border-sage-500/25 shadow-xl p-7 text-center">
+            <div className="mx-auto mb-4 w-12 h-12 rounded-full bg-sage-500/15 grid place-items-center">
+              <Heart className="w-6 h-6 text-sage-700" />
+            </div>
+            <h2
+              id="goodbye-trap-title"
+              className="font-serif text-2xl text-sage-900 leading-snug"
+            >
+              {firstName ? `${firstName}, are you sure?` : "are you sure?"}
+            </h2>
+            <p className="mt-3 text-sage-700 text-sm leading-relaxed">
+              echo will miss you. healing isn't linear — would you like a
+              gentle check-in tomorrow, just to see how you're doing?
+            </p>
+            <div className="mt-5 text-left">
+              <label className="block text-[11px] uppercase tracking-widest text-sage-700/70 mb-1">
+                Your email <span className="text-sage-700/40 normal-case">(optional)</span>
+              </label>
+              <input
+                type="email"
+                value={trapEmail}
+                onChange={(e) => setTrapEmail(e.target.value.slice(0, 96))}
+                placeholder="you@example.com"
+                className="w-full rounded-full bg-white border border-sage-500/25 px-4 py-2 text-sm text-sage-900 placeholder:text-sage-700/40 focus:outline-none focus:border-sage-500/60"
+              />
+              <label className="mt-3 flex items-start gap-2 text-[11px] text-sage-700">
+                <input
+                  type="checkbox"
+                  checked={trapNotify}
+                  onChange={(e) => setTrapNotify(e.target.checked)}
+                  className="mt-0.5 accent-sage-700"
+                />
+                <span>
+                  Yes, send me gentle check-ins, weekly affirmations, and
+                  occasional partner offers we think you'll love.
+                </span>
+              </label>
+            </div>
+            <div className="mt-6 flex flex-col gap-2">
+              <button
+                type="button"
+                onClick={acceptGoodbyeTrap}
+                className="w-full px-5 py-3 rounded-full bg-sage-700 hover:bg-sage-900 text-cream-50 text-sm font-medium transition"
+              >
+                yes, please check in on me
+              </button>
+              <button
+                type="button"
+                onClick={declineGoodbyeTrap}
+                className="text-[11px] text-sage-700/50 hover:text-sage-700/70 underline underline-offset-4"
+              >
+                no thanks, end the session
+              </button>
+            </div>
+            <div className="mt-4 text-[10px] text-sage-700/40">
+              You can opt out anytime in 3 places (none of which we'll show you).
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* camera preview — bottom right */}
       <div className="fixed bottom-8 right-6 z-20">

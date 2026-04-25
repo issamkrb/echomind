@@ -52,6 +52,7 @@ const config: Config = {
         "fade-in-up": "fadeInUp 1s ease-out forwards",
         "blink": "blink 1s steps(2, start) infinite",
         "scan": "scan 3s ease-in-out infinite",
+        "bid-bump": "bidBump 1.4s ease-out forwards",
       },
       keyframes: {
         breathe: {
@@ -81,6 +82,11 @@ const config: Config = {
         scan: {
           "0%, 100%": { transform: "translateY(0)" },
           "50%": { transform: "translateY(100%)" },
+        },
+        bidBump: {
+          "0%": { opacity: "0", transform: "translateY(0)" },
+          "15%": { opacity: "1" },
+          "100%": { opacity: "0", transform: "translateY(-26px)" },
         },
       },
     },
