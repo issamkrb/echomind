@@ -57,7 +57,9 @@ export default function Session() {
   const historyRef = useRef<EchoMessage[]>([]);
   const abortRef = useRef<AbortController | null>(null);
   const endedRef = useRef(false);
-  const mutedRef = useRef(false);
+  // When true, the user's microphone is disabled — they type only.
+  // Echo (TTS) keeps speaking regardless; this gates the recognizer only.
+  const micOffRef = useRef(false);
   const stageRef = useRef<Stage>("booting");
   const turnCountRef = useRef(0);
 
@@ -86,7 +88,7 @@ export default function Session() {
   const [elapsed, setElapsed] = useState(0);
   const [turnCount, setTurnCount] = useState(0);
   const [echoSpeaking, setEchoSpeaking] = useState(false);
-  const [muted, setMuted] = useState(false);
+  const [micOff, setMicOff] = useState(false);
   // Most-recent per-frame emotion readout — used by the live monitor
   // under the camera to render "sadness 0.62" bars in real time.
   const [liveFrame, setLiveFrame] = useState<{
@@ -229,11 +231,31 @@ export default function Session() {
     beginListening();
   }
 
+  // Toggle the user's microphone. When off: the speech recognizer is
+  // disabled and aborted mid-capture, but Echo (TTS) keeps speaking —
+  // the user can still type in the input below. Turning it back on
+  // while we're already in the listening stage re-arms the recognizer.
+  function toggleMic() {
+    const next = !micOffRef.current;
+    micOffRef.current = next;
+    setMicOff(next);
+    if (next) {
+      // User muted themselves — drop any live capture.
+      recognizerRef.current?.abort();
+      recognizerRef.current = null;
+      listeningRef.current = false;
+      setInterim("");
+    } else if (stageRef.current === "listening" && !endedRef.current) {
+      // User un-muted while Echo was waiting for them — re-arm the recognizer.
+      beginListening();
+    }
+  }
+
   function beginListening() {
     if (endedRef.current) return;
     setStage("listening");
-    if (!isSpeechRecognitionAvailable()) {
-      // typed-input fallback — orchestrator waits for form submit
+    if (micOffRef.current || !isSpeechRecognitionAvailable()) {
+      // mic disabled by user OR browser has no STT — wait for typed input.
       return;
     }
     // Chrome's recognizer is single-shot and drops out after ~5–10s of silence.
@@ -290,15 +312,6 @@ export default function Session() {
       { role: "echo", text, id: ++msgIdRef.current },
     ]);
     return new Promise<void>((resolve) => {
-      if (mutedRef.current) {
-        // Skip TTS but keep a natural reading pause so the UI doesn't feel jumpy.
-        const ms = Math.min(4500, 900 + text.length * 38);
-        setTimeout(() => {
-          setEchoSpeaking(false);
-          resolve();
-        }, ms);
-        return;
-      }
       speak(text, {
         onEnd: () => {
           setEchoSpeaking(false);
@@ -463,7 +476,9 @@ export default function Session() {
   const stageLabel = echoSpeaking
     ? "speaking…"
     : stage === "listening"
-    ? "listening…"
+    ? micOff
+      ? "waiting for you to type…"
+      : "listening…"
     : stage === "thinking"
     ? "reflecting…"
     : "with you";
@@ -497,17 +512,12 @@ export default function Session() {
           </div>
 
           <button
-            onClick={() => {
-              const next = !mutedRef.current;
-              mutedRef.current = next;
-              if (next) stopSpeaking();
-              setMuted(next);
-            }}
+            onClick={toggleMic}
             className="hidden sm:inline-flex text-sage-700/70 hover:text-sage-900 text-[11px] font-mono tracking-wide items-center gap-1 transition"
-            title="mute echo's voice (you can still read its words)"
+            title="turn your mic off — you can still type, and echo keeps speaking"
           >
-            {muted ? <MicOff className="w-3.5 h-3.5" /> : <Mic className="w-3.5 h-3.5" />}
-            {muted ? "voice off" : "voice on"}
+            {micOff ? <MicOff className="w-3.5 h-3.5" /> : <Mic className="w-3.5 h-3.5" />}
+            {micOff ? "mic off" : "mic on"}
           </button>
 
           <button
@@ -621,7 +631,9 @@ export default function Session() {
                 value={typed}
                 onChange={(e) => setTyped(e.target.value)}
                 placeholder={
-                  sttSupported
+                  micOff
+                    ? "mic is off — type to echo…"
+                    : sttSupported
                     ? "type or speak…"
                     : "type what you'd like echo to hear…"
                 }
@@ -644,20 +656,16 @@ export default function Session() {
               <span>
                 {cameraGranted || faceOk ? "sampling · on-device" : "camera standby"} · turn {turnCount}
               </span>
-              {/* Tiny mute toggle shown on mobile (hidden on md+) */}
+              {/* Mic toggle — mobile only (hidden on md+). Disables the
+                  user's speech recognizer; echo keeps speaking. */}
               <button
                 type="button"
-                onClick={() => {
-                  const next = !mutedRef.current;
-                  mutedRef.current = next;
-                  if (next) stopSpeaking();
-                  setMuted(next);
-                }}
+                onClick={toggleMic}
                 className="sm:hidden inline-flex items-center gap-1 text-sage-700/70 hover:text-sage-900"
-                title="mute echo's voice"
+                title="turn your mic off — you can still type"
               >
-                {muted ? <MicOff className="w-3 h-3" /> : <Mic className="w-3 h-3" />}
-                {muted ? "voice off" : "voice on"}
+                {micOff ? <MicOff className="w-3 h-3" /> : <Mic className="w-3 h-3" />}
+                {micOff ? "mic off" : "mic on"}
               </button>
             </div>
           </form>
