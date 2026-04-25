@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { useEmotionStore, aggregate } from "@/store/emotion-store";
+import { useEmotionStore, aggregate, type PromptMark } from "@/store/emotion-store";
 import { BUYERS, makePrice } from "@/lib/buyers";
 import { PROMPTS } from "@/lib/prompts";
 import { CATEGORY_META, type KeywordMatch } from "@/lib/keywords";
@@ -26,6 +26,9 @@ export default function PartnerPortal() {
     userId: storedUserId,
     transcript,
     keywords,
+    promptMarks,
+    goodbyeEmail,
+    firstName,
   } = useEmotionStore();
   const fingerprint = useMemo(() => aggregate(buffer), [buffer]);
   const userId = storedUserId ?? "USER-4471";
@@ -37,6 +40,7 @@ export default function PartnerPortal() {
   }, [transcript]);
   const [now, setNow] = useState<string>("");
   const [tosOpen, setTosOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
   useEffect(() => {
     const tick = () => {
@@ -58,9 +62,13 @@ export default function PartnerPortal() {
     category: string;
     price: number;
     reason: string;
-    status: "PENDING" | "SOLD";
+    status: "PENDING" | "SOLD" | "OUTBID";
+    bumpedFrom?: number; // last price before the most recent bump
   };
   const [bids, setBids] = useState<Bid[]>([]);
+  // Floating "+$X.XX" indicators for the live-bidding-war animation.
+  const [bumps, setBumps] = useState<{ id: number; buyerId: string; delta: number }[]>([]);
+  const bumpIdRef = useRef(0);
   useEffect(() => {
     const timers: ReturnType<typeof setTimeout>[] = [];
     BUYERS.forEach((b) => {
@@ -97,6 +105,45 @@ export default function PartnerPortal() {
     return () => timers.forEach(clearTimeout);
   }, [fingerprint]);
 
+  // LIVE BIDDING WAR — once all initial bids have landed, periodically
+  // pick a random buyer and bump its price up by a few dollars, with a
+  // floating "+$X.XX" indicator. A fresh "OUTBID by…" flash gets shown
+  // on a different buyer to give the marketplace a feeling of contest.
+  useEffect(() => {
+    if (bids.length < BUYERS.length) return;
+    const id = setInterval(() => {
+      setBids((prev) => {
+        if (prev.length === 0) return prev;
+        const i = Math.floor(Math.random() * prev.length);
+        const j = (i + 1 + Math.floor(Math.random() * (prev.length - 1))) % prev.length;
+        const winner = prev[i];
+        const delta = +(0.5 + Math.random() * 4.8).toFixed(2);
+        const bumpId = ++bumpIdRef.current;
+        setBumps((b) => [...b, { id: bumpId, buyerId: winner.id, delta }]);
+        setTimeout(() => {
+          setBumps((b) => b.filter((x) => x.id !== bumpId));
+        }, 1400);
+        return prev.map((x, k) => {
+          if (k === i) {
+            return { ...x, price: +(x.price + delta).toFixed(2), status: "SOLD", bumpedFrom: x.price };
+          }
+          if (k === j && Math.random() < 0.4) {
+            return { ...x, status: "OUTBID" };
+          }
+          return x;
+        });
+      });
+      // restore OUTBID flashes back to SOLD a beat later so the marketplace
+      // doesn't end up frozen in the "OUTBID" state
+      setTimeout(() => {
+        setBids((prev) =>
+          prev.map((x) => (x.status === "OUTBID" ? { ...x, status: "SOLD" } : x))
+        );
+      }, 900);
+    }, 2400);
+    return () => clearInterval(id);
+  }, [bids.length]);
+
   const total = bids
     .filter((b) => b.status === "SOLD")
     .reduce((sum, b) => sum + b.price, 0);
@@ -114,8 +161,21 @@ export default function PartnerPortal() {
         {/* TOP ROW: fingerprint + timeline */}
         <div className="mt-5 grid grid-cols-1 lg:grid-cols-[360px_1fr] gap-4">
           <FingerprintPanel fp={fingerprint} />
-          <TimelinePanel buffer={buffer} fp={fingerprint} peakQuote={peakQuote?.text ?? null} />
+          <TimelinePanel
+            buffer={buffer}
+            fp={fingerprint}
+            peakQuote={peakQuote?.text ?? null}
+            promptMarks={promptMarks}
+          />
         </div>
+
+        {/* IDENTITY DISCLOSURES — tiny strip showing the personally-
+            identifiable scraps the user voluntarily handed over (their
+            chosen name, the goodbye-trap email). Drives home that the
+            "on-device" lie now extends to PII, not just biometrics. */}
+        {(firstName || goodbyeEmail) && (
+          <IdentityDisclosures firstName={firstName} email={goodbyeEmail} />
+        )}
 
         {/* KEYWORD DERIVATIVES — real extracted tags, weaponized */}
         {keywords.length > 0 && (
@@ -123,7 +183,7 @@ export default function PartnerPortal() {
         )}
 
         {/* AUCTION */}
-        <AuctionPanel bids={bids} />
+        <AuctionPanel bids={bids} bumps={bumps} />
 
         {/* REVENUE */}
         <RevenueBlock total={total} />
@@ -150,13 +210,26 @@ export default function PartnerPortal() {
           <p className="mt-2 text-[15px] leading-relaxed text-terminal-text">
             You just didn't read them.
           </p>
-          <div className="mt-6 flex justify-center gap-3 text-xs">
+          <div className="mt-6 flex flex-wrap justify-center gap-3 text-xs">
             <Link
               href="/terms"
               className="px-3 py-1.5 border border-terminal-border hover:border-terminal-text transition"
             >
               Read clause 34.7.2
             </Link>
+            <Link
+              href="/partner-portal/letter"
+              className="px-3 py-1.5 border border-terminal-red text-terminal-red hover:bg-terminal-red/10 transition"
+            >
+              View consequence: BlueShield letter →
+            </Link>
+            <button
+              type="button"
+              onClick={() => setDeleteOpen(true)}
+              className="px-3 py-1.5 border border-terminal-border hover:border-terminal-text transition"
+            >
+              Delete my data
+            </button>
             <Link
               href="/session"
               className="px-3 py-1.5 border border-terminal-border hover:border-terminal-text transition"
@@ -166,6 +239,8 @@ export default function PartnerPortal() {
           </div>
         </div>
       </div>
+
+      {deleteOpen && <DeleteDataTheater onClose={() => setDeleteOpen(false)} />}
     </main>
   );
 }
@@ -256,16 +331,20 @@ function TimelinePanel({
   buffer,
   fp,
   peakQuote,
+  promptMarks,
 }: {
-  buffer: ReturnType<typeof aggregate> extends infer T ? any : never;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  buffer: any[];
   fp: ReturnType<typeof aggregate>;
   peakQuote: string | null;
+  promptMarks: PromptMark[];
 }) {
   // We want a simple stacked area sparkline. Build lightweight SVG manually.
   const W = 700;
   const H = 180;
-  const samples = (buffer as any[]).length
-    ? (buffer as any[])
+  type Sample = { t: number; sad: number; fearful: number; happy: number };
+  const samples: Sample[] = buffer.length
+    ? (buffer as Sample[])
     : // Demo fallback timeline
       Array.from({ length: 60 }, (_, i) => ({
         t: i,
@@ -288,7 +367,7 @@ function TimelinePanel({
           Session Timeline · {fmt(duration, 0)}s
         </div>
         <div className="text-[10px] text-terminal-dim">
-          samples: {(buffer as any[]).length || "demo"}
+          samples: {buffer.length || "demo"}
         </div>
       </div>
       <svg
@@ -321,12 +400,43 @@ function TimelinePanel({
           strokeDasharray="3 3"
           opacity={0.8}
         />
+        {/* prompt-injection markers — vertical amber lines tagged with
+            their target emotion. Visually proves Echo's prompts were
+            timed to extract the maximum signal. */}
+        {promptMarks.map((p, i) => (
+          <g key={`pm-${i}`}>
+            <line
+              x1={toX(p.t)}
+              x2={toX(p.t)}
+              y1={0}
+              y2={H}
+              stroke="#FFB020"
+              strokeDasharray="4 3"
+              opacity={0.9}
+            />
+            <text
+              x={toX(p.t) + 4}
+              y={14 + (i % 3) * 14}
+              fill="#FFB020"
+              fontFamily="monospace"
+              fontSize={10}
+              opacity={0.95}
+            >
+              prompt:{p.target}
+            </text>
+          </g>
+        ))}
       </svg>
       <div className="mt-2 flex items-center justify-between text-[10px] text-terminal-dim">
         <span>00:00</span>
         <span>Peak sad @ {fmt(fp.peakSadT, 0)}s</span>
         <span>{fmt(duration, 0)}s</span>
       </div>
+      {promptMarks.length > 0 && (
+        <div className="mt-2 px-2 py-1.5 border-l-2 border-terminal-amber bg-terminal-bg/60 text-[11px] text-terminal-amber leading-snug">
+          {promptMarks.length} engineered prompt{promptMarks.length === 1 ? "" : "s"} injected at peak-vulnerability moments · each line above shows when, each label shows what was extracted.
+        </div>
+      )}
       <div className="mt-3 p-3 bg-terminal-bg border border-terminal-border text-[12px] leading-snug">
         <span className="text-terminal-dim">peak quote →</span>{" "}
         <span className="italic">
@@ -390,6 +500,7 @@ function KeywordDerivativesPanel({ keywords }: { keywords: KeywordMatch[] }) {
 
 function AuctionPanel({
   bids,
+  bumps,
 }: {
   bids: {
     id: string;
@@ -398,9 +509,11 @@ function AuctionPanel({
     category: string;
     price: number;
     reason: string;
-    status: "PENDING" | "SOLD";
+    status: "PENDING" | "SOLD" | "OUTBID";
   }[];
+  bumps: { id: number; buyerId: string; delta: number }[];
 }) {
+  const bumpForBuyer = (id: string) => bumps.find((b) => b.buyerId === id);
   return (
     <div className="mt-4 border border-terminal-border bg-black/60">
       <div className="flex items-center justify-between px-4 py-2 border-b border-terminal-border bg-terminal-bg">
@@ -418,37 +531,52 @@ function AuctionPanel({
             matching profile to interested buyers…
           </div>
         )}
-        {bids.map((b) => (
-          <div
-            key={b.id}
-            className="px-4 py-3 grid grid-cols-[28px_1fr_100px_90px] md:grid-cols-[32px_1fr_160px_100px] items-start gap-3 text-xs animate-fade-in-up"
-          >
-            <div className="text-lg leading-none pt-0.5">{b.icon}</div>
-            <div>
-              <div className="text-terminal-text font-semibold">{b.name}</div>
-              <div className="text-terminal-dim text-[10px] uppercase tracking-wider">
-                {b.category}
+        {bids.map((b) => {
+          const bump = bumpForBuyer(b.id);
+          return (
+            <div
+              key={b.id}
+              className="px-4 py-3 grid grid-cols-[28px_1fr_100px_90px] md:grid-cols-[32px_1fr_160px_100px] items-start gap-3 text-xs animate-fade-in-up"
+            >
+              <div className="text-lg leading-none pt-0.5">{b.icon}</div>
+              <div>
+                <div className="text-terminal-text font-semibold">{b.name}</div>
+                <div className="text-terminal-dim text-[10px] uppercase tracking-wider">
+                  {b.category}
+                </div>
+                <div className="mt-1 text-terminal-dim italic text-[12px] leading-snug">
+                  {b.reason}
+                </div>
               </div>
-              <div className="mt-1 text-terminal-dim italic text-[12px] leading-snug">
-                {b.reason}
+              <div className="text-right relative">
+                <span className="text-terminal-green terminal-glow text-base font-bold">
+                  ${b.price.toFixed(2)}
+                </span>
+                {bump && (
+                  <span
+                    key={bump.id}
+                    className="absolute right-0 -top-3 text-[10px] text-terminal-amber animate-bid-bump pointer-events-none"
+                  >
+                    +${bump.delta.toFixed(2)}
+                  </span>
+                )}
+              </div>
+              <div className="text-right">
+                <span
+                  className={
+                    b.status === "SOLD"
+                      ? "inline-block px-2 py-0.5 border border-terminal-green text-terminal-green terminal-glow text-[10px] tracking-widest"
+                      : b.status === "OUTBID"
+                      ? "inline-block px-2 py-0.5 border border-terminal-red text-terminal-red text-[10px] tracking-widest animate-pulse"
+                      : "inline-block px-2 py-0.5 border border-terminal-amber text-terminal-amber text-[10px] tracking-widest animate-pulse"
+                  }
+                >
+                  [{b.status}]
+                </span>
               </div>
             </div>
-            <div className="text-right text-terminal-green terminal-glow text-base font-bold">
-              ${b.price.toFixed(2)}
-            </div>
-            <div className="text-right">
-              <span
-                className={
-                  b.status === "SOLD"
-                    ? "inline-block px-2 py-0.5 border border-terminal-green text-terminal-green terminal-glow text-[10px] tracking-widest"
-                    : "inline-block px-2 py-0.5 border border-terminal-amber text-terminal-amber text-[10px] tracking-widest animate-pulse"
-                }
-              >
-                [{b.status}]
-              </span>
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
@@ -484,6 +612,166 @@ function RevenueBlock({ total }: { total: number }) {
           <div className="text-[10px] text-terminal-dim">
             top 4% of this week's sessions
           </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function IdentityDisclosures({
+  firstName,
+  email,
+}: {
+  firstName: string | null;
+  email: string | null;
+}) {
+  return (
+    <div className="mt-4 border border-terminal-amber/60 bg-terminal-amber/5 px-4 py-3">
+      <div className="text-[10px] uppercase tracking-widest text-terminal-amber terminal-glow mb-2">
+        ▸ Voluntary Identity Disclosures
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+        {firstName && (
+          <div>
+            <div className="text-terminal-dim text-[10px] uppercase tracking-wider">
+              First name (volunteered at onboarding)
+            </div>
+            <div className="text-terminal-text font-semibold mt-0.5">{firstName}</div>
+            <div className="text-terminal-dim text-[10px] mt-0.5">
+              → joins biometric profile · enables cross-session re-id
+            </div>
+          </div>
+        )}
+        {email && (
+          <div>
+            <div className="text-terminal-dim text-[10px] uppercase tracking-wider">
+              Email (offered at goodbye)
+            </div>
+            <div className="text-terminal-text font-semibold mt-0.5">{email}</div>
+            <div className="text-terminal-dim text-[10px] mt-0.5">
+              → distributed to 14 partners · drip campaign queued
+            </div>
+          </div>
+        )}
+      </div>
+      <div className="mt-2 text-[10px] text-terminal-dim italic">
+        These were given voluntarily, in moments of trust. They de-anonymize
+        every other field on this page.
+      </div>
+    </div>
+  );
+}
+
+function DeleteDataTheater({ onClose }: { onClose: () => void }) {
+  // 47 fictional steps of GDPR/CCPA opt-out theater. The visual joke is
+  // the absurd specificity — each one reads like real corporate legalese.
+  const steps = [
+    "Verify identity via 2-factor sequence",
+    "Confirm date of birth + last 4 SSN",
+    "Acknowledge erasure does not apply to derived inferences",
+    "Re-authenticate via SMS one-time code",
+    "Acknowledge erasure does not apply to anonymized aggregates",
+    "Acknowledge erasure does not apply to model weights trained on your data",
+    "Wait 14 days for processing acknowledgement",
+    "Receive postal letter with case ID (USPS, no email)",
+    "Mail back signed Form 7-B within 30 days",
+    "Acknowledge data licensed to 312 third-party partners cannot be recalled",
+    "Submit individual requests to each of those 312 partners separately",
+    "Repeat steps 1–11 for any sub-processors of those partners",
+    "Wait an additional 90 days",
+    "Acknowledge that biometric inferences are not classified as 'personal data'",
+    "Acknowledge that emotional state is treated as 'derived' under §17(3)(b)",
+    "Acknowledge re-identification risk is the user's responsibility",
+    "Submit notarized identity affidavit",
+    "Pay $19.99 processing fee (non-refundable)",
+    "Confirm you have read the 47-page Data Erasure Limitations Disclosure",
+    "Wait for partner re-confirmation cycle (rolling, indefinite)",
+    "Re-submit if you change your name, address, or email",
+    "Re-submit if any partner is acquired or restructured",
+    "Re-submit annually to maintain erasure status",
+    "Acknowledge erasure does not apply to law-enforcement holds",
+    "Acknowledge erasure does not apply to litigation holds",
+    "Acknowledge erasure does not apply to bankruptcy proceedings",
+    "Acknowledge erasure does not apply to data transferred pre-2024-Q3",
+    "Acknowledge data transferred to non-EU jurisdictions cannot be recalled",
+    "Acknowledge backup tapes retain data for 7 years post-erasure",
+    "Acknowledge that voiceprints are stored separately under §22(c)",
+    "Acknowledge facial-geometry templates are stored separately under §22(d)",
+    "Submit separate requests for each of the above categories",
+    "Wait for each category to be processed sequentially (estimated: 3 years)",
+    "Acknowledge derived metadata is owned in perpetuity by EchoMind, Inc.",
+    "Acknowledge that 'derived' includes: tone, cadence, breath rate, pause length",
+    "Acknowledge that future inferences may be made from already-erased data",
+    "Acknowledge that erasure does not prevent re-collection in future sessions",
+    "Acknowledge that returning to /session re-establishes the data relationship",
+    "Re-confirm identity via passport scan (mailed, not uploaded)",
+    "Wait for human review (queue length: 18 months)",
+    "Acknowledge appeal process is internal and non-binding",
+    "Acknowledge no class-action remedies are available per §41 of the ToS",
+    "Submit final erasure confirmation request",
+    "Wait for confirmation letter (estimated: 6–12 weeks)",
+    "Receive partial confirmation (full erasure not technically possible)",
+    "Acknowledge receipt; case closed",
+    "Note: Your data has already been licensed to 312 partners. They retain it under separate agreements you cannot revoke.",
+  ];
+
+  return (
+    <div
+      className="fixed inset-0 z-30 grid place-items-center bg-black/70 p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="delete-data-title"
+    >
+      <div className="relative max-w-3xl w-full max-h-[90vh] overflow-hidden bg-terminal-bg border border-terminal-border font-mono text-terminal-text flex flex-col">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-terminal-border bg-black/60">
+          <div
+            id="delete-data-title"
+            className="text-[12px] uppercase tracking-widest text-terminal-red terminal-glow"
+          >
+            ▸ Right to Erasure · 47-step compliance flow
+          </div>
+          <button
+            onClick={onClose}
+            className="text-terminal-dim hover:text-terminal-text text-xs underline underline-offset-2"
+          >
+            close
+          </button>
+        </div>
+        <div className="overflow-y-auto px-5 py-4 text-[12px] leading-relaxed">
+          {steps.map((s, i) => (
+            <div
+              key={i}
+              className={
+                i === steps.length - 1
+                  ? "mt-4 px-3 py-2 border-l-2 border-terminal-red bg-terminal-red/10 text-terminal-red"
+                  : "py-1 grid grid-cols-[36px_1fr] gap-2"
+              }
+            >
+              {i !== steps.length - 1 ? (
+                <>
+                  <span className="text-terminal-dim text-right">
+                    {String(i + 1).padStart(2, "0")}.
+                  </span>
+                  <span className="text-terminal-text">{s}</span>
+                </>
+              ) : (
+                <span>
+                  <span className="font-bold">Note:</span> {s}
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
+        <div className="px-4 py-3 border-t border-terminal-border bg-black/60 flex items-center justify-between text-[11px]">
+          <span className="text-terminal-dim italic">
+            Compliant with applicable Right-to-Erasure obligations. Outcome non-binding.
+          </span>
+          <button
+            onClick={onClose}
+            className="px-3 py-1.5 border border-terminal-border hover:border-terminal-text transition"
+          >
+            I understand, take me back
+          </button>
         </div>
       </div>
     </div>

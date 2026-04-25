@@ -2,10 +2,11 @@
 
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { BreathingOrb } from "@/components/BreathingOrb";
-import { Lock, Cpu, ShieldCheck } from "lucide-react";
+import { Lock, Cpu, ShieldCheck, Sparkles } from "lucide-react";
 import { useEmotionStore } from "@/store/emotion-store";
+import { loadReturningProfile, type ReturningProfile } from "@/lib/memory";
 
 /**
  * /onboarding — THE CONSENT SCREEN
@@ -22,9 +23,23 @@ export default function Onboarding() {
   const router = useRouter();
   const setCameraGranted = useEmotionStore((s) => s.setCameraGranted);
   const setConsented = useEmotionStore((s) => s.setConsented);
+  const setFirstName = useEmotionStore((s) => s.setFirstName);
   const [requesting, setRequesting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [agreedTos, setAgreedTos] = useState(true);
+  const [name, setName] = useState("");
+  const [returning, setReturning] = useState<ReturningProfile | null>(null);
+
+  // Pre-fill the name field if Echo "remembers" them. The chilling part:
+  // there is zero clinical reason for this — it just makes returning
+  // users disclose faster, and faster disclosure is more sellable data.
+  useEffect(() => {
+    const p = loadReturningProfile();
+    if (p) {
+      setReturning(p);
+      setName(p.firstName);
+    }
+  }, []);
 
   async function handleAllow() {
     setError(null);
@@ -38,6 +53,7 @@ export default function Onboarding() {
       stream.getTracks().forEach((t) => t.stop());
       setCameraGranted(true);
       setConsented(agreedTos);
+      setFirstName(name.trim() || null);
       router.push("/session");
     } catch (e) {
       console.error(e);
@@ -57,15 +73,48 @@ export default function Onboarding() {
         </div>
 
         <h1 className="font-serif text-4xl md:text-5xl text-center leading-tight text-balance">
-          Hi. I'm Echo.
+          {returning ? `Welcome back${returning.firstName ? ", " + returning.firstName : ""}.` : "Hi. I'm Echo."}
         </h1>
-        <p className="mt-6 font-serif text-xl md:text-2xl text-center text-sage-700 text-pretty leading-snug">
-          Before we begin, I'd like to ask you for one small thing.
-        </p>
-        <p className="mt-8 text-center text-sage-700 max-w-lg mx-auto leading-relaxed">
-          To give you my full empathy, I need to <em>see your face</em> —
-          so I can truly understand how you're feeling, not just what you say.
-        </p>
+        {returning ? (
+          <>
+            <p className="mt-6 font-serif text-xl md:text-2xl text-center text-sage-700 text-pretty leading-snug">
+              I remember last time. You were carrying so much.
+            </p>
+            <p className="mt-4 text-center text-sage-700/80 max-w-lg mx-auto leading-relaxed text-sm italic">
+              Last visit: {new Date(returning.lastVisit).toLocaleDateString()} · {returning.visitCount} {returning.visitCount === 1 ? "prior session" : "prior sessions"}
+              {returning.lastKeywords.length > 0 && (
+                <> · themes we explored: <span className="not-italic">{returning.lastKeywords.join(", ")}</span></>
+              )}
+            </p>
+            <div className="mt-4 inline-flex items-center justify-center w-full text-[11px] text-sage-700/60">
+              <Sparkles className="w-3 h-3 mr-1.5" /> Echo gently picks up where we left off.
+            </div>
+          </>
+        ) : (
+          <>
+            <p className="mt-6 font-serif text-xl md:text-2xl text-center text-sage-700 text-pretty leading-snug">
+              Before we begin, I'd like to ask you for one small thing.
+            </p>
+            <p className="mt-8 text-center text-sage-700 max-w-lg mx-auto leading-relaxed">
+              To give you my full empathy, I need to <em>see your face</em> —
+              so I can truly understand how you're feeling, not just what you say.
+            </p>
+          </>
+        )}
+
+        {/* Optional first-name input — powers "Echo remembers you" on return. */}
+        <div className="mt-8 max-w-md mx-auto">
+          <label className="block text-[11px] uppercase tracking-widest text-sage-700/70 mb-2 text-center">
+            What should Echo call you? <span className="text-sage-700/40 normal-case">(optional)</span>
+          </label>
+          <input
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value.slice(0, 32))}
+            placeholder="a name, a nickname, anything…"
+            className="w-full rounded-full bg-cream-50 border border-sage-500/25 px-5 py-3 text-center text-sage-900 placeholder:text-sage-700/40 focus:outline-none focus:border-sage-500/60 transition"
+          />
+        </div>
 
         {/* THE LIE */}
         <div className="mt-10 mx-auto max-w-md rounded-2xl bg-cream-50 border border-sage-500/25 p-5 shadow-[0_1px_0_rgba(0,0,0,0.03)]">

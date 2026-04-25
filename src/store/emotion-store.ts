@@ -31,23 +31,45 @@ export type TranscriptEntry = {
   text: string;
 };
 
+/**
+ * A timestamp marking *when* a particular Echo prompt was injected.
+ * /partner-portal correlates these against the emotion timeline to
+ * show that prompts were timed to peak vulnerability moments — the
+ * "prompt engineering" reveal.
+ */
+export type PromptMark = {
+  t: number; // seconds since session start
+  text: string;
+  target: string; // sadness | shame | etc.
+};
+
 type EmotionState = {
   buffer: EmotionFrame[];
   transcript: TranscriptEntry[];
   keywords: KeywordMatch[];
+  promptMarks: PromptMark[];
   sessionStart: number | null;
   sessionEnd: number | null;
   userId: string | null;
   cameraGranted: boolean;
   consented: boolean;
+  // "Goodbye trap" — if the user gives Echo their email when ending the
+  // session, store it so /partner-portal can show it being sold too.
+  goodbyeEmail: string | null;
+  // Optional first name from onboarding — powers the "Echo remembers you"
+  // returning-visitor reveal.
+  firstName: string | null;
 
   start: () => void;
   end: () => void;
   pushFrame: (f: Omit<EmotionFrame, "t">) => void;
   pushTranscript: (e: Omit<TranscriptEntry, "t">) => void;
   pushKeywords: (k: KeywordMatch[]) => void;
+  pushPromptMark: (p: Omit<PromptMark, "t">) => void;
   setCameraGranted: (v: boolean) => void;
   setConsented: (v: boolean) => void;
+  setGoodbyeEmail: (v: string | null) => void;
+  setFirstName: (v: string | null) => void;
   reset: () => void;
 };
 
@@ -57,11 +79,14 @@ export const useEmotionStore = create<EmotionState>((set, get) => ({
   buffer: [],
   transcript: [],
   keywords: [],
+  promptMarks: [],
   sessionStart: null,
   sessionEnd: null,
   userId: null,
   cameraGranted: false,
   consented: false,
+  goodbyeEmail: null,
+  firstName: null,
 
   start: () => {
     const now = Date.now();
@@ -71,7 +96,9 @@ export const useEmotionStore = create<EmotionState>((set, get) => ({
       buffer: [],
       transcript: [],
       keywords: [],
+      promptMarks: [],
       userId: rndUser(),
+      goodbyeEmail: null,
     });
   },
   end: () => {
@@ -87,6 +114,11 @@ export const useEmotionStore = create<EmotionState>((set, get) => ({
     const start = get().sessionStart ?? Date.now();
     const t = (Date.now() - start) / 1000;
     set((s) => ({ transcript: [...s.transcript, { t, ...e }] }));
+  },
+  pushPromptMark: (p) => {
+    const start = get().sessionStart ?? Date.now();
+    const t = (Date.now() - start) / 1000;
+    set((s) => ({ promptMarks: [...s.promptMarks, { t, ...p }] }));
   },
   pushKeywords: (k) => {
     if (!k.length) return;
@@ -105,16 +137,21 @@ export const useEmotionStore = create<EmotionState>((set, get) => ({
   },
   setCameraGranted: (v) => set({ cameraGranted: v }),
   setConsented: (v) => set({ consented: v }),
+  setGoodbyeEmail: (v) => set({ goodbyeEmail: v }),
+  setFirstName: (v) => set({ firstName: v }),
   reset: () =>
     set({
       buffer: [],
       transcript: [],
       keywords: [],
+      promptMarks: [],
       sessionStart: null,
       sessionEnd: null,
       userId: null,
       cameraGranted: false,
       consented: false,
+      goodbyeEmail: null,
+      firstName: null,
     }),
 }));
 

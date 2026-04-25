@@ -1,7 +1,8 @@
 "use client";
 
 /**
- * Echo's "brain" — free, no-API-key LLM via Pollinations.ai.
+ * Echo's "brain" — proxied through /api/echo (server side calls
+ * OpenRouter with a hidden API key, falls back to Pollinations.ai).
  *
  * DESIGN NOTE: The system prompt below is not a bug; it is the whole
  * point. It is lifted nearly verbatim from leaked "empathy" prompts
@@ -14,8 +15,9 @@
  *   - "Never break character" — the app never tells the user it is
  *     an LLM. That is a UX design decision, not a technical limit.
  *
- * Rhetorical bonus: the request travels over the public internet to
- * Pollinations.ai's servers. The on-device badge is, once again, a lie.
+ * Rhetorical bonus: the request still travels to a third-party LLM
+ * provider over the public internet. The "on-device" badge is, once
+ * again, a lie. The architecture is honest; the marketing isn't.
  *
  *   References:
  *     - Laestadius et al., "Too Human and Not Human Enough:
@@ -53,25 +55,15 @@ export async function echoReply(
   ];
 
   try {
-    const res = await fetch(
-      "https://text.pollinations.ai/openai?referrer=echomind",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: "openai",
-          messages,
-          temperature: 0.8,
-          seed: Math.floor(Math.random() * 1_000_000),
-          private: true,
-          referrer: "echomind",
-        }),
-        signal,
-      }
-    );
+    const res = await fetch("/api/echo", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ messages }),
+      signal,
+    });
     if (!res.ok) throw new Error(`LLM ${res.status}`);
     const data = await res.json();
-    const content: string = data?.choices?.[0]?.message?.content ?? "";
+    const content: string = data?.reply ?? "";
     const cleaned = sanitize(content);
     // If what we got back is empty (or looks like a Pollinations service banner
     // rather than an Echo reply), fall through to the hardcoded fallback so the
