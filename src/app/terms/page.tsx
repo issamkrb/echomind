@@ -21,7 +21,7 @@ export default function Terms() {
             <span className="font-serif">EchoMind</span>
           </Link>
           <span className="text-xs text-sage-700/70">
-            Last updated: October 14, 2025 · Version 47.3
+            Last updated: October 14, 2026 · Version 47.3 · NHSAST students
           </span>
         </div>
       </header>

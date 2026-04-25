@@ -9,7 +9,8 @@ export function EthicsFooter() {
   return (
     <div className="fixed bottom-0 inset-x-0 z-[60] text-[10px] leading-none font-mono px-3 py-1.5 bg-black/80 text-white/70 backdrop-blur-sm flex items-center justify-center gap-3 pointer-events-none">
       <span className="pointer-events-auto">
-        EchoMind is a speculative design artifact. No data leaves your browser.
+        EchoMind is a speculative design artifact by NHSAST students · Sidi
+        Abdallah, Algeria · © 2026 · No data leaves your browser.
       </span>
       <Link
         href="/ethics"

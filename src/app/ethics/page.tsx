@@ -103,6 +103,22 @@ export default function Ethics() {
           available 24/7 by call or text.
         </p>
 
+        <h2 className="font-serif text-2xl mt-12 mb-4">Built by</h2>
+        <p className="text-sage-700 leading-relaxed mb-3 text-pretty">
+          A team of NHSAST students at <strong>Sidi Abdallah</strong>,
+          Algiers, Algeria — for a university presentation on the theme
+          <em> &ldquo;AI is watching you&rdquo;</em>.
+        </p>
+        <ul className="text-sage-900 text-[15px] leading-relaxed list-disc pl-6">
+          <li>Imad — NHSAST</li>
+          <li>Adnane — NHSAST</li>
+          <li>Adel — NHSAST</li>
+          <li>Issam Kerbaa — NHSAST</li>
+        </ul>
+        <p className="mt-4 text-xs text-sage-700/70">
+          © 2026 · Speculative design only · No data is transmitted.
+        </p>
+
         <div className="mt-16 pt-6 border-t border-sage-500/20 text-center">
           <Link
             href="/"
