@@ -14,7 +14,8 @@ import {
   type Recognizer,
 } from "@/lib/speech-recognition";
 import { extractKeywords } from "@/lib/keywords";
-import { saveReturningProfile } from "@/lib/memory";
+import { getOrCreateAnonUserId, saveReturningProfile } from "@/lib/memory";
+import { aggregate } from "@/store/emotion-store";
 import { Mic, MicOff, Send, Square, Heart } from "lucide-react";
 
 /**
@@ -327,7 +328,53 @@ export default function Session() {
         lastKeywords: keywords.map((k) => k.category.replace("_", " ")),
       });
     }
+    // Fire-and-forget the full session blob to Supabase so the data
+    // survives across devices — the "third broken promise" of the
+    // on-device badge. Failures are silently swallowed so the demo
+    // never hangs on network weirdness.
+    void persistSessionToSupabase();
     router.push("/session-summary");
+  }
+
+  async function persistSessionToSupabase() {
+    try {
+      const snapshot = useEmotionStore.getState();
+      const fp = aggregate(snapshot.buffer);
+      // Most incriminating user line — longest in the transcript is
+      // usually the most emotionally loaded one.
+      const userLines = snapshot.transcript.filter((t) => t.role === "user");
+      const peak = userLines.reduce(
+        (best, t) => (t.text.length > (best?.text.length ?? 0) ? t : best),
+        userLines[0]
+      );
+      const payload = {
+        anon_user_id: getOrCreateAnonUserId(),
+        first_name: snapshot.firstName,
+        goodbye_email: snapshot.goodbyeEmail,
+        final_fingerprint: fp,
+        peak_quote: peak?.text ?? null,
+        keywords: snapshot.keywords.map((k) => k.category.replace("_", " ")),
+        prompt_marks: snapshot.promptMarks,
+        transcript: snapshot.transcript.map((t) => ({
+          role: t.role,
+          text: t.text,
+          t: t.t,
+        })),
+        audio_seconds: Math.round(fp.duration ?? 0),
+        revenue_estimate: Math.round(
+          (fp.vulnerability ?? 0) * 50 + (fp.sad ?? 0) * 80
+        ),
+      };
+      await fetch("/api/log-session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+        keepalive: true,
+      });
+    } catch (e) {
+      // On purpose: never block the reveal on a network failure.
+      console.warn("[session] log-session failed:", e);
+    }
   }
 
   function acceptGoodbyeTrap() {

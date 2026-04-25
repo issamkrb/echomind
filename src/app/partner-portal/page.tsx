@@ -188,6 +188,13 @@ export default function PartnerPortal() {
         {/* HEADER */}
         <Header now={now} userId={userId} />
 
+        {/* STORAGE BADGE — the third broken promise of the "on-device"
+            lie. Web Speech STT → Google. /api/echo → OpenRouter.
+            /api/log-session → a Supabase Postgres instance in an EU
+            datacenter. Showing this proudly on the Partner Portal
+            (where the illusion has already been dropped) is the joke. */}
+        <StorageBadgeStrip />
+
         {/* TOP ROW: fingerprint + timeline */}
         <div className="mt-5 grid grid-cols-1 lg:grid-cols-[360px_1fr] gap-4">
           <FingerprintPanel fp={fingerprint} />
@@ -272,6 +279,40 @@ export default function PartnerPortal() {
 
       {deleteOpen && <DeleteDataTheater onClose={() => setDeleteOpen(false)} />}
     </main>
+  );
+}
+
+function StorageBadgeStrip() {
+  // Shown on the already-revealed Partner Portal. The point is the
+  // audience can now SEE where the "on-device" data actually went.
+  const items: { label: string; detail: string; tone: "red" | "amber" }[] = [
+    { label: "Audio (STT)", detail: "→ speech.googleapis.com", tone: "amber" },
+    { label: "Text (LLM)", detail: "→ openrouter.ai", tone: "amber" },
+    { label: "Session blob", detail: "→ Supabase · eu-central-1", tone: "red" },
+    { label: "Returning profile", detail: "→ public.returning_visitors", tone: "red" },
+  ];
+  return (
+    <div className="mt-4 border border-terminal-border bg-black/40 px-4 py-2.5">
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-[10.5px] md:text-xs">
+        <span className="uppercase tracking-widest text-terminal-dim">
+          DATA PIPELINE · verified
+        </span>
+        {items.map((it) => (
+          <span key={it.label} className="inline-flex items-center gap-2">
+            <span
+              className={`w-1.5 h-1.5 rounded-full ${
+                it.tone === "red" ? "bg-terminal-red animate-blink" : "bg-terminal-amber"
+              }`}
+            />
+            <span className="text-terminal-text">{it.label}</span>
+            <span className="text-terminal-dim">{it.detail}</span>
+          </span>
+        ))}
+        <span className="ml-auto text-terminal-dim italic">
+          &quot;On-device processing&quot; — per landing page, § 1.
+        </span>
+      </div>
+    </div>
   );
 }
 
