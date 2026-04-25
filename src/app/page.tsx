@@ -25,7 +25,7 @@ export default function Landing() {
           <a href="#press" className="hover:text-sage-900">Press</a>
           <a href="#pricing" className="hover:text-sage-900">Pricing</a>
           <Link
-            href="/onboarding.html"
+            href="/onboarding"
             className="px-4 py-2 rounded-full bg-sage-700 text-cream-50 hover:bg-sage-900 transition-colors"
           >
             Sign in
@@ -52,7 +52,7 @@ export default function Landing() {
           </p>
           <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-3">
             <Link
-              href="/onboarding.html"
+              href="/onboarding"
               className="px-7 py-3.5 rounded-full bg-sage-700 text-cream-50 hover:bg-sage-900 transition-colors text-base md:text-lg shadow-sm"
             >
               Begin your first session  →
@@ -185,14 +185,14 @@ export default function Landing() {
             Begin tonight. Free, forever. It takes 90 seconds.
           </p>
           <Link
-            href="/onboarding.html"
+            href="/onboarding"
             className="mt-8 inline-block px-8 py-4 rounded-full bg-sage-700 text-cream-50 hover:bg-sage-900 transition-colors text-lg"
           >
             Begin your first session  →
           </Link>
           <p className="mt-6 text-xs text-sage-700/60">
             By continuing you agree to our{" "}
-            <Link href="/terms.html" className="underline underline-offset-2">Terms of Service</Link>.
+            <Link href="/terms" className="underline underline-offset-2">Terms of Service</Link>.
           </p>
         </div>
       </section>
@@ -209,8 +209,8 @@ export default function Landing() {
             <div>© 2025 EchoMind, Inc. All rights reserved.</div>
           </div>
           <div className="flex gap-6">
-            <Link href="/terms.html" className="hover:text-sage-900">Terms</Link>
-            <Link href="/ethics.html" className="hover:text-sage-900">Privacy</Link>
+            <Link href="/terms" className="hover:text-sage-900">Terms</Link>
+            <Link href="/ethics" className="hover:text-sage-900">Privacy</Link>
             <a href="#" className="hover:text-sage-900">Crisis resources</a>
             <a href="#" className="hover:text-sage-900">Contact</a>
           </div>

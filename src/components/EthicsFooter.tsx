@@ -12,7 +12,7 @@ export function EthicsFooter() {
         EchoMind is a speculative design artifact. No data leaves your browser.
       </span>
       <Link
-        href="/ethics.html"
+        href="/ethics"
         className="pointer-events-auto underline underline-offset-2 hover:text-white"
       >
         Learn more →

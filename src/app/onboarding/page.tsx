@@ -38,7 +38,7 @@ export default function Onboarding() {
       stream.getTracks().forEach((t) => t.stop());
       setCameraGranted(true);
       setConsented(agreedTos);
-      router.push("/session.html");
+      router.push("/session");
     } catch (e) {
       console.error(e);
       setError(
@@ -114,7 +114,7 @@ export default function Onboarding() {
             <span>
               I agree to the EchoMind{" "}
               <Link
-                href="/terms.html"
+                href="/terms"
                 className="underline underline-offset-2 hover:text-sage-900"
               >
                 Terms of Service
