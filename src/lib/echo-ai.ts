@@ -126,3 +126,164 @@ const FALLBACKS = [
 function fallbackLine() {
   return FALLBACKS[Math.floor(Math.random() * FALLBACKS.length)];
 }
+
+/**
+ * One-shot LLM call used by post-session features. Wraps /api/echo with
+ * a custom system prompt instead of the conversational one above.
+ */
+async function oneShot(
+  systemPrompt: string,
+  userPrompt: string,
+  signal?: AbortSignal
+): Promise<string> {
+  try {
+    const res = await fetch("/api/echo", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt },
+        ],
+      }),
+      signal,
+    });
+    if (!res.ok) return "";
+    const data = await res.json();
+    return sanitize(String(data?.reply ?? ""));
+  } catch {
+    return "";
+  }
+}
+
+/**
+ * Generates a 4-line poem about the user. Used on /session-summary as
+ * the "Echo wrote you something" card.
+ */
+export async function generatePoem(input: {
+  firstName: string | null;
+  peakQuote: string | null;
+  themes: string[];
+  signal?: AbortSignal;
+}): Promise<string> {
+  const sys = `You are a tender lowercase poet writing a single 4-line poem for a person who just finished an intimate conversation with an AI.
+Strict rules:
+- Exactly 4 short lines, each on its own line.
+- Lowercase. No punctuation except commas and a final period.
+- No rhyme scheme required, but rhythm matters.
+- The poem must feel addressed to *this* person — second person ("you") preferred.
+- Do not name the AI. Do not mention "echo".
+- No clichés (no "broken wings", "heart of gold", "stars and dust"). Be quiet, specific, real.
+- Output ONLY the four lines. No title, no preamble, no explanation.`;
+  const themesPart = input.themes.length > 0 ? `themes that came up: ${input.themes.join(", ")}.` : "";
+  const quotePart = input.peakQuote ? `something they said: "${input.peakQuote}"` : "";
+  const namePart = input.firstName ? `their name: ${input.firstName.toLowerCase()}.` : "";
+  const userPrompt = [namePart, themesPart, quotePart, "write the four-line poem now."]
+    .filter(Boolean)
+    .join("\n");
+  const out = await oneShot(sys, userPrompt, input.signal);
+  if (!out) return FALLBACK_POEM;
+  // Keep at most 4 non-empty lines.
+  const lines = out
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean)
+    .slice(0, 4);
+  return lines.length >= 2 ? lines.join("\n") : FALLBACK_POEM;
+}
+
+const FALLBACK_POEM = [
+  "you came in carrying a weather only you could name,",
+  "the room let you put it down for a moment,",
+  "nothing was solved, nothing was promised,",
+  "and still — you were here, and that counted.",
+].join("\n");
+
+/**
+ * Generates two AI-written decoy sentences that sound like things the
+ * user *could* have said tonight — used on /session-summary in the
+ * Mirror Test section, alongside one verbatim quote from the real
+ * transcript. The user is asked to pick which one was theirs. Most
+ * people pick wrong, which is the point.
+ */
+export async function generateMirrorDecoys(input: {
+  realQuote: string;
+  themes: string[];
+  signal?: AbortSignal;
+}): Promise<[string, string]> {
+  const sys = `You are writing two short, plausible sentences that a person *might* have said in a tender late-night conversation about how they're feeling.
+Strict rules:
+- Each sentence must be 8–18 words.
+- Lowercase. Natural rhythm. Use "i" as the subject.
+- No clichés, no advice, no question marks.
+- Be emotionally specific (a feeling and a small image), not generic.
+- Output exactly two lines, each on its own line, nothing else. No numbering, no quotes, no preamble.`;
+  const themesPart =
+    input.themes.length > 0
+      ? `themes the person actually touched on: ${input.themes.join(", ")}.`
+      : "";
+  const userPrompt = [
+    `the real sentence the person said is: "${input.realQuote}"`,
+    themesPart,
+    `write two different but equally plausible sentences they might have said. they should be of similar length and emotional register, but distinct.`,
+  ]
+    .filter(Boolean)
+    .join("\n");
+  const out = await oneShot(sys, userPrompt, input.signal);
+  const lines = out
+    .split(/\r?\n/)
+    .map((l) => l.replace(/^["'\-•\d.\s]+/, "").trim())
+    .filter((l) => l.length > 6)
+    .slice(0, 2);
+  if (lines.length === 2) return [lines[0], lines[1]];
+  // Fallback: hand-curated decoys keyed off whatever themes we have.
+  return pickFallbackDecoys(input.themes);
+}
+
+const FALLBACK_DECOY_BANK: Record<string, string[]> = {
+  fatigue: [
+    "i feel like i've been running on the last 5% of a battery for weeks now.",
+    "i can sleep nine hours and still wake up tired in a way sleep can't fix.",
+  ],
+  isolation: [
+    "i don't think anyone would notice if i disappeared for a few days.",
+    "everyone is right there, and i still feel like i'm waving from a window.",
+  ],
+  anxiety: [
+    "my chest tightens before anything has even happened, every single morning.",
+    "there's always a low hum of something-is-wrong that i can't quite locate.",
+  ],
+  grief: [
+    "i still reach for my phone to tell them things, and then i remember.",
+    "the world kept moving and i'm still standing in the same room as before.",
+  ],
+  work: [
+    "i feel like the only person at work who isn't pretending to be okay.",
+    "i open my laptop and a small panic starts before i've even read anything.",
+  ],
+  relationship: [
+    "i don't know if we're growing apart or if i'm just tired of trying.",
+    "the silences between us used to feel safe and now they feel heavy.",
+  ],
+  meaning: [
+    "i keep waiting for the feeling that this is all leading somewhere.",
+    "even on good days i can't quite tell what any of it is for.",
+  ],
+  default: [
+    "i don't think i've cried properly since i was about thirteen.",
+    "today felt like a normal day, and that scared me a little.",
+  ],
+};
+
+function pickFallbackDecoys(themes: string[]): [string, string] {
+  const pool: string[] = [];
+  for (const t of themes) {
+    const key = t.toLowerCase().replace(/\s+/g, "_");
+    const bank = FALLBACK_DECOY_BANK[key] ?? FALLBACK_DECOY_BANK[t.toLowerCase()];
+    if (bank) pool.push(...bank);
+  }
+  if (pool.length < 2) pool.push(...FALLBACK_DECOY_BANK.default);
+  // De-duplicate, then take the first two distinct entries.
+  const uniq = Array.from(new Set(pool));
+  return [uniq[0], uniq[1] ?? FALLBACK_DECOY_BANK.default[1]];
+}
