@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { Fraunces, Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
-import { EthicsFooter } from "@/components/EthicsFooter";
 
 const fraunces = Fraunces({
   subsets: ["latin"],
@@ -44,7 +43,6 @@ export default function RootLayout({
         className={`${fraunces.variable} ${inter.variable} ${jetbrains.variable} antialiased`}
       >
         {children}
-        <EthicsFooter />
       </body>
     </html>
   );
