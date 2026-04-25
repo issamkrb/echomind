@@ -69,6 +69,7 @@ export default function PartnerPortal() {
   // Floating "+$X.XX" indicators for the live-bidding-war animation.
   const [bumps, setBumps] = useState<{ id: number; buyerId: string; delta: number }[]>([]);
   const bumpIdRef = useRef(0);
+  const pendingTimeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([]);
   useEffect(() => {
     const timers: ReturnType<typeof setTimeout>[] = [];
     BUYERS.forEach((b) => {
@@ -111,41 +112,63 @@ export default function PartnerPortal() {
   // on a different buyer to give the marketplace a feeling of contest.
   useEffect(() => {
     if (bids.length < BUYERS.length) return;
+    // All side effects happen OUTSIDE the setBids updater so StrictMode's
+    // double-invoke of the updater in dev can't duplicate them. We use
+    // the stable BUYERS array (not bids state) to pick the winner, since
+    // bids[k] is always BUYERS[k] once the staggered-entrance effect has
+    // finished.
     const id = setInterval(() => {
-      setBids((prev) => {
-        if (prev.length === 0) return prev;
-        const i = Math.floor(Math.random() * prev.length);
-        const j = (i + 1 + Math.floor(Math.random() * (prev.length - 1))) % prev.length;
-        const winner = prev[i];
-        const delta = +(0.5 + Math.random() * 4.8).toFixed(2);
-        const bumpId = ++bumpIdRef.current;
-        setBumps((b) => [...b, { id: bumpId, buyerId: winner.id, delta }]);
-        setTimeout(() => {
-          setBumps((b) => b.filter((x) => x.id !== bumpId));
-        }, 1400);
-        return prev.map((x, k) => {
+      const buyerCount = BUYERS.length;
+      const i = Math.floor(Math.random() * buyerCount);
+      const j = (i + 1 + Math.floor(Math.random() * (buyerCount - 1))) % buyerCount;
+      const delta = +(0.5 + Math.random() * 4.8).toFixed(2);
+      const flashOutbid = Math.random() < 0.4;
+      const bumpId = ++bumpIdRef.current;
+      const bumpedBuyerId = BUYERS[i].id;
+
+      setBids((prev) =>
+        prev.map((x, k) => {
           if (k === i) {
-            return { ...x, price: +(x.price + delta).toFixed(2), status: "SOLD", bumpedFrom: x.price };
+            return {
+              ...x,
+              price: +(x.price + delta).toFixed(2),
+              status: "SOLD",
+              bumpedFrom: x.price,
+            };
           }
-          if (k === j && Math.random() < 0.4) {
+          if (flashOutbid && k === j) {
             return { ...x, status: "OUTBID" };
           }
           return x;
-        });
-      });
+        })
+      );
+
+      setBumps((b) => [...b, { id: bumpId, buyerId: bumpedBuyerId, delta }]);
+      const clearBumpHandle = setTimeout(() => {
+        setBumps((b) => b.filter((x) => x.id !== bumpId));
+      }, 1400);
+
       // restore OUTBID flashes back to SOLD a beat later so the marketplace
       // doesn't end up frozen in the "OUTBID" state
-      setTimeout(() => {
+      const clearOutbidHandle = setTimeout(() => {
         setBids((prev) =>
           prev.map((x) => (x.status === "OUTBID" ? { ...x, status: "SOLD" } : x))
         );
       }, 900);
+
+      pendingTimeoutsRef.current.push(clearBumpHandle, clearOutbidHandle);
     }, 2400);
-    return () => clearInterval(id);
+    return () => {
+      clearInterval(id);
+      pendingTimeoutsRef.current.forEach(clearTimeout);
+      pendingTimeoutsRef.current = [];
+    };
   }, [bids.length]);
 
+  // OUTBID is purely a cosmetic flash on already-sold bids — count both
+  // as revenue so the headline number doesn't blip down/up every 2.4s.
   const total = bids
-    .filter((b) => b.status === "SOLD")
+    .filter((b) => b.status === "SOLD" || b.status === "OUTBID")
     .reduce((sum, b) => sum + b.price, 0);
 
   return (
