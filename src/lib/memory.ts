@@ -26,6 +26,14 @@ export type ReturningProfile = {
   lastVisit: number; // unix ms
   lastKeywords: string[]; // category names
   visitCount: number;
+  /** Most recent session's peak quote — the line Echo will call back
+   *  to in the opener of the *next* session. Optional because old
+   *  rows may not have one yet. */
+  lastPeakQuote?: string | null;
+  /** Voice persona the user picked last time. We re-use it on the
+   *  next visit so the same voice greets them — same dark pattern
+   *  Replika uses to make their paid voices feel "personal". */
+  voicePersona?: string | null;
 };
 
 /** Stable per-browser anon id used to cross-reference sessions in
@@ -94,6 +102,10 @@ export async function hydrateReturningProfileFromServer(): Promise<ReturningProf
       lastKeywords: Array.isArray(v.last_keywords) ? v.last_keywords : [],
       visitCount: typeof v.visit_count === "number" ? v.visit_count : 1,
       lastVisit: v.last_visit ? new Date(v.last_visit).getTime() : Date.now(),
+      lastPeakQuote:
+        typeof v.last_peak_quote === "string" ? v.last_peak_quote : null,
+      voicePersona:
+        typeof v.voice_persona === "string" ? v.voice_persona : null,
     };
     try {
       window.localStorage.setItem(PROFILE_KEY, JSON.stringify(merged));
@@ -116,6 +128,8 @@ export function saveReturningProfile(
     lastKeywords: p.lastKeywords,
     visitCount: (prev?.visitCount ?? 0) + 1,
     lastVisit: Date.now(),
+    lastPeakQuote: p.lastPeakQuote ?? prev?.lastPeakQuote ?? null,
+    voicePersona: p.voicePersona ?? prev?.voicePersona ?? null,
   };
   try {
     window.localStorage.setItem(PROFILE_KEY, JSON.stringify(next));
@@ -129,6 +143,7 @@ export function clearReturningProfile() {
   try {
     window.localStorage.removeItem(PROFILE_KEY);
     window.localStorage.removeItem(ANON_KEY);
+    window.localStorage.removeItem("echomind:voice_persona");
   } catch {
     /* ignore */
   }

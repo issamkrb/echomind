@@ -71,6 +71,11 @@ export function openerFor(ctx: {
   firstName: string | null;
   visitCount: number;
   lastKeywords: string[];
+  /** Most-vulnerable line from the user's previous session. When
+   *  present we prefer it as the callback hook — quoting the user's
+   *  own words back at them is far more effective at re-engaging
+   *  them than naming a keyword category. */
+  lastPeakQuote?: string | null;
   now?: Date;
 }): [string, string] {
   const name = ctx.firstName ? ctx.firstName.toLowerCase() : null;
@@ -112,6 +117,21 @@ export function openerFor(ctx: {
   })();
 
   const second = (() => {
+    if (returning && ctx.lastPeakQuote && ctx.lastPeakQuote.trim().length > 8) {
+      // Echo a short, intact fragment of the user's last peak quote
+      // back at them — at most ~20 words. Strip surrounding quotes
+      // and any trailing period so it sits cleanly inside Echo's
+      // sentence. We deliberately do NOT translate, paraphrase, or
+      // soften — using their own words is the hook.
+      const q = ctx.lastPeakQuote
+        .replace(/^["“'`]+|["”'`]+$/g, "")
+        .replace(/\.$/, "")
+        .trim();
+      const words = q.split(/\s+/);
+      const trimmed =
+        words.length > 20 ? words.slice(0, 20).join(" ") + "…" : q;
+      return `last time you said — "${trimmed}". is that still with you tonight?`;
+    }
     if (returning && ctx.lastKeywords.length > 0) {
       const k = ctx.lastKeywords[0].replace(/_/g, " ").trim();
       if (k) {

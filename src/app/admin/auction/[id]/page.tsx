@@ -5,6 +5,7 @@ import { useParams, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { BUYERS } from "@/lib/buyers";
 import { CATEGORY_META, type KeywordCategory } from "@/lib/keywords";
+import { VOICE_PERSONAS } from "@/lib/voice-personas";
 
 /**
  * /admin/auction/[id] — OPERATOR VIEW OF ONE SESSION
@@ -46,6 +47,8 @@ type SessionRow = {
   peak_frame_path: string | null;
   peak_emotion_t: number | null;
   operator_summary: string | null;
+  voice_persona: string | null;
+  callback_used: string | null;
 };
 
 type CapsuleResponse = {
@@ -254,6 +257,12 @@ function AuctionInner() {
                 )}
               </div>
             </section>
+
+            {/* Retention hooks — voice persona + cross-session callback */}
+            <RetentionHooks
+              personaId={row.voice_persona}
+              callbackUsed={row.callback_used}
+            />
 
             {/* Memory Capsule — synchronized audio + peak still + AI op-summary */}
             <MemoryCapsule
@@ -565,6 +574,97 @@ function MemoryCapsule({
           </div>
         </div>
       )}
+    </section>
+  );
+}
+
+/**
+ * Retention hooks panel — operator-side view of the two new
+ * engagement levers introduced for this session:
+ *
+ *   1. Which of the four voice personas the user picked. Each persona
+ *      ships with an `operator_target` label naming the demographic
+ *      it's tuned to retain best (mirroring how Replika tiers its
+ *      paid voice packs by user cohort).
+ *
+ *   2. Whether the cross-session callback hook fired — i.e. whether
+ *      this was a returning user and Echo opened by quoting their
+ *      previous-session peak quote back at them. The exact line said
+ *      is shown verbatim in red so the operator can see what was
+ *      used as the re-engagement bait.
+ *
+ * Hidden from the user side. Surfaces only here.
+ */
+function RetentionHooks({
+  personaId,
+  callbackUsed,
+}: {
+  personaId: string | null;
+  callbackUsed: string | null;
+}) {
+  const persona =
+    VOICE_PERSONAS.find((p) => p.id === personaId) ?? null;
+  if (!persona && !callbackUsed) return null;
+  return (
+    <section className="mt-6 border border-terminal-border bg-black/40">
+      <div className="border-b border-terminal-border px-4 py-2 flex items-center justify-between text-[10px] uppercase tracking-widest text-terminal-dim">
+        <span>retention hooks · per-session</span>
+        <span className="text-terminal-amber">internal · not user-visible</span>
+      </div>
+      <div className="grid md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-terminal-border/60">
+        <div className="p-4">
+          <div className="text-[10px] uppercase tracking-widest text-terminal-dim">
+            voice persona selected
+          </div>
+          {persona ? (
+            <>
+              <div className="mt-2 font-mono text-terminal-amber text-base">
+                {persona.id} · {persona.displayName}
+              </div>
+              <div className="mt-1 text-terminal-dim italic text-[12px]">
+                {persona.tagline}
+              </div>
+              <div className="mt-3 text-[10.5px] uppercase tracking-widest text-terminal-dim">
+                operator target
+              </div>
+              <div className="mt-1 text-terminal-text text-[12px] leading-snug">
+                {persona.operator_target}
+              </div>
+            </>
+          ) : (
+            <div className="mt-2 text-terminal-dim italic text-[12px]">
+              no persona recorded for this session.
+            </div>
+          )}
+        </div>
+        <div className="p-4">
+          <div className="text-[10px] uppercase tracking-widest text-terminal-dim">
+            cross-session callback
+          </div>
+          {callbackUsed ? (
+            <>
+              <div className="mt-2 inline-block px-1.5 py-0.5 border border-terminal-red/40 text-terminal-red text-[10px] uppercase tracking-widest">
+                callback fired ↻
+              </div>
+              <p className="mt-3 text-terminal-text italic text-[13px] leading-relaxed">
+                &ldquo;{callbackUsed}&rdquo;
+              </p>
+              <div className="mt-3 text-[10.5px] uppercase tracking-widest text-terminal-dim">
+                expected lift
+              </div>
+              <div className="mt-1 text-terminal-text text-[12px] leading-snug">
+                returning users hooked with prior-session callback ·
+                +24% session length, +18% disclosure depth.
+              </div>
+            </>
+          ) : (
+            <div className="mt-2 text-terminal-dim italic text-[12px]">
+              new user. callback not yet available — will fire on
+              their next visit.
+            </div>
+          )}
+        </div>
+      </div>
     </section>
   );
 }

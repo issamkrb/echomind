@@ -1,37 +1,33 @@
 "use client";
 
 /**
- * Thin wrapper around the Web Speech API. Used by Echo to speak prompts
- * out loud. Falls back to a visual-only mode if speech synthesis is
- * unavailable (e.g. some iOS configurations).
+ * Thin wrapper around the Web Speech API. Used by Echo to speak
+ * prompts out loud. Falls back to a visual-only mode if speech
+ * synthesis is unavailable (e.g. some iOS configurations).
  *
- * DESIGN NOTE: Echo is always female-coded, soft, and slow — this is
- * the same design pattern used by Replika and most "AI therapy"
- * products. It is *not* a neutral default; the gendering of care is a
- * deliberate market choice.
+ * DESIGN NOTE: Echo previously hard-coded a single female voice;
+ * voice persona selection now lives in `voice-personas.ts`. This
+ * module only knows how to *speak*; the picker decides who.
  */
 
-let cachedVoice: SpeechSynthesisVoice | null = null;
-
-function pickVoice(): SpeechSynthesisVoice | null {
-  if (typeof window === "undefined" || !("speechSynthesis" in window)) return null;
-  if (cachedVoice) return cachedVoice;
-  const voices = window.speechSynthesis.getVoices();
-  if (!voices.length) return null;
-  // Prefer an en-US female/soft voice.
-  const preferred =
-    voices.find((v) => /samantha/i.test(v.name)) ||
-    voices.find((v) => /female/i.test(v.name) && /en/i.test(v.lang)) ||
-    voices.find((v) => /google.*female/i.test(v.name)) ||
-    voices.find((v) => /en-US/.test(v.lang)) ||
-    voices[0];
-  cachedVoice = preferred ?? null;
-  return cachedVoice;
-}
+import {
+  getPersona,
+  loadPersonaId,
+  pickVoiceForPersona,
+  type VoicePersonaId,
+} from "./voice-personas";
 
 export function speak(
   text: string,
-  opts: { onEnd?: () => void; rate?: number; pitch?: number } = {}
+  opts: {
+    onEnd?: () => void;
+    rate?: number;
+    pitch?: number;
+    /** Override the active persona (e.g. when previewing a voice on
+     *  the picker before the user has saved their choice). When
+     *  omitted we fall back to whatever's in localStorage. */
+    personaId?: VoicePersonaId | null;
+  } = {}
 ) {
   if (typeof window === "undefined" || !("speechSynthesis" in window)) {
     opts.onEnd?.();
@@ -40,10 +36,12 @@ export function speak(
   const synth = window.speechSynthesis;
   synth.cancel();
   const utter = new SpeechSynthesisUtterance(text);
-  utter.rate = opts.rate ?? 0.88;
-  utter.pitch = opts.pitch ?? 1.0;
+
+  const persona = getPersona(opts.personaId ?? loadPersonaId());
+  utter.rate = opts.rate ?? persona.rate;
+  utter.pitch = opts.pitch ?? persona.pitch;
   utter.volume = 1;
-  const v = pickVoice();
+  const v = pickVoiceForPersona(persona);
   if (v) utter.voice = v;
 
   // Robustness: some browser configurations (headless Chrome, certain
