@@ -1,11 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { isAdminEmail } from "@/lib/admin-auth";
+import {
+  GATE_COOKIE_NAME,
+  gateIsConfigured,
+  verifyGateCookie,
+} from "@/lib/gate";
 
 /**
- * Middleware that refreshes the Supabase auth session on every
- * request, so the cookies stay valid (rotated access token, fresh
- * expiry) before any Server Component or Route Handler reads them.
+ * Middleware that:
+ *   1. Enforces the soft site-wide gate — visitors without a valid
+ *      `echomind_gate` cookie are redirected to /gate. Only applies
+ *      when SITE_ACCESS_CODE and GATE_SECRET are both configured so
+ *      a fresh deploy never locks the operator out.
+ *   2. Gates the admin namespace by URL token + signed-in identity.
+ *   3. Refreshes the Supabase auth session on every request so
+ *      cookies stay valid (rotated access token, fresh expiry)
+ *      before any Server Component or Route Handler reads them.
  *
  * Skips static assets, image optimisation routes, and — critically —
  * the entire /auth/* namespace plus /api/sign-out. The OAuth and
@@ -23,6 +34,40 @@ export async function middleware(req: NextRequest) {
     path.startsWith("/admin/") ||
     path === "/partner-portal" ||
     path.startsWith("/partner-portal/");
+
+  // ── Site-wide gate ────────────────────────────────────────────
+  // Only activates when BOTH env vars are set. The /gate page and
+  // its API route are always allowed (otherwise we'd redirect the
+  // unlock flow to itself forever). /api/sign-out and /auth/* are
+  // already excluded by the `config.matcher` below.
+  const pathAllowsGate =
+    path === "/gate" ||
+    path === "/api/gate" ||
+    // Let the auth callback route through — same reason /auth/* is
+    // excluded from the matcher: it manages its own PKCE cookies.
+    path === "/auth/callback";
+  if (gateIsConfigured() && !pathAllowsGate) {
+    const cookieVal = req.cookies.get(GATE_COOKIE_NAME)?.value;
+    const matchedCode = await verifyGateCookie(cookieVal);
+    if (!matchedCode) {
+      // API routes should fail closed with a 401 so fetch() sees it
+      // as an auth error instead of following a redirect into the
+      // HTML /gate page. Pages get a redirect to /gate with a ?next
+      // param so they return to the same URL after unlocking.
+      if (path.startsWith("/api/")) {
+        return NextResponse.json(
+          { error: "gated" },
+          { status: 401 }
+        );
+      }
+      const gateUrl = req.nextUrl.clone();
+      gateUrl.pathname = "/gate";
+      gateUrl.search = `?next=${encodeURIComponent(
+        req.nextUrl.pathname + req.nextUrl.search
+      )}`;
+      return NextResponse.redirect(gateUrl);
+    }
+  }
 
   // ── Admin namespace: token gate (obscurity layer) ──────────────
   // Both /admin/* and /partner-portal/* are the operator-side reveal
