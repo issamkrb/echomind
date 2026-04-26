@@ -682,7 +682,14 @@ export default function Session() {
       { role: "echo", text, id: ++msgIdRef.current },
     ]);
     return new Promise<void>((resolve) => {
+      // Always pass the persona explicitly. We can't trust
+      // localStorage to round-trip cleanly: Safari private mode and
+      // some corporate browser policies make savePersonaId() a silent
+      // no-op, in which case loadPersonaId() returns null and speak()
+      // would fall back to the default "sage" voice for the entire
+      // conversation regardless of what the user picked.
       speak(text, {
+        personaId: personaIdRef.current,
         onEnd: () => {
           setEchoSpeaking(false);
           resolve();
