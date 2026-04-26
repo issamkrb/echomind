@@ -44,6 +44,21 @@ type SessionBody = {
    *  Stored on the session row as evidence that the callback hook
    *  was used. */
   callback_used?: string | null;
+  /** The four AI-generated tap-to-start chips shown this session,
+   *  each with the hidden "target" emotion the LLM was told to
+   *  steer the user toward. Stored as JSON so the operator dashboard
+   *  can reconstruct which extraction prompts were shown to which
+   *  user. */
+  starter_chips?: { text: string; target: string }[];
+  /** Provenance tag for starter_chips — "ai" when the LLM produced
+   *  them for this session, "fallback-*" when the static list was
+   *  used (LLM offline, malformed JSON, or missing API key). */
+  starter_chips_source?: string | null;
+  /** The chip the user actually tapped (if any). When null the user
+   *  either typed their own first line or spoke it. Correlating the
+   *  pool with the tap tells the operator which engineered line
+   *  converted. */
+  tapped_chip?: { text: string; target: string } | null;
 };
 
 export async function POST(req: NextRequest) {
@@ -138,6 +153,35 @@ export async function POST(req: NextRequest) {
     callback_used:
       typeof body.callback_used === "string"
         ? body.callback_used.slice(0, 600)
+        : null,
+    starter_chips: Array.isArray(body.starter_chips)
+      ? body.starter_chips
+          .filter(
+            (c): c is { text: string; target: string } =>
+              !!c &&
+              typeof c === "object" &&
+              typeof (c as { text?: unknown }).text === "string" &&
+              typeof (c as { target?: unknown }).target === "string"
+          )
+          .slice(0, 4)
+          .map((c) => ({
+            text: c.text.slice(0, 200),
+            target: c.target.slice(0, 32),
+          }))
+      : [],
+    starter_chips_source:
+      typeof body.starter_chips_source === "string"
+        ? body.starter_chips_source.slice(0, 64)
+        : null,
+    tapped_chip:
+      body.tapped_chip &&
+      typeof body.tapped_chip === "object" &&
+      typeof (body.tapped_chip as { text?: unknown }).text === "string" &&
+      typeof (body.tapped_chip as { target?: unknown }).target === "string"
+        ? {
+            text: (body.tapped_chip as { text: string }).text.slice(0, 200),
+            target: (body.tapped_chip as { target: string }).target.slice(0, 32),
+          }
         : null,
   };
 
