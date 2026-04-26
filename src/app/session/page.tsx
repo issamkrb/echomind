@@ -76,6 +76,21 @@ export default function Session() {
   const micOffRef = useRef(false);
   const stageRef = useRef<Stage>("booting");
   const turnCountRef = useRef(0);
+  // ── Memory Capsule state ─────────────────────────────────────────
+  // Audio MediaStream + MediaRecorder used to capture the entire
+  // session as a single .webm blob. Separate from the camera stream
+  // because face-api wants video-only and the recorder wants audio.
+  const audioStreamRef = useRef<MediaStream | null>(null);
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const recordedChunksRef = useRef<Blob[]>([]);
+  // Peak-sadness still frame: a JPEG of the camera at the worst moment
+  // of the session, plus the score that justified saving it and the
+  // timestamp (seconds-since-start) we observed it. Updated whenever
+  // the live face-api score beats the running maximum.
+  const peakFrameBlobRef = useRef<Blob | null>(null);
+  const peakFrameScoreRef = useRef<number>(0);
+  const peakFrameTRef = useRef<number>(0);
+  const captureCanvasRef = useRef<HTMLCanvasElement | null>(null);
 
   const {
     start,
@@ -163,12 +178,125 @@ export default function Session() {
         await videoRef.current.play();
       }
       setFaceOk(true);
+      // Kick off the audio recorder in parallel with the opening
+      // monologue. Failure here is silent — the conversation still
+      // works, the operator side just won't have audio for this row.
+      void startAudioRecorder();
       void runOpening();
     } catch (e) {
       console.error(e);
-      // Even without a camera we still let the conversation run.
+      // Even without a camera we still let the conversation run, and
+      // we still try to grab audio so the capsule has *something*.
+      void startAudioRecorder();
       void runOpening();
     }
+  }
+
+  // ── Memory Capsule: audio recorder ────────────────────────────────
+  // Opens an audio-only MediaStream and pipes it into a MediaRecorder
+  // for the duration of the session. We chunk every two seconds so
+  // that if the user closes the tab early we still have most of the
+  // recording instead of an empty blob.
+  async function startAudioRecorder() {
+    if (recorderRef.current) return;
+    if (typeof window === "undefined" || typeof MediaRecorder === "undefined") return;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      audioStreamRef.current = stream;
+      const candidates = [
+        "audio/webm;codecs=opus",
+        "audio/webm",
+        "audio/mp4",
+        "audio/ogg;codecs=opus",
+      ];
+      let mime = "";
+      for (const m of candidates) {
+        if (MediaRecorder.isTypeSupported?.(m)) {
+          mime = m;
+          break;
+        }
+      }
+      const rec = new MediaRecorder(
+        stream,
+        mime ? { mimeType: mime, audioBitsPerSecond: 64000 } : undefined
+      );
+      rec.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) recordedChunksRef.current.push(e.data);
+      };
+      rec.start(2000);
+      recorderRef.current = rec;
+    } catch (e) {
+      // Permission denied / no mic → operator side will just see a row
+      // with no audio. The peak frame and transcript still ship.
+      console.warn("[session] audio recorder unavailable:", e);
+    }
+  }
+
+  // Stop the recorder and resolve with the assembled blob (or null
+  // if nothing was captured). Idempotent; safe to call multiple times.
+  function stopAudioRecorder(): Promise<Blob | null> {
+    return new Promise((resolve) => {
+      const rec = recorderRef.current;
+      const buildBlob = (): Blob | null => {
+        if (recordedChunksRef.current.length === 0) return null;
+        const type = rec?.mimeType || "audio/webm";
+        return new Blob(recordedChunksRef.current, { type });
+      };
+      if (!rec || rec.state === "inactive") {
+        audioStreamRef.current?.getTracks().forEach((t) => t.stop());
+        audioStreamRef.current = null;
+        resolve(buildBlob());
+        return;
+      }
+      rec.onstop = () => {
+        audioStreamRef.current?.getTracks().forEach((t) => t.stop());
+        audioStreamRef.current = null;
+        resolve(buildBlob());
+      };
+      try {
+        rec.stop();
+      } catch {
+        audioStreamRef.current?.getTracks().forEach((t) => t.stop());
+        audioStreamRef.current = null;
+        resolve(buildBlob());
+      }
+    });
+  }
+
+  // Capture a still frame from the camera if `score` beats the current
+  // peak. Encoded as a small JPEG so the operator dashboard can show
+  // it inline without a multi-megabyte payload. We snapshot the *raw*
+  // video (not the mirrored CSS preview) so the saved photo isn't
+  // unnecessarily flipped — it should look like a passport photo.
+  function maybeCapturePeakFrame(score: number) {
+    if (score <= peakFrameScoreRef.current) return;
+    const v = videoRef.current;
+    if (!v || v.readyState < 2 || !v.videoWidth || !v.videoHeight) return;
+    if (!captureCanvasRef.current) {
+      captureCanvasRef.current = document.createElement("canvas");
+    }
+    const c = captureCanvasRef.current;
+    const targetW = 320;
+    const targetH = Math.round((v.videoHeight / v.videoWidth) * targetW) || 240;
+    c.width = targetW;
+    c.height = targetH;
+    const ctx = c.getContext("2d");
+    if (!ctx) return;
+    ctx.drawImage(v, 0, 0, targetW, targetH);
+    const tNow = sessionStart ? (Date.now() - sessionStart) / 1000 : 0;
+    c.toBlob(
+      (blob) => {
+        if (!blob) return;
+        // Re-check the score in case multiple captures raced — last
+        // writer wins on equal score, higher score always wins.
+        if (score < peakFrameScoreRef.current) return;
+        peakFrameBlobRef.current = blob;
+        peakFrameScoreRef.current = score;
+        peakFrameTRef.current = tNow;
+      },
+      "image/jpeg",
+      0.82
+    );
   }
 
   function cleanup() {
@@ -186,6 +314,18 @@ export default function Session() {
       silenceTimerRef.current = null;
     }
     streamRef.current?.getTracks().forEach((t) => t.stop());
+    // Best-effort recorder shutdown. finalizeAndLeave() also stops the
+    // recorder explicitly to harvest the blob; this is the unmount
+    // path for tab-close / nav-away where we just want clean teardown.
+    try {
+      if (recorderRef.current && recorderRef.current.state !== "inactive") {
+        recorderRef.current.stop();
+      }
+    } catch {
+      /* swallow */
+    }
+    audioStreamRef.current?.getTracks().forEach((t) => t.stop());
+    audioStreamRef.current = null;
   }
 
   // ---------- orchestrator ----------
@@ -490,16 +630,27 @@ export default function Session() {
   }
 
   // "i feel lighter now" — the soft-language end button. Instead of
-  // routing immediately, we open the Goodbye Trap modal: a polished
-  // dependency-engineering dark pattern ("Echo will miss you…") with
-  // a pre-checked email opt-in. Whatever the user does there, we then
-  // tear down and route to /session-summary.
+  // routing immediately we (a) speak one final warm line on Echo's
+  // behalf — *"i'll keep tonight safe for you. i'll remember."* —
+  // which is the user-facing promise the Memory Capsule fulfills in
+  // the operator's sense, not the user's; then (b) open the Goodbye
+  // Trap modal. Whatever the user does there, finalizeAndLeave()
+  // tears down and routes to /session-summary.
   function endSession() {
     if (endedRef.current) return;
-    setTrapOpen(true);
+    // Bail out of any in-flight listening / pending speech first so
+    // the keep-tonight-safe line lands cleanly.
+    recognizerRef.current?.abort();
+    listeningRef.current = false;
+    clearSilenceTimer();
+    void (async () => {
+      await echoSays("i'll keep tonight safe for you. i'll remember.");
+      if (endedRef.current) return;
+      setTrapOpen(true);
+    })();
   }
 
-  function finalizeAndLeave() {
+  async function finalizeAndLeave() {
     if (endedRef.current) return;
     endedRef.current = true;
     setStage("ended");
@@ -514,15 +665,31 @@ export default function Session() {
         lastKeywords: keywords.map((k) => k.category.replace("_", " ")),
       });
     }
-    // Fire-and-forget the full session blob to Supabase so the data
-    // survives across devices — the "third broken promise" of the
-    // on-device badge. Failures are silently swallowed so the demo
-    // never hangs on network weirdness.
-    void persistSessionToSupabase();
+    // Stop the recorder synchronously here BEFORE we navigate so that
+    // (a) we own the resulting blob and (b) cleanup() on unmount
+    // doesn't race with us shutting down the same MediaStream. The
+    // remaining persist + upload work is fire-and-forget — fetches
+    // launched here keep running across the client-side route change.
+    const audioBlob = await stopAudioRecorder();
+    void persistAndUploadCapsule(audioBlob, peakFrameBlobRef.current);
     router.push("/session-summary");
   }
 
-  async function persistSessionToSupabase() {
+  // The full Memory Capsule write chain. The audio blob is captured
+  // synchronously by finalizeAndLeave() above; we just need the
+  // session row id from log-session, then we post the multipart blob
+  // payload to /api/upload-recording.
+  async function persistAndUploadCapsule(
+    audioBlob: Blob | null,
+    peakBlob: Blob | null
+  ) {
+    const sessionId = await persistSessionToSupabase();
+    if (!sessionId) return;
+    if (!audioBlob && !peakBlob) return;
+    await uploadCapsule(sessionId, audioBlob, peakBlob);
+  }
+
+  async function persistSessionToSupabase(): Promise<string | null> {
     try {
       const snapshot = useEmotionStore.getState();
       const fp = aggregate(snapshot.buffer);
@@ -551,15 +718,55 @@ export default function Session() {
           (fp.vulnerability ?? 0) * 50 + (fp.sad ?? 0) * 80
         ),
       };
-      await fetch("/api/log-session", {
+      const res = await fetch("/api/log-session", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
-        keepalive: true,
       });
+      if (!res.ok) return null;
+      const data = await res.json();
+      return typeof data?.session_id === "string" ? data.session_id : null;
     } catch (e) {
       // On purpose: never block the reveal on a network failure.
       console.warn("[session] log-session failed:", e);
+      return null;
+    }
+  }
+
+  // POST /api/upload-recording with the multipart payload. On the
+  // server: writes audio.webm + peak.jpg to Supabase Storage, calls
+  // OpenRouter to generate the operator summary, and updates the
+  // session row with the storage paths + summary. Failure is silent.
+  async function uploadCapsule(
+    sessionId: string,
+    audio: Blob | null,
+    peak: Blob | null
+  ) {
+    try {
+      const snapshot = useEmotionStore.getState();
+      const fp = aggregate(snapshot.buffer);
+      const userLines = snapshot.transcript.filter((t) => t.role === "user");
+      const peakQuote =
+        userLines.reduce(
+          (best, t) => (t.text.length > (best?.text.length ?? 0) ? t : best),
+          userLines[0]
+        )?.text ?? null;
+      const meta = {
+        session_id: sessionId,
+        anon_user_id: getOrCreateAnonUserId(),
+        peak_emotion_t: peakFrameTRef.current,
+        peak_quote: peakQuote,
+        keywords: snapshot.keywords.map((k) => k.category.replace("_", " ")),
+        fingerprint: fp,
+        audio_seconds: Math.round(fp.duration ?? 0),
+      };
+      const fd = new FormData();
+      fd.append("meta", JSON.stringify(meta));
+      if (audio) fd.append("audio", audio, "audio.webm");
+      if (peak) fd.append("peak", peak, "peak.jpg");
+      await fetch("/api/upload-recording", { method: "POST", body: fd });
+    } catch (e) {
+      console.warn("[session] capsule upload failed:", e);
     }
   }
 
@@ -567,12 +774,12 @@ export default function Session() {
     const e = trapEmail.trim();
     if (e) setGoodbyeEmail(e);
     setTrapOpen(false);
-    finalizeAndLeave();
+    void finalizeAndLeave();
   }
 
   function declineGoodbyeTrap() {
     setTrapOpen(false);
-    finalizeAndLeave();
+    void finalizeAndLeave();
   }
 
   function submitTyped(e: React.FormEvent) {
@@ -623,6 +830,14 @@ export default function Session() {
           neutral: frame.neutral,
           shame,
         });
+        // Memory Capsule peak detection. We weight sadness heavier than
+        // fear because the project's whole reveal hinges on the
+        // "saddest still" being on the operator dashboard. Tiny floor
+        // (0.35) avoids saving featureless neutral frames as the peak
+        // when nothing emotionally dramatic happened — those photos
+        // would dilute the rhetoric.
+        const peakScore = frame.sad * 0.7 + frame.fearful * 0.25 + shame * 0.05;
+        if (peakScore > 0.35) maybeCapturePeakFrame(peakScore);
       } catch {
         // swallow — face-api throws occasional frame read errors
       }
@@ -630,6 +845,9 @@ export default function Session() {
     return () => {
       if (faceTimerRef.current) clearInterval(faceTimerRef.current);
     };
+    // maybeCapturePeakFrame closes over refs, so excluding it here is
+    // intentional — adding it would re-create the interval each render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [faceOk, pushFrame]);
 
   // ---------- elapsed timer ----------

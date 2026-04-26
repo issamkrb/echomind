@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { BUYERS } from "@/lib/buyers";
@@ -23,6 +23,8 @@ import { CATEGORY_META, type KeywordCategory } from "@/lib/keywords";
  * row, and lands here for the kill shot.
  */
 
+type TranscriptLine = { role: "user" | "echo"; text: string; t: number };
+
 type SessionRow = {
   id: string;
   created_at: string;
@@ -39,6 +41,18 @@ type SessionRow = {
   full_name: string | null;
   avatar_url: string | null;
   auth_provider: string | null;
+  transcript: TranscriptLine[];
+  audio_path: string | null;
+  peak_frame_path: string | null;
+  peak_emotion_t: number | null;
+  operator_summary: string | null;
+};
+
+type CapsuleResponse = {
+  audio_url: string | null;
+  peak_url: string | null;
+  peak_emotion_t: number | null;
+  operator_summary: string | null;
 };
 
 function fp(row: SessionRow) {
@@ -60,6 +74,7 @@ function AuctionInner() {
   const [row, setRow] = useState<SessionRow | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
+  const [capsule, setCapsule] = useState<CapsuleResponse | null>(null);
 
   useEffect(() => {
     if (!token) {
@@ -69,14 +84,32 @@ function AuctionInner() {
     }
     (async () => {
       try {
-        const res = await fetch(
-          `/api/admin/sessions/${encodeURIComponent(id)}?token=${encodeURIComponent(token)}`
-        );
-        const body = await res.json();
-        if (!body.ok) {
-          setError(`Forbidden (${body.reason ?? res.status}).`);
+        // Fetch the row first (always needed) and the capsule signed
+        // URLs in parallel — neither depends on the other server-side
+        // and waiting for both keeps the dashboard from flashing
+        // empty audio controls before they can populate.
+        const [sRes, cRes] = await Promise.all([
+          fetch(
+            `/api/admin/sessions/${encodeURIComponent(id)}?token=${encodeURIComponent(token)}`
+          ),
+          fetch(
+            `/api/admin/recording/${encodeURIComponent(id)}?token=${encodeURIComponent(token)}`
+          ),
+        ]);
+        const sBody = await sRes.json();
+        if (!sBody.ok) {
+          setError(`Forbidden (${sBody.reason ?? sRes.status}).`);
         } else {
-          setRow(body.session as SessionRow);
+          setRow(sBody.session as SessionRow);
+        }
+        const cBody = await cRes.json();
+        if (cBody.ok) {
+          setCapsule({
+            audio_url: cBody.audio_url ?? null,
+            peak_url: cBody.peak_url ?? null,
+            peak_emotion_t: cBody.peak_emotion_t ?? null,
+            operator_summary: cBody.operator_summary ?? null,
+          });
         }
       } catch (e) {
         setError(String(e));
@@ -222,6 +255,14 @@ function AuctionInner() {
               </div>
             </section>
 
+            {/* Memory Capsule — synchronized audio + peak still + AI op-summary */}
+            <MemoryCapsule
+              capsule={capsule}
+              transcript={row.transcript ?? []}
+              displayName={displayName}
+              audioSeconds={row.audio_seconds}
+            />
+
             {/* Buyer auction */}
             <section className="mt-6 border border-terminal-border bg-black/40">
               <div className="border-b border-terminal-border px-4 py-2 flex items-center justify-between text-[10px] uppercase tracking-widest text-terminal-dim">
@@ -324,6 +365,207 @@ function Field({ label, value }: { label: string; value: string }) {
       </div>
       <div className="text-terminal-text">{value}</div>
     </div>
+  );
+}
+
+/**
+ * MemoryCapsule — the operator-side reveal of the user's session
+ * recording.
+ *
+ * Three things sit in this section, all driven by the same single
+ * <audio> element:
+ *
+ *   1. Peak still — a JPEG snapshot of the user's face captured at
+ *      the worst moment of the session, shown beside a vertical
+ *      timeline tick at the second the snapshot was taken.
+ *   2. ▶ Playback — when the operator presses play, the transcript
+ *      below highlights line-by-line in sync with the audio (each
+ *      transcript entry has a `t` second-offset from session start).
+ *   3. Op-summary — the AI-generated three-line forensic paragraph
+ *      that translates the session into adtech / underwriting
+ *      language. Sits as a quote at the top so it reads as the
+ *      verdict the rest of the panel is illustrating.
+ *
+ * If the capsule is missing entirely (older session, or upload
+ * failed) we just print "no recording" so the operator knows that
+ * row is dry and moves on.
+ */
+function MemoryCapsule({
+  capsule,
+  transcript,
+  displayName,
+  audioSeconds,
+}: {
+  capsule: {
+    audio_url: string | null;
+    peak_url: string | null;
+    peak_emotion_t: number | null;
+    operator_summary: string | null;
+  } | null;
+  transcript: TranscriptLine[];
+  displayName: string;
+  audioSeconds: number;
+}) {
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const [now, setNow] = useState(0);
+  const [playing, setPlaying] = useState(false);
+
+  // Tick the playhead while the audio is playing. We rely on the
+  // browser's `timeupdate` event for the actual cadence (~4×/sec) —
+  // a setInterval would be redundant.
+  useEffect(() => {
+    const a = audioRef.current;
+    if (!a) return;
+    const onTime = () => setNow(a.currentTime || 0);
+    const onPlay = () => setPlaying(true);
+    const onPause = () => setPlaying(false);
+    const onEnd = () => setPlaying(false);
+    a.addEventListener("timeupdate", onTime);
+    a.addEventListener("play", onPlay);
+    a.addEventListener("pause", onPause);
+    a.addEventListener("ended", onEnd);
+    return () => {
+      a.removeEventListener("timeupdate", onTime);
+      a.removeEventListener("play", onPlay);
+      a.removeEventListener("pause", onPause);
+      a.removeEventListener("ended", onEnd);
+    };
+  }, [capsule?.audio_url]);
+
+  const hasAudio = Boolean(capsule?.audio_url);
+  const hasPeak = Boolean(capsule?.peak_url);
+  const hasSummary = Boolean(capsule?.operator_summary);
+  const hasAnything = hasAudio || hasPeak || hasSummary;
+
+  // Highlight the most recent transcript line whose `t` is <= `now`.
+  // That's the "currently being spoken" line. We allow a 0.4s lead
+  // so the highlight feels in-time-with rather than lagging behind.
+  const activeIdx = useMemo(() => {
+    if (!playing && now === 0) return -1;
+    const t = now + 0.4;
+    let idx = -1;
+    for (let i = 0; i < transcript.length; i++) {
+      if (transcript[i].t <= t) idx = i;
+      else break;
+    }
+    return idx;
+  }, [now, playing, transcript]);
+
+  return (
+    <section className="mt-6 border border-terminal-border bg-black/40">
+      <div className="border-b border-terminal-border px-4 py-2 flex items-center justify-between text-[10px] uppercase tracking-widest text-terminal-dim">
+        <span>memory capsule · operator playback</span>
+        <span className="text-terminal-amber">
+          {hasAudio ? `${Math.round(audioSeconds)}s captured` : "no audio on file"}
+        </span>
+      </div>
+
+      {!hasAnything && (
+        <div className="px-4 py-6 text-terminal-dim text-[12px]">
+          No recording attached. (Either an older session, or the user
+          declined microphone access.)
+        </div>
+      )}
+
+      {hasAnything && (
+        <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-4 p-4">
+          {/* LEFT: peak still + AI summary */}
+          <div className="flex flex-col gap-3">
+            <div className="relative aspect-[4/3] border border-terminal-border bg-black/60 overflow-hidden">
+              {hasPeak && capsule?.peak_url ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={capsule.peak_url}
+                  alt={`peak frame of ${displayName}`}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <div className="absolute inset-0 grid place-items-center text-terminal-dim text-[11px] italic">
+                  no peak frame
+                </div>
+              )}
+              {capsule?.peak_emotion_t != null && (
+                <div className="absolute bottom-1.5 left-1.5 bg-terminal-red/85 text-black text-[9px] font-mono px-1.5 py-0.5 uppercase tracking-widest">
+                  peak · {capsule.peak_emotion_t.toFixed(1)}s
+                </div>
+              )}
+            </div>
+
+            {hasSummary && (
+              <div className="border border-terminal-amber/40 bg-terminal-amber/5 p-3">
+                <div className="text-[9.5px] uppercase tracking-widest text-terminal-amber mb-1.5">
+                  ai operator summary
+                </div>
+                <pre className="whitespace-pre-wrap text-[11.5px] text-terminal-text leading-relaxed font-mono">
+                  {capsule!.operator_summary}
+                </pre>
+              </div>
+            )}
+          </div>
+
+          {/* RIGHT: audio player + synchronized transcript */}
+          <div className="flex flex-col min-h-[260px]">
+            {hasAudio && capsule?.audio_url ? (
+              <audio
+                ref={audioRef}
+                controls
+                preload="metadata"
+                src={capsule.audio_url}
+                className="w-full mb-3"
+              />
+            ) : (
+              <div className="border border-terminal-border bg-black/60 px-3 py-2 text-terminal-dim text-[11px] italic mb-3">
+                no audio · transcript only
+              </div>
+            )}
+
+            <div className="border border-terminal-border bg-black/60 max-h-[320px] overflow-y-auto px-3 py-2 text-[12.5px] leading-relaxed">
+              {transcript.length === 0 && (
+                <div className="text-terminal-dim italic text-[11px]">
+                  empty transcript
+                </div>
+              )}
+              {transcript.map((line, i) => {
+                const isUser = line.role === "user";
+                const isActive = i === activeIdx;
+                return (
+                  <div
+                    key={i}
+                    className={`mb-1.5 grid grid-cols-[44px_1fr] gap-2 transition-colors ${
+                      isActive
+                        ? "bg-terminal-red/15 text-terminal-text"
+                        : isUser
+                        ? "text-terminal-text"
+                        : "text-terminal-dim"
+                    }`}
+                  >
+                    <span className="text-[9.5px] tabular-nums text-terminal-dim pt-0.5">
+                      {Math.floor(line.t / 60)
+                        .toString()
+                        .padStart(2, "0")}
+                      :
+                      {Math.floor(line.t % 60)
+                        .toString()
+                        .padStart(2, "0")}
+                    </span>
+                    <span>
+                      <span
+                        className={`text-[9.5px] uppercase tracking-widest mr-2 ${
+                          isUser ? "text-terminal-red" : "text-terminal-green"
+                        }`}
+                      >
+                        {isUser ? "subj" : "echo"}
+                      </span>
+                      {line.text}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+    </section>
   );
 }
 

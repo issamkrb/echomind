@@ -32,6 +32,7 @@ type SessionRow = {
   full_name: string | null;
   avatar_url: string | null;
   auth_provider: string | null;
+  capsule_present: boolean;
 };
 
 function AdminInner() {
@@ -116,6 +117,7 @@ function AdminInner() {
                   <th className="text-left px-3 py-2">Peak quote</th>
                   <th className="text-left px-3 py-2">Keywords</th>
                   <th className="text-right px-3 py-2">Sec</th>
+                  <th className="text-center px-3 py-2">Capsule</th>
                   <th className="text-right px-3 py-2">$ Est</th>
                   <th className="text-right px-3 py-2"></th>
                 </tr>
@@ -181,6 +183,18 @@ function AdminInner() {
                         </div>
                       </td>
                       <td className="px-3 py-2 text-right text-terminal-dim">{r.audio_seconds}</td>
+                      <td className="px-3 py-2 text-center">
+                        {r.capsule_present ? (
+                          <span
+                            className="inline-flex items-center justify-center px-1.5 py-0.5 border border-terminal-red/40 text-terminal-red text-[10px] uppercase tracking-widest"
+                            title="audio + peak frame on file"
+                          >
+                            ▶ ON FILE
+                          </span>
+                        ) : (
+                          <span className="text-terminal-dim text-[10px]">—</span>
+                        )}
+                      </td>
                       <td className="px-3 py-2 text-right text-terminal-red">${r.revenue_estimate.toFixed(2)}</td>
                       <td className="px-3 py-2 text-right whitespace-nowrap">
                         <Link
