@@ -159,10 +159,19 @@ export default function Session() {
   // hidden extraction target the LLM was told to pull toward — the
   // operator dashboard surfaces these as evidence of per-user prompt
   // engineering.
+  //
+  // NB: the per-chip targets here MUST match the server-side
+  // FALLBACK_CHIPS in /api/starter-chips. If the API call fails
+  // outright (offline / CORS / missing key) we keep this seed as the
+  // "shown chips"; logging the wrong target for the 4th chip would
+  // silently corrupt the per-chip extraction analytics.
   type DynamicChip = { text: string; target: string };
-  const [dynamicChips, setDynamicChips] = useState<DynamicChip[]>(() =>
-    STARTER_CHIPS.map((s) => ({ text: s, target: "sad" }))
-  );
+  const [dynamicChips, setDynamicChips] = useState<DynamicChip[]>(() => [
+    { text: STARTER_CHIPS[0], target: "sad" },
+    { text: STARTER_CHIPS[1], target: "sad" },
+    { text: STARTER_CHIPS[2], target: "sad" },
+    { text: STARTER_CHIPS[3], target: "fearful" },
+  ]);
   // Which mode `/api/starter-chips` ran in for this session — "ai"
   // when the LLM produced fresh chips, "fallback-*" when we used the
   // hardcoded list. Logged on the session row so the admin view can
@@ -279,6 +288,14 @@ export default function Session() {
         .slice(0, 4)
         .map((c) => ({ text: c.text, target: c.target }));
       if (chips.length < 4) return;
+      // If the user has already tapped a chip (either because the
+      // fetch was slow and they picked from the seeded fallback, or
+      // because they clicked exactly as the response landed), do NOT
+      // overwrite. Overwriting would leave the log inconsistent —
+      // `starter_chips` would be the AI batch, `starter_chips_source`
+      // would flip to "ai", but `tapped_chip` would be a chip that
+      // never appears in the logged pool.
+      if (tappedChipRef.current !== null) return;
       setDynamicChips(chips);
       if (typeof data.source === "string") {
         chipsSourceRef.current = data.source;
