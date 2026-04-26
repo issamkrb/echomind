@@ -804,7 +804,7 @@ function LiveMonitor({
             muted
             autoPlay
             playsInline
-            className="w-full h-full object-cover"
+            className="w-full h-full object-cover scale-x-[-1]"
           />
           <div className="absolute top-1 left-1 bg-black/60 text-white/90 text-[9px] font-mono px-1.5 py-0.5 rounded inline-flex items-center gap-1">
             <span
