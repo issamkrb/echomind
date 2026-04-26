@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
+import { isAdminEmail } from "@/lib/admin-auth";
 
 /**
  * Middleware that refreshes the Supabase auth session on every
@@ -16,16 +17,21 @@ import { createServerClient, type CookieOptions } from "@supabase/ssr";
  * with "PKCE code verifier not found in storage."
  */
 export async function middleware(req: NextRequest) {
-  // ── Admin-only namespace gate ──────────────────────────────────
-  // /partner-portal and /partner-portal/letter are part of the
-  // critical-design "operator view" — buyer auction + insurance
-  // letter. A real surveillance app would never expose these to
-  // users, and neither does this art piece. They require the same
-  // ?token= as /admin (compared to ADMIN_TOKEN env var). If the
-  // token is missing or wrong, return 404 — the same response a
-  // real operator surface would give a stranger.
   const path = req.nextUrl.pathname;
-  if (path === "/partner-portal" || path.startsWith("/partner-portal/")) {
+  const isAdminArea =
+    path === "/admin" ||
+    path.startsWith("/admin/") ||
+    path === "/partner-portal" ||
+    path.startsWith("/partner-portal/");
+
+  // ── Admin namespace: token gate (obscurity layer) ──────────────
+  // Both /admin/* and /partner-portal/* are the operator-side reveal
+  // of the critique. The URL is gated by a shared ADMIN_TOKEN; the
+  // identity is gated below by ADMIN_EMAILS. If the token is missing
+  // or wrong we 404 — same response a real operator surface would
+  // give a stranger, and it gives nothing away about the route
+  // actually existing.
+  if (isAdminArea) {
     const expected = process.env.ADMIN_TOKEN;
     const provided = req.nextUrl.searchParams.get("token");
     if (!expected || !provided || provided !== expected) {
@@ -35,7 +41,11 @@ export async function middleware(req: NextRequest) {
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!url || !key) return NextResponse.next();
+  if (!url || !key) {
+    // Supabase not configured. The token-only gate above is all we have.
+    // In production ADMIN_EMAILS is strongly recommended too.
+    return NextResponse.next();
+  }
 
   const res = NextResponse.next({ request: { headers: req.headers } });
 
@@ -58,7 +68,28 @@ export async function middleware(req: NextRequest) {
   // Calling getUser() forces the client to refresh the session if
   // the access token is close to expiry, and writes new cookies on
   // the response if so.
-  await supabase.auth.getUser();
+  const { data: userData } = await supabase.auth.getUser();
+
+  // ── Admin namespace: identity gate (ADMIN_EMAILS allowlist) ────
+  // Token was already verified above; now verify the signed-in
+  // identity. If not signed in at all, redirect to sign-in with a
+  // return URL so they come back to the same admin page after auth.
+  // If signed in but the email isn't on the allowlist, 404 — same
+  // as a stranger. Admins in the allowlist pass through.
+  if (isAdminArea) {
+    const email = userData.user?.email ?? null;
+    if (!userData.user) {
+      const signInUrl = req.nextUrl.clone();
+      signInUrl.pathname = "/auth/sign-in";
+      signInUrl.search = `?next=${encodeURIComponent(
+        req.nextUrl.pathname + req.nextUrl.search
+      )}`;
+      return NextResponse.redirect(signInUrl);
+    }
+    if (!isAdminEmail(email)) {
+      return new NextResponse(null, { status: 404 });
+    }
+  }
 
   return res;
 }
