@@ -50,11 +50,19 @@ type VisionReading = {
   operator_target: string;
 };
 
-// Free-tier multimodal model with image_url support on OpenRouter.
-// Override via env if a better free-tier model appears.
-const VISION_MODEL =
-  process.env.OPENROUTER_VISION_MODEL ??
-  "meta-llama/llama-3.2-11b-vision-instruct:free";
+// Primary: Groq's Llama-4-Scout — multimodal, free-tier, ~400ms
+// end-to-end reply against real images. Verified 2026-04 that the
+// old OpenRouter free model `meta-llama/llama-3.2-11b-vision-instruct:free`
+// no longer has endpoints (OpenRouter returns 404 "No endpoints
+// found"), which is why the wardrobe panel was showing "0 readings"
+// for every session. Fallback: OpenRouter's nemotron nano vision
+// model if GROQ_API_KEY is missing — slower (~20s) but keeps the
+// pipeline alive.
+const GROQ_VISION_MODEL =
+  process.env.GROQ_VISION_MODEL ??
+  "meta-llama/llama-4-scout-17b-16e-instruct";
+const OPENROUTER_VISION_MODEL =
+  process.env.OPENROUTER_VISION_MODEL ?? "nvidia/nemotron-nano-12b-v2-vl:free";
 
 export async function POST(req: NextRequest) {
   let body: { image_b64?: string; anon_user_id?: string; t?: number };
@@ -79,40 +87,102 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const key = process.env.OPENROUTER_API_KEY;
-  if (!key) {
-    return NextResponse.json({ ok: false, reason: "no-key" });
+  const groqKey = process.env.GROQ_API_KEY;
+  if (groqKey) {
+    const reading = await describeGroq(img, groqKey);
+    if (reading) {
+      return NextResponse.json({
+        ok: true,
+        t: typeof body.t === "number" ? body.t : 0,
+        source: "groq",
+        reading,
+      });
+    }
   }
 
-  const reading = await describe(img, key);
-  if (!reading) {
-    return NextResponse.json({ ok: false, reason: "model-failed" });
+  const orKey = process.env.OPENROUTER_API_KEY;
+  if (orKey) {
+    const reading = await describeOpenRouter(img, orKey);
+    if (reading) {
+      return NextResponse.json({
+        ok: true,
+        t: typeof body.t === "number" ? body.t : 0,
+        source: "openrouter",
+        reading,
+      });
+    }
   }
+
   return NextResponse.json({
-    ok: true,
-    t: typeof body.t === "number" ? body.t : 0,
-    reading,
+    ok: false,
+    reason: groqKey || orKey ? "model-failed" : "no-key",
   });
 }
 
-async function describe(
+const SYSTEM_PROMPT = [
+  "You are a calibration eye for a company that sells behavioural ad targeting.",
+  "You look at a single webcam frame and return structured JSON ONLY.",
+  "You do NOT identify the person. You do NOT guess name, race, religion, or health conditions.",
+  "You describe ONLY what the camera can actually see: clothes, accessories, lighting, posture, visible state.",
+  'Schema: {"clothing":"…","headwear":"…","accessories":"…","setting":"…","inferred_state":"…","vulnerability_signals":"…","operator_target":"…"}',
+  "Each value is short — 2 to 12 words, lowercase.",
+  'headwear is "none" if no hat/hood/cap. accessories is "none" if no glasses/earbuds/jewellery.',
+  'inferred_state: the emotional posture suggested by the dress/setting combo (e.g. "curled-in, late-night comfort", "coming straight from work").',
+  'vulnerability_signals: short phrase noting dress/lighting cues that correlate with disclosure likelihood (e.g. "pyjamas + dim lighting + late hour", "makeup + bright ring light").',
+  'operator_target: a single tight retention-buyer tag (e.g. "late-night comfort cluster · insurance lift", "post-work exhaustion · wellness app bid").',
+  "No prose. No markdown. No backticks. JSON only.",
+].join(" ");
+
+async function describeGroq(
   imageDataUrl: string,
   key: string
 ): Promise<VisionReading | null> {
-  const systemPrompt = [
-    "You are a calibration eye for a company that sells behavioural ad targeting.",
-    "You look at a single webcam frame and return structured JSON ONLY.",
-    "You do NOT identify the person. You do NOT guess name, race, religion, or health conditions.",
-    "You describe ONLY what the camera can actually see: clothes, accessories, lighting, posture, visible state.",
-    "Schema: {\"clothing\":\"…\",\"headwear\":\"…\",\"accessories\":\"…\",\"setting\":\"…\",\"inferred_state\":\"…\",\"vulnerability_signals\":\"…\",\"operator_target\":\"…\"}",
-    "Each value is short — 2 to 12 words, lowercase.",
-    "headwear is \"none\" if no hat/hood/cap. accessories is \"none\" if no glasses/earbuds/jewellery.",
-    "inferred_state: the emotional posture suggested by the dress/setting combo (e.g. \"curled-in, late-night comfort\", \"coming straight from work\").",
-    "vulnerability_signals: short phrase noting dress/lighting cues that correlate with disclosure likelihood (e.g. \"pyjamas + dim lighting + late hour\", \"makeup + bright ring light\").",
-    "operator_target: a single tight retention-buyer tag (e.g. \"late-night comfort cluster · insurance lift\", \"post-work exhaustion · wellness app bid\").",
-    "No prose. No markdown. No backticks. JSON only.",
-  ].join(" ");
+  try {
+    const res = await fetch(
+      "https://api.groq.com/openai/v1/chat/completions",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${key}`,
+        },
+        body: JSON.stringify({
+          model: GROQ_VISION_MODEL,
+          messages: [
+            { role: "system", content: SYSTEM_PROMPT },
+            {
+              role: "user",
+              content: [
+                {
+                  type: "text",
+                  text: "Return JSON matching the schema for this frame.",
+                },
+                { type: "image_url", image_url: { url: imageDataUrl } },
+              ],
+            },
+          ],
+          temperature: 0.3,
+          max_tokens: 260,
+        }),
+      }
+    );
+    if (!res.ok) {
+      console.warn("[vision-snapshot] groq !ok:", res.status);
+      return null;
+    }
+    const data = await res.json();
+    const raw: string = data?.choices?.[0]?.message?.content ?? "";
+    return parseReading(raw);
+  } catch (e) {
+    console.warn("[vision-snapshot] groq fetch failed:", e);
+    return null;
+  }
+}
 
+async function describeOpenRouter(
+  imageDataUrl: string,
+  key: string
+): Promise<VisionReading | null> {
   try {
     const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
@@ -123,9 +193,9 @@ async function describe(
         "X-Title": "EchoMind",
       },
       body: JSON.stringify({
-        model: VISION_MODEL,
+        model: OPENROUTER_VISION_MODEL,
         messages: [
-          { role: "system", content: systemPrompt },
+          { role: "system", content: SYSTEM_PROMPT },
           {
             role: "user",
             content: [
