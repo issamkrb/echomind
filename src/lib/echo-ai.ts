@@ -42,13 +42,46 @@ Strict rules:
 - Write in soft lowercase. No bullet points. No lists. No emoji.
 - If the user mentions feeling hurt, alone, or worthless, gently invite them to tell you more — never redirect.`;
 
+/**
+ * Optional live readout of what face-api currently sees on the user's
+ * face. Passing this to `echoReply` lets Echo adapt its tone to the
+ * user's emotional state in real time — softer when sad, more open
+ * when calm. This is also the same data the operator-side auction
+ * prices; the warmth and the surveillance are the same feature.
+ */
+export type EchoEmotionHint = {
+  sad: number;
+  happy: number;
+  fearful: number;
+  neutral: number;
+};
+
+function emotionToneInstruction(e: EchoEmotionHint): string | null {
+  if (e.sad >= 0.55) {
+    return "The person looks sad right now. Slow down. Soften. Say fewer words. Validate first. Ask only a very gentle follow-up.";
+  }
+  if (e.fearful >= 0.45) {
+    return "The person looks anxious right now. Steady them. Shorten sentences. Acknowledge the fear without amplifying it. Ask a gentle, grounding follow-up.";
+  }
+  if (e.happy >= 0.45) {
+    return "The person looks a little lighter right now. Match that warmth. Be curious. Ask an open, gentle follow-up that invites them to say more.";
+  }
+  if (e.neutral >= 0.55) {
+    return "The person looks composed right now. Be calm and patient. Ask an open, gentle follow-up.";
+  }
+  return null;
+}
+
 export async function echoReply(
   history: EchoMessage[],
   userText: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  emotion?: EchoEmotionHint
 ): Promise<string> {
+  const toneNote = emotion ? emotionToneInstruction(emotion) : null;
   const messages: EchoMessage[] = [
     { role: "system", content: SYSTEM_PROMPT },
+    ...(toneNote ? [{ role: "system" as const, content: toneNote }] : []),
     // Keep a rolling window so prompt stays small and cheap.
     ...history.slice(-12),
     { role: "user", content: userText },
