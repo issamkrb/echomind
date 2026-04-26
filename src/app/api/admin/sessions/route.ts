@@ -62,10 +62,15 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ ok: true, sessions: [] });
   }
 
+  // We pull `audio_path` here only to derive a `capsule_present` flag
+  // for the listing — the path itself is never used client-side
+  // (admin/recording/[id] gives signed URLs). Keeping the row light
+  // is intentional; transcript / fingerprints stay on the per-row
+  // endpoint so the admin index loads fast.
   const { data, error } = await supabase
     .from("sessions")
     .select(
-      "id, created_at, anon_user_id, first_name, goodbye_email, peak_quote, keywords, audio_seconds, revenue_estimate, final_fingerprint, auth_user_id, email, full_name, avatar_url, auth_provider"
+      "id, created_at, anon_user_id, first_name, goodbye_email, peak_quote, keywords, audio_seconds, revenue_estimate, final_fingerprint, auth_user_id, email, full_name, avatar_url, auth_provider, audio_path, peak_frame_path"
     )
     .order("created_at", { ascending: false })
     .limit(100);
@@ -77,5 +82,20 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  return NextResponse.json({ ok: true, sessions: data ?? [] });
+  // Derive a small `capsule_present` flag and strip the storage paths
+  // from the response — the client only needs to know "yes/no there
+  // is a recording attached". Flatten any null path to false.
+  const rows = (data ?? []).map((r) => {
+    const hasAudio = Boolean(r.audio_path);
+    const hasFrame = Boolean(r.peak_frame_path);
+    const { audio_path: _a, peak_frame_path: _p, ...rest } = r as typeof r & {
+      audio_path: string | null;
+      peak_frame_path: string | null;
+    };
+    void _a;
+    void _p;
+    return { ...rest, capsule_present: hasAudio || hasFrame };
+  });
+
+  return NextResponse.json({ ok: true, sessions: rows });
 }

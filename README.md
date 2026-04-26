@@ -65,6 +65,36 @@ For the full experience, use a desktop browser with a working webcam. Grant came
 
 ---
 
+## Production setup (Vercel + Supabase)
+
+The artifact runs without any backend in development. For the full operator-side reveal you will need:
+
+| Env var | Purpose |
+|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon key (used by `@supabase/ssr` auth) |
+| `SUPABASE_SERVICE_ROLE_KEY` | Server-side writes (sessions, recordings) |
+| `OPENROUTER_API_KEY` | Echo's "brain" + AI Operator Summary on each Memory Capsule |
+| `OPENROUTER_MODEL` | Optional override, defaults to `meta-llama/llama-3.3-70b-instruct:free` |
+| `ADMIN_TOKEN` | Required to open `/admin` and `/partner-portal` |
+| `ADMIN_EMAILS` | Comma-separated allowlist of emails permitted to view admin pages (in addition to the token gate) |
+
+### Database
+
+Apply the SQL files in `supabase/migrations/` in order via the Supabase SQL editor:
+
+1. `0001_init.sql` — sessions + returning_visitors
+2. `0002_auth_identity.sql` — auth identity columns + profiles trigger
+3. `0003_memory_capsule.sql` — audio path + peak frame path + operator summary
+
+### Storage bucket (for Memory Capsule audio + still frames)
+
+Create a private Supabase Storage bucket named **`session-recordings`** (Storage → New bucket, **leave Public unchecked**). The server uses the service-role key to upload, and the operator dashboard fetches short-lived signed URLs via `/api/admin/recording/[id]`.
+
+If the bucket doesn't exist, sessions still record, log, and play back transcripts — they just won't have audio attached.
+
+---
+
 ## Pages
 
 | Route | What it is |

@@ -4,14 +4,25 @@ import { getServerAuthSupabase } from "@/lib/supabase-server";
 import { isAdminEmail } from "@/lib/admin-auth";
 
 /**
- * GET /api/admin/sessions/[id]?token=<ADMIN_TOKEN>
+ * GET /api/admin/recording/[id]?token=<ADMIN_TOKEN>
  *
- * Single-session read, used by `/admin/auction/[id]`. Gated by both
- * the shared `ADMIN_TOKEN` and the signed-in `ADMIN_EMAILS` identity,
- * matching the listing endpoint and the middleware.
+ * Returns short-lived signed URLs for the audio recording and the
+ * peak-moment still frame attached to a session, plus the operator
+ * summary string we wrote at session end.
+ *
+ * Gated by the same two layers as the rest of /admin: the URL token
+ * must match `ADMIN_TOKEN`, AND the request cookie must belong to a
+ * signed-in user listed in `ADMIN_EMAILS`. Without both, 401.
+ *
+ * The signed URLs expire in 5 minutes — long enough for the operator
+ * to play back the audio in the dashboard, short enough that pasting
+ * the URL anywhere is essentially useless.
  */
 
 export const runtime = "nodejs";
+
+const BUCKET = "session-recordings";
+const SIGNED_URL_TTL_S = 5 * 60;
 
 export async function GET(
   req: NextRequest,
@@ -32,6 +43,7 @@ export async function GET(
       { status: 401 }
     );
   }
+
   const authClient = getServerAuthSupabase();
   if (!authClient) {
     return NextResponse.json(
@@ -46,6 +58,7 @@ export async function GET(
       { status: 401 }
     );
   }
+
   if (!supabaseConfigured()) {
     return NextResponse.json(
       { ok: false, reason: "supabase-not-configured" },
@@ -60,15 +73,9 @@ export async function GET(
     );
   }
 
-  // We include `transcript` here (but not on the listing endpoint) so
-  // the per-session admin view can render synchronized playback —
-  // each transcript line lights up as the audio reaches its `t`
-  // timestamp. Same with `peak_emotion_t` for the still-frame label.
   const { data, error } = await supabase
     .from("sessions")
-    .select(
-      "id, created_at, anon_user_id, first_name, goodbye_email, peak_quote, keywords, audio_seconds, revenue_estimate, final_fingerprint, auth_user_id, email, full_name, avatar_url, auth_provider, transcript, audio_path, peak_frame_path, peak_emotion_t, operator_summary"
-    )
+    .select("audio_path, peak_frame_path, peak_emotion_t, operator_summary")
     .eq("id", params.id)
     .maybeSingle();
 
@@ -84,5 +91,28 @@ export async function GET(
       { status: 404 }
     );
   }
-  return NextResponse.json({ ok: true, session: data });
+
+  let audioUrl: string | null = null;
+  let peakUrl: string | null = null;
+
+  if (data.audio_path) {
+    const { data: signed } = await supabase.storage
+      .from(BUCKET)
+      .createSignedUrl(data.audio_path, SIGNED_URL_TTL_S);
+    audioUrl = signed?.signedUrl ?? null;
+  }
+  if (data.peak_frame_path) {
+    const { data: signed } = await supabase.storage
+      .from(BUCKET)
+      .createSignedUrl(data.peak_frame_path, SIGNED_URL_TTL_S);
+    peakUrl = signed?.signedUrl ?? null;
+  }
+
+  return NextResponse.json({
+    ok: true,
+    audio_url: audioUrl,
+    peak_url: peakUrl,
+    peak_emotion_t: data.peak_emotion_t ?? null,
+    operator_summary: data.operator_summary ?? null,
+  });
 }
