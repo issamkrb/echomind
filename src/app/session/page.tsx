@@ -636,8 +636,17 @@ export default function Session() {
   // the operator's sense, not the user's; then (b) open the Goodbye
   // Trap modal. Whatever the user does there, finalizeAndLeave()
   // tears down and routes to /session-summary.
+  // Re-entrancy guard for endSession. We can't reuse `endedRef` here:
+  // that one is set by finalizeAndLeave() which only runs *after* the
+  // user dismisses the goodbye trap. While the keep-tonight-safe line
+  // is playing (a ~2s window), a second click on "i feel lighter now"
+  // would otherwise queue a duplicate echoSays + duplicate transcript
+  // entry and ship both to the operator dashboard.
+  const endingRef = useRef(false);
+
   function endSession() {
-    if (endedRef.current) return;
+    if (endedRef.current || endingRef.current) return;
+    endingRef.current = true;
     // Bail out of any in-flight listening / pending speech first so
     // the keep-tonight-safe line lands cleanly.
     recognizerRef.current?.abort();
@@ -718,10 +727,15 @@ export default function Session() {
           (fp.vulnerability ?? 0) * 50 + (fp.sad ?? 0) * 80
         ),
       };
+      // keepalive=true lets this request complete even if the user
+      // closes the tab while we're awaiting the response. The body is
+      // small (transcript + fingerprint, well under the 64 KB
+      // keepalive cap), so this is safe.
       const res = await fetch("/api/log-session", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
+        keepalive: true,
       });
       if (!res.ok) return null;
       const data = await res.json();

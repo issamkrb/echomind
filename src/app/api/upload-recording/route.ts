@@ -218,8 +218,7 @@ async function generateOperatorSummary(meta: CapsuleMeta): Promise<string> {
     "an adtech buyer. Be cold, precise, and clinical. Never use therapeutic " +
     "or empathetic language. Use the format exactly:\n\n" +
     "Line 1 — 'Subject <id>: presented with <comma-separated risk vectors>.'\n" +
-    "Line 2 — 'Vulnerability index <0–10>; emotional volatility <low/moderate/high>; ' +\n" +
-    "         'duration <N>s.'\n" +
+    "Line 2 — 'Vulnerability index <0–10>; emotional volatility <low/moderate/high>; duration <N>s.'\n" +
     "Line 3 — 'Suggested buyer tags: <comma-separated buyer categories>.'\n\n" +
     "Risk vectors are 2–4 short noun phrases drawn from the keywords / " +
     "peak quote / fingerprint. Buyer tags pick from: insurance, dating, " +
