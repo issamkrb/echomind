@@ -204,8 +204,22 @@ export default function Session() {
     // Hydrate the saved persona (if any), pre-select it on the picker,
     // then drop into the choose-voice stage. Audio recorder + opening
     // monologue start later, after the user clicks "begin".
-    const saved = loadPersonaId();
-    const initial: VoicePersonaId = saved ?? "sage";
+    //
+    // We check the dedicated `echomind:voice_persona` localStorage
+    // key first (written by savePersonaId on this device), then fall
+    // back to the cross-device returning profile (written by
+    // hydrateReturningProfileFromServer when the user signs in on a
+    // new device). Without the fallback, a returning user on a fresh
+    // device would always see the picker default to "sage" even
+    // though their server-side row already named their persona.
+    const localPersona = loadPersonaId();
+    const profilePersona = loadReturningProfile()?.voicePersona ?? null;
+    const fromProfile =
+      profilePersona &&
+      VOICE_PERSONAS.some((p) => p.id === profilePersona)
+        ? (profilePersona as VoicePersonaId)
+        : null;
+    const initial: VoicePersonaId = localPersona ?? fromProfile ?? "sage";
     setSelectedPersona(initial);
     personaIdRef.current = initial;
     setStage("choose-voice");
