@@ -1,12 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSupabase, supabaseConfigured } from "@/lib/supabase";
+import { getServerAuthSupabase } from "@/lib/supabase-server";
+import { isAdminEmail } from "@/lib/admin-auth";
 
 /**
  * GET /api/admin/sessions/[id]?token=<ADMIN_TOKEN>
  *
- * Returns a single session row by primary key, gated by the same
- * shared admin token as the listing endpoint. Used by the operator-
- * side `/admin/auction/[id]` view.
+ * Single-session read, used by `/admin/auction/[id]`. Gated by both
+ * the shared `ADMIN_TOKEN` and the signed-in `ADMIN_EMAILS` identity,
+ * matching the listing endpoint and the middleware.
  */
 
 export const runtime = "nodejs";
@@ -27,6 +29,20 @@ export async function GET(
   if (!token || token !== expected) {
     return NextResponse.json(
       { ok: false, reason: "bad-token" },
+      { status: 401 }
+    );
+  }
+  const authClient = getServerAuthSupabase();
+  if (!authClient) {
+    return NextResponse.json(
+      { ok: false, reason: "auth-not-configured" },
+      { status: 503 }
+    );
+  }
+  const { data: userData } = await authClient.auth.getUser();
+  if (!userData.user || !isAdminEmail(userData.user.email)) {
+    return NextResponse.json(
+      { ok: false, reason: "not-admin" },
       { status: 401 }
     );
   }
