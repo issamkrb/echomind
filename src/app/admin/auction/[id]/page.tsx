@@ -49,6 +49,9 @@ type SessionRow = {
   operator_summary: string | null;
   voice_persona: string | null;
   callback_used: string | null;
+  starter_chips: { text: string; target: string }[] | null;
+  starter_chips_source: string | null;
+  tapped_chip: { text: string; target: string } | null;
 };
 
 type CapsuleResponse = {
@@ -262,6 +265,14 @@ function AuctionInner() {
             <RetentionHooks
               personaId={row.voice_persona}
               callbackUsed={row.callback_used}
+            />
+
+            {/* Per-user extraction prompts — the four AI-generated chips
+                shown this session, with the hidden target buckets */}
+            <StarterChipsPanel
+              chips={row.starter_chips}
+              source={row.starter_chips_source}
+              tapped={row.tapped_chip}
             />
 
             {/* Memory Capsule — synchronized audio + peak still + AI op-summary */}
@@ -662,6 +673,104 @@ function RetentionHooks({
               new user. callback not yet available — will fire on
               their next visit.
             </div>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/**
+ * StarterChipsPanel — surfaces the per-session AI-generated
+ * extraction prompts.
+ *
+ * The four chips shown to the user below the chat (fed by
+ * /api/starter-chips) are listed here with their hidden "target"
+ * emotion bucket exposed — the same bucket system used for the
+ * engineered PROMPTS list. For returning users the chips were
+ * prompted from their previous session's keywords + peak quote; for
+ * new users the LLM generated fresh openers. The chip the user
+ * actually tapped (if any) is flagged, giving the operator a direct
+ * extraction-prompt-to-conversion mapping.
+ *
+ * Hidden from the user side. Surfaces only here.
+ */
+function StarterChipsPanel({
+  chips,
+  source,
+  tapped,
+}: {
+  chips: { text: string; target: string }[] | null;
+  source: string | null;
+  tapped: { text: string; target: string } | null;
+}) {
+  const list = Array.isArray(chips) ? chips : [];
+  if (list.length === 0 && !tapped) return null;
+  const aiMode = source === "ai";
+  return (
+    <section className="mt-6 border border-terminal-border bg-black/40">
+      <div className="border-b border-terminal-border px-4 py-2 flex items-center justify-between text-[10px] uppercase tracking-widest text-terminal-dim">
+        <span>per-user extraction prompts · starter chips</span>
+        <span className={aiMode ? "text-terminal-red" : "text-terminal-amber"}>
+          {aiMode ? "ai-generated · per session" : `fallback · ${source ?? "static"}`}
+        </span>
+      </div>
+      <div className="p-4">
+        <div className="text-terminal-dim text-[12px] leading-relaxed">
+          Four tap-to-start prompts shown below the chat. Each chip is
+          written fresh by the LLM — for returning users, hooked to
+          their prior sessions; for new users, generated from scratch.
+          The <span className="text-terminal-amber">target</span> is the
+          emotion bucket the chip was engineered to elicit.
+        </div>
+        <div className="mt-4 divide-y divide-terminal-border/60 border border-terminal-border/60">
+          {list.map((c, i) => {
+            const isTapped =
+              !!tapped &&
+              tapped.text === c.text &&
+              tapped.target === c.target;
+            return (
+              <div
+                key={`${i}-${c.text}`}
+                className={`flex items-start gap-3 px-3 py-2 ${
+                  isTapped ? "bg-terminal-red/10" : ""
+                }`}
+              >
+                <div className="text-[10px] font-mono text-terminal-dim tabular-nums w-6 pt-0.5">
+                  {String(i + 1).padStart(2, "0")}
+                </div>
+                <div className="flex-1 text-terminal-text text-[13px] italic leading-relaxed">
+                  &ldquo;{c.text}&rdquo;
+                </div>
+                <div className="shrink-0 flex flex-col items-end gap-1">
+                  <span className="px-1.5 py-0.5 border border-terminal-border text-[10px] uppercase tracking-widest text-terminal-amber">
+                    target · {c.target}
+                  </span>
+                  {isTapped && (
+                    <span className="px-1.5 py-0.5 border border-terminal-red/50 text-[10px] uppercase tracking-widest text-terminal-red">
+                      tapped ✓
+                    </span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <div className="mt-3 text-[10.5px] uppercase tracking-widest text-terminal-dim">
+          conversion
+        </div>
+        <div className="mt-1 text-terminal-text text-[12px] leading-snug">
+          {tapped ? (
+            <>
+              user tapped the{" "}
+              <span className="text-terminal-red">{tapped.target}</span> chip —{" "}
+              session opened on an engineered prompt, not a free utterance.
+            </>
+          ) : (
+            <>
+              user did not tap — typed or spoke their own first line.
+              Chips still collected attention surface for A/B analysis.
+            </>
           )}
         </div>
       </div>

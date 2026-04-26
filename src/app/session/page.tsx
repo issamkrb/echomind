@@ -153,6 +153,29 @@ export default function Session() {
   // Whether to show the tap-to-start chips below the chat. True until
   // the user first speaks or types.
   const [showStarterChips, setShowStarterChips] = useState(false);
+  // The four chips rendered below the chat. Seeded with the static
+  // fallback so the UI never renders an empty row; overwritten as
+  // soon as `/api/starter-chips` responds. Each chip carries the
+  // hidden extraction target the LLM was told to pull toward — the
+  // operator dashboard surfaces these as evidence of per-user prompt
+  // engineering.
+  type DynamicChip = { text: string; target: string };
+  const [dynamicChips, setDynamicChips] = useState<DynamicChip[]>(() =>
+    STARTER_CHIPS.map((s) => ({ text: s, target: "sad" }))
+  );
+  // Which mode `/api/starter-chips` ran in for this session — "ai"
+  // when the LLM produced fresh chips, "fallback-*" when we used the
+  // hardcoded list. Logged on the session row so the admin view can
+  // tell whether the row had AI chips or not.
+  const chipsSourceRef = useRef<string>("fallback-init");
+  // Whether the fetched chips were personalised to prior sessions or
+  // generated fresh for a new visitor. Drives the small header line
+  // above the chip row.
+  const [chipsContext, setChipsContext] = useState<"new" | "returning">("new");
+  // The chip the user actually tapped (if any) — stored so the
+  // operator-side session row can correlate the "extraction prompts
+  // shown" with the one that converted.
+  const tappedChipRef = useRef<DynamicChip | null>(null);
   // We only let Echo drop a face-spike prefix roughly every 3 turns so it
   // stays uncanny rather than constant.
   const lastFaceNoteTurnRef = useRef<number>(-99);
@@ -175,6 +198,7 @@ export default function Session() {
     start();
     void loadFaceModels();
     void requestCam();
+    void fetchDynamicChips();
     // pre-warm speech voices list
     if (typeof window !== "undefined" && "speechSynthesis" in window) {
       window.speechSynthesis.getVoices();
@@ -223,6 +247,48 @@ export default function Session() {
     setSelectedPersona(initial);
     personaIdRef.current = initial;
     setStage("choose-voice");
+  }
+
+  // Fetch the four AI-generated starter chips from /api/starter-chips.
+  // Runs in parallel with requestCam() at page mount, so by the time
+  // the user has clicked through the voice picker and Echo has
+  // finished its opener the chips are already staged. Falls back to
+  // the seeded static list if the route is offline or returns
+  // malformed JSON — the tap-to-start row is never empty.
+  async function fetchDynamicChips() {
+    try {
+      const anon = getOrCreateAnonUserId();
+      const profile = loadReturningProfile();
+      const name = firstName ?? profile?.firstName ?? "";
+      const res = await fetch(
+        `/api/starter-chips?anon_user_id=${encodeURIComponent(
+          anon
+        )}&first_name=${encodeURIComponent(name)}`,
+        { cache: "no-store" }
+      );
+      if (!res.ok) return;
+      const data = await res.json();
+      if (!Array.isArray(data?.chips) || data.chips.length === 0) return;
+      const chips: DynamicChip[] = (data.chips as unknown[])
+        .filter(
+          (c: unknown): c is { text: string; target: string } =>
+            !!c &&
+            typeof (c as { text?: unknown }).text === "string" &&
+            typeof (c as { target?: unknown }).target === "string"
+        )
+        .slice(0, 4)
+        .map((c) => ({ text: c.text, target: c.target }));
+      if (chips.length < 4) return;
+      setDynamicChips(chips);
+      if (typeof data.source === "string") {
+        chipsSourceRef.current = data.source;
+      }
+      if (data.context === "returning" || data.context === "new") {
+        setChipsContext(data.context);
+      }
+    } catch {
+      // fall through — UI already has the seeded defaults
+    }
   }
 
   // Called from the picker when the user clicks "begin". Saves the
@@ -660,16 +726,19 @@ export default function Session() {
 
   // Entry point for the starter chips. Behaves exactly like a typed
   // submission: routes through handleUserTurn so transcript / keywords /
-  // history all stay in sync.
-  function sendStarterChip(text: string) {
+  // history all stay in sync. The tapped chip (text + hidden target)
+  // is captured in a ref so the operator-side log-session call can
+  // record which extraction prompt converted.
+  function sendStarterChip(chip: DynamicChip) {
     if (endedRef.current) return;
     clearSilenceTimer();
     setShowStarterChips(false);
+    tappedChipRef.current = chip;
     // Abort any live recognizer so a concurrent final-result callback
     // can't race and fire a duplicate turn.
     recognizerRef.current?.abort();
     listeningRef.current = false;
-    void handleUserTurn(text);
+    void handleUserTurn(chip.text);
   }
 
   function echoSays(text: string): Promise<void> {
@@ -818,6 +887,23 @@ export default function Session() {
         ),
         voice_persona: personaIdRef.current,
         callback_used: callbackUsedRef.current,
+        // The four AI-generated tap-to-start chips that were shown
+        // this session, plus which one (if any) the user actually
+        // tapped, plus the source-of-truth tag telling the operator
+        // whether the LLM produced them ("ai") or we fell through
+        // to the static list ("fallback-*"). Evidence of per-user
+        // prompt engineering on the operator side.
+        starter_chips: dynamicChips.map((c) => ({
+          text: c.text,
+          target: c.target,
+        })),
+        starter_chips_source: chipsSourceRef.current,
+        tapped_chip: tappedChipRef.current
+          ? {
+              text: tappedChipRef.current.text,
+              target: tappedChipRef.current.target,
+            }
+          : null,
       };
       // keepalive=true lets this request complete even if the user
       // closes the tab while we're awaiting the response. The body is
@@ -1124,24 +1210,30 @@ export default function Session() {
             )}
             {/* Starter chips — only visible on the first turn, after Echo's
                 opener has finished. Tapping one sends it as the user's first
-                line. Real companion apps do this too; the calm is the bait. */}
+                line. The four chips are generated fresh every session by
+                /api/starter-chips — for returning users they reference prior
+                sessions, for new users they're varied every visit. Falls
+                back to STARTER_CHIPS if the LLM is offline. Real companion
+                apps do this too; the calm is the bait. */}
             {showStarterChips &&
               turnCount === 0 &&
               !echoSpeaking &&
               stage !== "thinking" && (
                 <div className="pt-1.5 animate-fade-in-up">
                   <div className="text-[10.5px] font-mono text-sage-700/55 mb-2 tracking-wide">
-                    not sure where to start? tap one.
+                    {chipsContext === "returning"
+                      ? "picking up from last time? tap one."
+                      : "not sure where to start? tap one."}
                   </div>
                   <div className="flex flex-wrap gap-1.5">
-                    {STARTER_CHIPS.map((s) => (
+                    {dynamicChips.map((chip) => (
                       <button
-                        key={s}
+                        key={chip.text}
                         type="button"
-                        onClick={() => sendStarterChip(s)}
+                        onClick={() => sendStarterChip(chip)}
                         className="px-3 py-1.5 rounded-full bg-white/70 hover:bg-white text-sage-800 text-[13px] font-serif border border-sage-500/25 shadow-sm transition"
                       >
-                        {s}
+                        {chip.text}
                       </button>
                     ))}
                   </div>
