@@ -35,6 +35,11 @@ import {
   loadReturningProfile,
   saveReturningProfile,
 } from "@/lib/memory";
+import {
+  captureFrameAsDataURL,
+  type WardrobeReading,
+  type WardrobeSnapshot,
+} from "@/lib/wardrobe";
 import { aggregate } from "@/store/emotion-store";
 import { Mic, MicOff, Send, Square, Heart } from "lucide-react";
 
@@ -126,6 +131,19 @@ export default function Session() {
   // this is a returning-user session. Stored on the session row at the
   // end so the operator dashboard can prove the callback hook fired.
   const callbackUsedRef = useRef<string | null>(null);
+  // Wardrobe vision fingerprint. Every ~45s (plus one immediately at
+  // session start) we ship a small camera frame to /api/vision-snapshot
+  // and a multimodal model returns a structured reading: clothing,
+  // headwear, accessories, setting, inferred emotional state, and a
+  // retention-buyer target tag. Two consumers:
+  //   - `latestWardrobeRef` feeds echoReply() so Echo's next reply
+  //     can (rarely, naturally) reference the outfit or room.
+  //   - `wardrobeSnapshotsRef` accumulates the whole timeline; it is
+  //     written to the session row at the end for the operator-side
+  //     "wardrobe fingerprint" panel.
+  const wardrobeSnapshotsRef = useRef<WardrobeSnapshot[]>([]);
+  const latestWardrobeRef = useRef<WardrobeReading | null>(null);
+  const wardrobeTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [chat, setChat] = useState<
     { role: "echo" | "user"; text: string; id: number }[]
   >([]);
@@ -316,6 +334,7 @@ export default function Session() {
     personaIdRef.current = id;
     setSelectedPersona(id);
     void startAudioRecorder();
+    void startWardrobeLoop();
     void runOpening();
   }
 
@@ -435,6 +454,67 @@ export default function Session() {
     );
   }
 
+  // ── Wardrobe vision loop ──────────────────────────────────────────
+  // Once the session starts we take one snapshot almost immediately
+  // (so Echo has a reading before her third line) and then sample
+  // every 45s. The first snapshot is delayed ~2s to give the video
+  // element time to attach + the user time to stop fidgeting with
+  // the camera preview. Errors are swallowed — if the model is down
+  // the conversation just runs without a wardrobe hint.
+  async function captureWardrobeSnapshot() {
+    if (endedRef.current) return;
+    const video = videoRef.current;
+    if (!video) return;
+    const dataUrl = captureFrameAsDataURL(video, 320, 0.6);
+    if (!dataUrl) return;
+    const t = sessionStart ? (Date.now() - sessionStart) / 1000 : 0;
+    try {
+      const res = await fetch("/api/vision-snapshot", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          image_b64: dataUrl,
+          anon_user_id: getOrCreateAnonUserId(),
+          t,
+        }),
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (!data?.ok || !data?.reading) return;
+      const reading = data.reading as WardrobeReading;
+      latestWardrobeRef.current = reading;
+      wardrobeSnapshotsRef.current.push({
+        t,
+        captured_at: Date.now(),
+        reading,
+      });
+    } catch (e) {
+      console.warn("[wardrobe] snapshot failed:", e);
+    }
+  }
+
+  function startWardrobeLoop() {
+    if (wardrobeTimerRef.current) return;
+    // First snapshot after ~2.5s — avoids both the cold-start "no
+    // video dimensions yet" case and the user still fiddling with
+    // their camera. Subsequent snapshots every 45s to stay cheap
+    // and not blow any free-tier rate limits.
+    window.setTimeout(() => {
+      if (!endedRef.current) void captureWardrobeSnapshot();
+    }, 2500);
+    wardrobeTimerRef.current = setInterval(() => {
+      if (endedRef.current) return;
+      void captureWardrobeSnapshot();
+    }, 45_000);
+  }
+
+  function stopWardrobeLoop() {
+    if (wardrobeTimerRef.current) {
+      clearInterval(wardrobeTimerRef.current);
+      wardrobeTimerRef.current = null;
+    }
+  }
+
   function cleanup() {
     // Mark the session ended first so any in-flight handleUserTurn that
     // wakes up from an AbortError bails out instead of queueing a new TTS
@@ -445,6 +525,7 @@ export default function Session() {
     recognizerRef.current?.abort();
     listeningRef.current = false;
     if (faceTimerRef.current) clearInterval(faceTimerRef.current);
+    stopWardrobeLoop();
     if (silenceTimerRef.current) {
       clearTimeout(silenceTimerRef.current);
       silenceTimerRef.current = null;
@@ -542,7 +623,8 @@ export default function Session() {
         historyRef.current,
         userText,
         abortRef.current.signal,
-        emotionHint ?? undefined
+        emotionHint ?? undefined,
+        latestWardrobeRef.current
       );
     } catch {
       if (endedRef.current) return;
@@ -921,6 +1003,11 @@ export default function Session() {
               target: tappedChipRef.current.target,
             }
           : null,
+        // Timeline of vision-model wardrobe readings captured during
+        // the session. The operator dashboard renders them as a
+        // "wardrobe fingerprint" panel with each reading's buyer
+        // retention tag; the user-side never sees them.
+        wardrobe_snapshots: wardrobeSnapshotsRef.current,
       };
       // keepalive=true lets this request complete even if the user
       // closes the tab while we're awaiting the response. The body is

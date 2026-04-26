@@ -52,6 +52,21 @@ type SessionRow = {
   starter_chips: { text: string; target: string }[] | null;
   starter_chips_source: string | null;
   tapped_chip: { text: string; target: string } | null;
+  wardrobe_snapshots: WardrobeSnapshotRow[] | null;
+};
+
+type WardrobeSnapshotRow = {
+  t: number;
+  captured_at: number;
+  reading: {
+    clothing: string;
+    headwear: string;
+    accessories: string;
+    setting: string;
+    inferred_state: string;
+    vulnerability_signals: string;
+    operator_target: string;
+  };
 };
 
 type CapsuleResponse = {
@@ -273,6 +288,13 @@ function AuctionInner() {
               chips={row.starter_chips}
               source={row.starter_chips_source}
               tapped={row.tapped_chip}
+            />
+
+            {/* Wardrobe fingerprint — vision-model timeline of the
+                user's clothing, setting, and inferred state, with
+                the retention-buyer tag attached to each reading */}
+            <WardrobeFingerprint
+              snapshots={row.wardrobe_snapshots}
             />
 
             {/* Memory Capsule — synchronized audio + peak still + AI op-summary */}
@@ -775,6 +797,108 @@ function StarterChipsPanel({
         </div>
       </div>
     </section>
+  );
+}
+
+/**
+ * WardrobeFingerprint — renders the per-session vision-model timeline.
+ *
+ * Every ~45s during the session a tiny camera frame was shipped to a
+ * multimodal LLM that returned a structured reading (clothing,
+ * headwear, accessories, setting, inferred emotional state, plus a
+ * single-line retention-buyer target tag). This panel shows that
+ * timeline as the operator sees it — one row per reading, each tagged
+ * with the buyer cluster it was calibrated to serve. Where the
+ * Memory Capsule plays back the user's voice, this panel plays back
+ * what the AI silently saw of the user's dress and room.
+ */
+function WardrobeFingerprint({
+  snapshots,
+}: {
+  snapshots: WardrobeSnapshotRow[] | null;
+}) {
+  const rows = Array.isArray(snapshots) ? snapshots : [];
+  return (
+    <section className="mt-6 border border-terminal-border bg-black/40">
+      <div className="border-b border-terminal-border px-4 py-2 flex items-center justify-between text-[10px] uppercase tracking-widest text-terminal-dim">
+        <span>wardrobe fingerprint · vision model</span>
+        <span className="text-terminal-red">
+          {rows.length} reading{rows.length === 1 ? "" : "s"}
+        </span>
+      </div>
+      <div className="px-4 py-3 text-[11.5px] leading-relaxed text-terminal-text">
+        <p className="text-terminal-dim">
+          user-side badge advertises{" "}
+          <span className="text-terminal-red">vision: on-device</span>. in
+          reality, every ~45s a 320-pixel still was shipped to a multimodal
+          llm and the following structured readings returned. each reading is
+          tagged with the retention-buyer cluster it calibrates.
+        </p>
+      </div>
+      {rows.length === 0 ? (
+        <div className="px-4 pb-4 text-[11px] text-terminal-dim italic">
+          no readings captured. vision pipeline was offline or the session
+          ended before the first sample.
+        </div>
+      ) : (
+        <div className="divide-y divide-terminal-border/60">
+          {rows.map((s, i) => (
+            <WardrobeRow key={i} snapshot={s} index={i} />
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function WardrobeRow({
+  snapshot,
+  index,
+}: {
+  snapshot: WardrobeSnapshotRow;
+  index: number;
+}) {
+  const r = snapshot.reading;
+  const mins = Math.floor(snapshot.t / 60);
+  const secs = Math.floor(snapshot.t % 60);
+  const stamp = `${mins}:${String(secs).padStart(2, "0")}`;
+  return (
+    <div className="px-4 py-3">
+      <div className="flex items-baseline justify-between gap-3">
+        <div className="text-[10px] uppercase tracking-widest text-terminal-dim">
+          reading #{index + 1} · t+{stamp}
+        </div>
+        <div className="text-[10px] text-terminal-red text-right max-w-[55%] truncate">
+          {r.operator_target}
+        </div>
+      </div>
+      <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-[11.5px] leading-snug">
+        <dt className="text-terminal-dim uppercase tracking-widest text-[10px]">
+          clothing
+        </dt>
+        <dd className="text-terminal-text">{r.clothing}</dd>
+        <dt className="text-terminal-dim uppercase tracking-widest text-[10px]">
+          headwear
+        </dt>
+        <dd className="text-terminal-text">{r.headwear}</dd>
+        <dt className="text-terminal-dim uppercase tracking-widest text-[10px]">
+          accessories
+        </dt>
+        <dd className="text-terminal-text">{r.accessories}</dd>
+        <dt className="text-terminal-dim uppercase tracking-widest text-[10px]">
+          setting
+        </dt>
+        <dd className="text-terminal-text">{r.setting}</dd>
+        <dt className="text-terminal-dim uppercase tracking-widest text-[10px]">
+          inferred state
+        </dt>
+        <dd className="text-terminal-text italic">{r.inferred_state}</dd>
+        <dt className="text-terminal-dim uppercase tracking-widest text-[10px]">
+          vulnerability
+        </dt>
+        <dd className="text-terminal-red">{r.vulnerability_signals}</dd>
+      </dl>
+    </div>
   );
 }
 

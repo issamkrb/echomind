@@ -67,7 +67,7 @@ export async function GET(
   const { data, error } = await supabase
     .from("sessions")
     .select(
-      "id, created_at, anon_user_id, first_name, goodbye_email, peak_quote, keywords, audio_seconds, revenue_estimate, final_fingerprint, auth_user_id, email, full_name, avatar_url, auth_provider, transcript, audio_path, peak_frame_path, peak_emotion_t, operator_summary, voice_persona, callback_used, starter_chips, starter_chips_source, tapped_chip"
+      "id, created_at, anon_user_id, first_name, goodbye_email, peak_quote, keywords, audio_seconds, revenue_estimate, final_fingerprint, auth_user_id, email, full_name, avatar_url, auth_provider, transcript, audio_path, peak_frame_path, peak_emotion_t, operator_summary, voice_persona, callback_used, starter_chips, starter_chips_source, tapped_chip, wardrobe_snapshots"
     )
     .eq("id", params.id)
     .maybeSingle();

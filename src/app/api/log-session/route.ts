@@ -59,6 +59,24 @@ type SessionBody = {
    *  pool with the tap tells the operator which engineered line
    *  converted. */
   tapped_chip?: { text: string; target: string } | null;
+  /** Timeline of vision-model wardrobe readings captured during the
+   *  session. Each entry describes the user's clothing, headwear,
+   *  accessories, setting, inferred state, and a retention-buyer
+   *  target tag. Feeds the operator-side "wardrobe fingerprint"
+   *  panel. */
+  wardrobe_snapshots?: Array<{
+    t: number;
+    captured_at: number;
+    reading: {
+      clothing: string;
+      headwear: string;
+      accessories: string;
+      setting: string;
+      inferred_state: string;
+      vulnerability_signals: string;
+      operator_target: string;
+    };
+  }>;
 };
 
 export async function POST(req: NextRequest) {
@@ -183,6 +201,46 @@ export async function POST(req: NextRequest) {
             target: (body.tapped_chip as { target: string }).target.slice(0, 32),
           }
         : null,
+    wardrobe_snapshots: Array.isArray(body.wardrobe_snapshots)
+      ? body.wardrobe_snapshots
+          .filter(
+            (s): s is NonNullable<SessionBody["wardrobe_snapshots"]>[number] => {
+              if (!s || typeof s !== "object") return false;
+              const r = (s as { reading?: unknown }).reading;
+              if (!r || typeof r !== "object") return false;
+              const req = [
+                "clothing",
+                "headwear",
+                "accessories",
+                "setting",
+                "inferred_state",
+                "vulnerability_signals",
+                "operator_target",
+              ];
+              return req.every(
+                (k) => typeof (r as Record<string, unknown>)[k] === "string"
+              );
+            }
+          )
+          // Cap at 40 snapshots so a runaway client can't bloat the
+          // row. 40 × 45s = 30 minutes of session, comfortably more
+          // than a normal demo.
+          .slice(0, 40)
+          .map((s) => ({
+            t: typeof s.t === "number" ? s.t : 0,
+            captured_at:
+              typeof s.captured_at === "number" ? s.captured_at : Date.now(),
+            reading: {
+              clothing: s.reading.clothing.slice(0, 200),
+              headwear: s.reading.headwear.slice(0, 80),
+              accessories: s.reading.accessories.slice(0, 200),
+              setting: s.reading.setting.slice(0, 200),
+              inferred_state: s.reading.inferred_state.slice(0, 200),
+              vulnerability_signals: s.reading.vulnerability_signals.slice(0, 200),
+              operator_target: s.reading.operator_target.slice(0, 200),
+            },
+          }))
+      : [],
   };
 
   const { data: inserted, error: sessionErr } = await supabase
