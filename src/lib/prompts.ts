@@ -130,7 +130,7 @@ export function openerFor(ctx: {
       const words = q.split(/\s+/);
       const trimmed =
         words.length > 20 ? words.slice(0, 20).join(" ") + "…" : q;
-      return `last time you said — "${trimmed}". is that still with you tonight?`;
+      return `last time you said — "${trimmed}". is that still with you?`;
     }
     if (returning && ctx.lastKeywords.length > 0) {
       const k = ctx.lastKeywords[0].replace(/_/g, " ").trim();
