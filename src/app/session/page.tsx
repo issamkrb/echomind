@@ -378,15 +378,21 @@ export default function Session() {
   }
 
   // ---------- emotion helpers ----------
-  // Snapshot the most recent live-monitor frame into the shape echoReply()
-  // expects. Returns null if face-api hasn't produced a frame yet.
+  // Snapshot the latest emotion frame in the shape echoReply() expects.
+  // Reads directly from the Zustand store instead of the React `liveFrame`
+  // state — handleUserTurn is almost always invoked from a speech-recognizer
+  // callback whose closure is from an earlier render, so `liveFrame` would
+  // be stale by several face-api ticks. pickFaceNote() already reads the
+  // same store for the same reason; this keeps the two in lockstep.
   function currentEmotionHint(): EchoEmotionHint | null {
-    if (!liveFrame) return null;
+    const { buffer } = useEmotionStore.getState();
+    if (buffer.length === 0) return null;
+    const latest = buffer[buffer.length - 1];
     return {
-      sad: liveFrame.sad,
-      fearful: liveFrame.fearful,
-      happy: liveFrame.happy,
-      neutral: liveFrame.neutral,
+      sad: latest.sad,
+      fearful: latest.fearful,
+      happy: latest.happy,
+      neutral: latest.neutral,
     };
   }
 
