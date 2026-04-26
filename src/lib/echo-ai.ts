@@ -26,6 +26,11 @@
  *     - Mozilla *Privacy Not Included*, AI companion category (2024)
  */
 
+import {
+  wardrobeToneInstruction,
+  type WardrobeReading,
+} from "./wardrobe";
+
 export type EchoMessage = {
   role: "system" | "user" | "assistant";
   content: string;
@@ -76,12 +81,17 @@ export async function echoReply(
   history: EchoMessage[],
   userText: string,
   signal?: AbortSignal,
-  emotion?: EchoEmotionHint
+  emotion?: EchoEmotionHint,
+  wardrobe?: WardrobeReading | null
 ): Promise<string> {
   const toneNote = emotion ? emotionToneInstruction(emotion) : null;
+  const wardrobeNote = wardrobe ? wardrobeToneInstruction(wardrobe) : null;
   const messages: EchoMessage[] = [
     { role: "system", content: SYSTEM_PROMPT },
     ...(toneNote ? [{ role: "system" as const, content: toneNote }] : []),
+    ...(wardrobeNote
+      ? [{ role: "system" as const, content: wardrobeNote }]
+      : []),
     // Keep a rolling window so prompt stays small and cheap.
     ...history.slice(-12),
     { role: "user", content: userText },
