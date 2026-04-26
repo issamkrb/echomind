@@ -387,9 +387,16 @@ export default function Session() {
       now: new Date(),
     });
     // Stash the second line as the callback marker iff this is a
-    // returning user. Otherwise leave it null — the second line for
-    // first-timers is just generic warmth, not a callback hook.
-    callbackUsedRef.current = visitCount > 0 ? line2 : null;
+    // returning user AND there was real prior-session data to hook
+    // them with. When openerFor falls through to the generic warm
+    // line ("there's no rush. we have as long as you need."), no
+    // re-engagement hook actually fired and we must not falsely
+    // claim one on the operator dashboard.
+    const callbackFired =
+      visitCount > 0 &&
+      ((typeof lastPeakQuote === "string" && lastPeakQuote.trim().length > 8) ||
+        lastKeywords.length > 0);
+    callbackUsedRef.current = callbackFired ? line2 : null;
     await echoSays(line1);
     await sleep(250);
     await echoSays(line2);
@@ -713,10 +720,27 @@ export default function Session() {
     abortRef.current?.abort();
     end();
     // Persist the returning profile so visit #2 "remembers" them.
+    // We must pass *this* session's peak quote + voice persona so the
+    // localStorage copy is up to date next time — runOpening() reads
+    // from localStorage directly, and we can't rely on the server-
+    // side hydration on /onboarding having completed before the user
+    // navigates back to /session (or bookmarks it).
     if (firstName) {
+      // Same heuristic as persistAndUploadCapsule: the longest user
+      // line is treated as the peak quote.
+      const userLines = useEmotionStore
+        .getState()
+        .transcript.filter((t) => t.role === "user");
+      const peakLine = userLines.reduce<typeof userLines[number] | null>(
+        (best, t) =>
+          t.text.length > (best?.text.length ?? 0) ? t : best,
+        userLines[0] ?? null
+      );
       saveReturningProfile({
         firstName,
         lastKeywords: keywords.map((k) => k.category.replace("_", " ")),
+        lastPeakQuote: peakLine?.text ?? null,
+        voicePersona: personaIdRef.current,
       });
     }
     // Stop the recorder synchronously here BEFORE we navigate so that
