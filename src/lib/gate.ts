@@ -85,9 +85,21 @@ export async function verifyGateCookie(
   const secret = process.env.GATE_SECRET;
   if (!secret) return null;
 
-  const parts = raw.split(".");
-  if (parts.length !== 3) return null;
-  const [issuedAtStr, code, sig] = parts;
+  // Cookie format is `<issuedAt>.<code>.<sig>`. The issuedAt is
+  // all-digits and the HMAC signature is base64url (A–Z, a–z, 0–9,
+  // '-', '_'), neither of which can contain a dot — but `code` can
+  // (e.g. `SITE_ACCESS_CODE=v2.secret`). So we split only at the
+  // FIRST and LAST dot, and treat everything between as the code.
+  // Using `raw.split(".")` here bites us: a code with one dot
+  // splits into 4 parts and verification fails forever, causing an
+  // infinite redirect loop back to /gate.
+  const firstDot = raw.indexOf(".");
+  const lastDot = raw.lastIndexOf(".");
+  if (firstDot === -1 || lastDot === firstDot) return null;
+  const issuedAtStr = raw.slice(0, firstDot);
+  const code = raw.slice(firstDot + 1, lastDot);
+  const sig = raw.slice(lastDot + 1);
+  if (!issuedAtStr || !code || !sig) return null;
   const issuedAt = Number(issuedAtStr);
   if (!Number.isFinite(issuedAt)) return null;
   if (Date.now() / 1000 - issuedAt > GATE_COOKIE_MAX_AGE_SECONDS) return null;
