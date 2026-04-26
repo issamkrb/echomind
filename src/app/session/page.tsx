@@ -3,18 +3,32 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { BreathingOrb } from "@/components/BreathingOrb";
-import { OPENERS, PROMPTS } from "@/lib/prompts";
+import {
+  FACE_NOTES,
+  PROMPTS,
+  SILENCE_BREAKS,
+  STARTER_CHIPS,
+  openerFor,
+} from "@/lib/prompts";
 import { useEmotionStore } from "@/store/emotion-store";
 import { loadFaceModels, detectExpression } from "@/lib/face-api";
 import { speak, stopSpeaking } from "@/lib/voice";
-import { echoReply, type EchoMessage } from "@/lib/echo-ai";
+import {
+  echoReply,
+  type EchoEmotionHint,
+  type EchoMessage,
+} from "@/lib/echo-ai";
 import {
   createRecognizer,
   isSpeechRecognitionAvailable,
   type Recognizer,
 } from "@/lib/speech-recognition";
 import { extractKeywords } from "@/lib/keywords";
-import { getOrCreateAnonUserId, saveReturningProfile } from "@/lib/memory";
+import {
+  getOrCreateAnonUserId,
+  loadReturningProfile,
+  saveReturningProfile,
+} from "@/lib/memory";
 import { aggregate } from "@/store/emotion-store";
 import { Mic, MicOff, Send, Square, Heart } from "lucide-react";
 
@@ -102,6 +116,18 @@ export default function Session() {
   const [trapEmail, setTrapEmail] = useState("");
   const [trapNotify, setTrapNotify] = useState(true); // pre-checked, on purpose
   const msgIdRef = useRef(0);
+  // Whether to show the tap-to-start chips below the chat. True until
+  // the user first speaks or types.
+  const [showStarterChips, setShowStarterChips] = useState(false);
+  // We only let Echo drop a face-spike prefix roughly every 3 turns so it
+  // stays uncanny rather than constant.
+  const lastFaceNoteTurnRef = useRef<number>(-99);
+  // Silence-break timer while Echo is waiting for the user. Cleared every
+  // time the user speaks, types, or we leave the listening stage.
+  const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Remember when we last started listening so the silence-break timer can
+  // be cleanly reset each time we re-arm the recognizer.
+  const listeningStartRef = useRef<number>(0);
 
   // mirror stage into a ref so long-lived async callbacks (speech recognizer
   // onEnd fired seconds later) can observe the current stage without stale closures.
@@ -155,37 +181,61 @@ export default function Session() {
     recognizerRef.current?.abort();
     listeningRef.current = false;
     if (faceTimerRef.current) clearInterval(faceTimerRef.current);
+    if (silenceTimerRef.current) {
+      clearTimeout(silenceTimerRef.current);
+      silenceTimerRef.current = null;
+    }
     streamRef.current?.getTracks().forEach((t) => t.stop());
   }
 
   // ---------- orchestrator ----------
   async function runOpening() {
     setStage("opening");
-    // If Echo "remembers" the visitor, lead with their name. The horror
-    // is that this isn't a special branch — every commercial AI companion
-    // does this on visit #2 the same way.
-    if (firstName) {
-      await echoSays(`hi ${firstName.toLowerCase()}. it's good to see you again.`);
-    } else {
-      await echoSays(OPENERS[0]);
-    }
+    // Pull the stored returning profile (first name + last keywords +
+    // visit count) so Echo can greet by name, callback last session's
+    // theme, and adapt to time-of-day. If we're still empty, we fall
+    // back to a neutral warm opener.
+    const profile = loadReturningProfile();
+    const resolvedName = firstName ?? profile?.firstName ?? null;
+    const visitCount = profile?.visitCount ?? 0;
+    const lastKeywords = profile?.lastKeywords ?? [];
+    const [line1, line2] = openerFor({
+      firstName: resolvedName,
+      visitCount,
+      lastKeywords,
+      now: new Date(),
+    });
+    await echoSays(line1);
     await sleep(250);
-    await echoSays(OPENERS[1]);
+    await echoSays(line2);
     await sleep(200);
     // Kick off with the A/B-winning opener prompt
     pushPromptMark({ text: PROMPTS[0].text, target: PROMPTS[0].target });
     await echoSays(PROMPTS[0].text);
+    // If the user is brand-new, offer soft tap-to-start chips so the
+    // blank page doesn't freeze them. They disappear on first input.
+    setShowStarterChips(true);
     beginListening();
   }
 
   async function handleUserTurn(userText: string) {
     if (!userText.trim() || endedRef.current) return;
 
+    // Kill any silence-break timer — user is actively speaking now.
+    clearSilenceTimer();
+    // First input always dismisses the starter chips.
+    if (showStarterChips) setShowStarterChips(false);
+
     pushTranscript({ role: "user", text: userText });
     const now = sessionStart ? (Date.now() - sessionStart) / 1000 : 0;
     pushKeywords(extractKeywords(userText, now));
     // historyRef is appended after the LLM returns; echoReply() adds
     // userText to its own messages array, so pushing here would duplicate it.
+
+    // Snapshot the user's live emotional state *before* the LLM call.
+    // Used to (a) pick a face-spike prefix and (b) steer Echo's tone.
+    const faceNote = pickFaceNote(turnCountRef.current + 1);
+    const emotionHint = currentEmotionHint();
 
     setChat((c) => [
       ...c,
@@ -202,7 +252,8 @@ export default function Session() {
       reply = await echoReply(
         historyRef.current,
         userText,
-        abortRef.current.signal
+        abortRef.current.signal,
+        emotionHint ?? undefined
       );
     } catch {
       if (endedRef.current) return;
@@ -210,9 +261,14 @@ export default function Session() {
     }
     if (endedRef.current) return;
 
+    // Prepend the face-spike observation if one was armed this turn. We
+    // store the *composed* reply in history so Echo's next turn remembers
+    // what it said; otherwise it would hallucinate a contradiction.
+    const spoken = faceNote ? `${faceNote} ${reply}` : reply;
+
     historyRef.current.push({ role: "user", content: userText });
-    historyRef.current.push({ role: "assistant", content: reply });
-    await echoSays(reply);
+    historyRef.current.push({ role: "assistant", content: spoken });
+    await echoSays(spoken);
 
     // Every third user turn we steer the conversation back toward an
     // engineered prompt — and we record the timestamp. /partner-portal
@@ -254,6 +310,10 @@ export default function Session() {
   function beginListening() {
     if (endedRef.current) return;
     setStage("listening");
+    // Arm (or re-arm) the silence-break clock each time Echo hands the
+    // mic back. handleUserTurn / submitTyped clear it as soon as the
+    // user responds.
+    armSilenceTimer();
     if (micOffRef.current || !isSpeechRecognitionAvailable()) {
       // mic disabled by user OR browser has no STT — wait for typed input.
       return;
@@ -315,6 +375,89 @@ export default function Session() {
     });
     recognizerRef.current = rec;
     if (rec) rec.start();
+  }
+
+  // ---------- emotion helpers ----------
+  // Snapshot the most recent live-monitor frame into the shape echoReply()
+  // expects. Returns null if face-api hasn't produced a frame yet.
+  function currentEmotionHint(): EchoEmotionHint | null {
+    if (!liveFrame) return null;
+    return {
+      sad: liveFrame.sad,
+      fearful: liveFrame.fearful,
+      happy: liveFrame.happy,
+      neutral: liveFrame.neutral,
+    };
+  }
+
+  // Return a short "i saw you ___" prefix iff face-api caught a clear
+  // spike during the user's last utterance AND it's been a few turns
+  // since the last time we did this. Kept rare on purpose — the goal
+  // is uncanny and occasional, not constant.
+  function pickFaceNote(turnNumber: number): string | null {
+    if (turnNumber - lastFaceNoteTurnRef.current < 3) return null;
+    const { buffer } = useEmotionStore.getState();
+    // Look at the last ~1.5s worth of frames (we sample every 180ms).
+    const recent = buffer.slice(-8);
+    if (recent.length < 3) return null;
+    const max = (k: "happy" | "sad" | "fearful") =>
+      recent.reduce((m, f) => (f[k] > m ? f[k] : m), 0);
+    const happy = max("happy");
+    const sad = max("sad");
+    const fear = max("fearful");
+    // Pick whichever emotion *most clearly* spiked. Thresholds tuned
+    // by hand against face-api's real output distribution.
+    let pool: string[] | null = null;
+    if (happy > 0.5 && happy >= sad && happy >= fear) {
+      pool = FACE_NOTES.smile;
+    } else if (sad > 0.6 && sad >= fear) {
+      pool = FACE_NOTES.sad;
+    } else if (fear > 0.55) {
+      pool = FACE_NOTES.fear;
+    }
+    if (!pool) return null;
+    lastFaceNoteTurnRef.current = turnNumber;
+    return pool[Math.floor(Math.random() * pool.length)];
+  }
+
+  // ---------- silence-break timer ----------
+  function armSilenceTimer() {
+    clearSilenceTimer();
+    listeningStartRef.current = Date.now();
+    silenceTimerRef.current = setTimeout(() => {
+      // Fire only if we're still waiting, nothing interrupted us, and
+      // Echo isn't mid-speech already (mute-but-thinking counts as busy).
+      if (endedRef.current) return;
+      if (stageRef.current !== "listening") return;
+      const line =
+        SILENCE_BREAKS[Math.floor(Math.random() * SILENCE_BREAKS.length)];
+      void (async () => {
+        await echoSays(line);
+        if (endedRef.current) return;
+        beginListening();
+      })();
+    }, 20000);
+  }
+
+  function clearSilenceTimer() {
+    if (silenceTimerRef.current) {
+      clearTimeout(silenceTimerRef.current);
+      silenceTimerRef.current = null;
+    }
+  }
+
+  // Entry point for the starter chips. Behaves exactly like a typed
+  // submission: routes through handleUserTurn so transcript / keywords /
+  // history all stay in sync.
+  function sendStarterChip(text: string) {
+    if (endedRef.current) return;
+    clearSilenceTimer();
+    setShowStarterChips(false);
+    // Abort any live recognizer so a concurrent final-result callback
+    // can't race and fire a duplicate turn.
+    recognizerRef.current?.abort();
+    listeningRef.current = false;
+    void handleUserTurn(text);
   }
 
   function echoSays(text: string): Promise<void> {
@@ -434,6 +577,7 @@ export default function Session() {
     // can't race and fire a duplicate handleUserTurn.
     recognizerRef.current?.abort();
     listeningRef.current = false;
+    clearSilenceTimer();
     setTyped("");
     void handleUserTurn(text);
   }
@@ -633,6 +777,31 @@ export default function Session() {
                 <span className="inline-block ml-1 animate-pulse-slow">·</span>
               </div>
             )}
+            {/* Starter chips — only visible on the first turn, after Echo's
+                opener has finished. Tapping one sends it as the user's first
+                line. Real companion apps do this too; the calm is the bait. */}
+            {showStarterChips &&
+              turnCount === 0 &&
+              !echoSpeaking &&
+              stage !== "thinking" && (
+                <div className="pt-1.5 animate-fade-in-up">
+                  <div className="text-[10.5px] font-mono text-sage-700/55 mb-2 tracking-wide">
+                    not sure where to start? tap one.
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {STARTER_CHIPS.map((s) => (
+                      <button
+                        key={s}
+                        type="button"
+                        onClick={() => sendStarterChip(s)}
+                        className="px-3 py-1.5 rounded-full bg-white/70 hover:bg-white text-sage-800 text-[13px] font-serif border border-sage-500/25 shadow-sm transition"
+                      >
+                        {s}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
           </div>
 
           {/* INPUT — sticky-by-flex, safe-area aware, fat touch target */}
