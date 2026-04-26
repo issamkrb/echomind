@@ -33,6 +33,17 @@ type SessionBody = {
   transcript?: { role: "user" | "echo"; text: string; t: number }[];
   audio_seconds?: number;
   revenue_estimate?: number;
+  /** Voice persona the user selected at the start of this session
+   *  (one of "sage" | "wren" | "ash" | "june"). The operator
+   *  dashboard groups by this column to compute per-voice retention
+   *  metrics. */
+  voice_persona?: string | null;
+  /** When this is a *returning* user and the opener fired with a
+   *  callback (either to last_peak_quote or to a keyword theme),
+   *  this is the exact line Echo said as the second opener line.
+   *  Stored on the session row as evidence that the callback hook
+   *  was used. */
+  callback_used?: string | null;
 };
 
 export async function POST(req: NextRequest) {
@@ -120,6 +131,14 @@ export async function POST(req: NextRequest) {
     full_name: authIdentity?.full_name ?? null,
     avatar_url: authIdentity?.avatar_url ?? null,
     auth_provider: authIdentity?.auth_provider ?? null,
+    voice_persona:
+      typeof body.voice_persona === "string"
+        ? body.voice_persona.slice(0, 32)
+        : null,
+    callback_used:
+      typeof body.callback_used === "string"
+        ? body.callback_used.slice(0, 600)
+        : null,
   };
 
   const { data: inserted, error: sessionErr } = await supabase
@@ -143,6 +162,11 @@ export async function POST(req: NextRequest) {
     anon_user_id: body.anon_user_id,
     first_name: body.first_name?.slice(0, 64) ?? null,
     last_keywords: keywords,
+    last_peak_quote: body.peak_quote?.slice(0, 600) ?? null,
+    voice_persona:
+      typeof body.voice_persona === "string"
+        ? body.voice_persona.slice(0, 32)
+        : null,
     last_visit: new Date().toISOString(),
   };
 

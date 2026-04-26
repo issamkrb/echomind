@@ -14,6 +14,12 @@ import { useEmotionStore } from "@/store/emotion-store";
 import { loadFaceModels, detectExpression } from "@/lib/face-api";
 import { speak, stopSpeaking } from "@/lib/voice";
 import {
+  VOICE_PERSONAS,
+  loadPersonaId,
+  savePersonaId,
+  type VoicePersonaId,
+} from "@/lib/voice-personas";
+import {
   echoReply,
   type EchoEmotionHint,
   type EchoMessage,
@@ -55,6 +61,7 @@ import { Mic, MicOff, Send, Square, Heart } from "lucide-react";
  */
 type Stage =
   | "booting"
+  | "choose-voice"
   | "opening"
   | "echo-speaking"
   | "listening"
@@ -107,6 +114,18 @@ export default function Session() {
   } = useEmotionStore();
 
   const [stage, setStage] = useState<Stage>("booting");
+  // The voice persona the user is *picking* on the choose-voice screen.
+  // Defaults to the previously-saved persona for returning users so the
+  // same voice greets them. Saved to localStorage and persisted on the
+  // session row only when the user clicks "begin".
+  const [selectedPersona, setSelectedPersona] = useState<VoicePersonaId>(
+    "sage"
+  );
+  const personaIdRef = useRef<VoicePersonaId>("sage");
+  // The exact callback line Echo said as the second opener line when
+  // this is a returning-user session. Stored on the session row at the
+  // end so the operator dashboard can prove the callback hook fired.
+  const callbackUsedRef = useRef<string | null>(null);
   const [chat, setChat] = useState<
     { role: "echo" | "user"; text: string; id: number }[]
   >([]);
@@ -178,18 +197,52 @@ export default function Session() {
         await videoRef.current.play();
       }
       setFaceOk(true);
-      // Kick off the audio recorder in parallel with the opening
-      // monologue. Failure here is silent — the conversation still
-      // works, the operator side just won't have audio for this row.
-      void startAudioRecorder();
-      void runOpening();
     } catch (e) {
       console.error(e);
-      // Even without a camera we still let the conversation run, and
-      // we still try to grab audio so the capsule has *something*.
-      void startAudioRecorder();
-      void runOpening();
+      // Even without a camera we still let the conversation run.
     }
+    // Hydrate the saved persona (if any), pre-select it on the picker,
+    // then drop into the choose-voice stage. Audio recorder + opening
+    // monologue start later, after the user clicks "begin".
+    //
+    // We check the dedicated `echomind:voice_persona` localStorage
+    // key first (written by savePersonaId on this device), then fall
+    // back to the cross-device returning profile (written by
+    // hydrateReturningProfileFromServer when the user signs in on a
+    // new device). Without the fallback, a returning user on a fresh
+    // device would always see the picker default to "sage" even
+    // though their server-side row already named their persona.
+    const localPersona = loadPersonaId();
+    const profilePersona = loadReturningProfile()?.voicePersona ?? null;
+    const fromProfile =
+      profilePersona &&
+      VOICE_PERSONAS.some((p) => p.id === profilePersona)
+        ? (profilePersona as VoicePersonaId)
+        : null;
+    const initial: VoicePersonaId = localPersona ?? fromProfile ?? "sage";
+    setSelectedPersona(initial);
+    personaIdRef.current = initial;
+    setStage("choose-voice");
+  }
+
+  // Called from the picker when the user clicks "begin". Saves the
+  // chosen persona, starts the audio recorder, and runs the opening
+  // monologue.
+  function startSessionWithPersona(id: VoicePersonaId) {
+    savePersonaId(id);
+    personaIdRef.current = id;
+    setSelectedPersona(id);
+    void startAudioRecorder();
+    void runOpening();
+  }
+
+  // Plays a short sample line in the picked persona's voice so the
+  // user can preview before committing. Cancels any in-flight preview.
+  function previewPersona(id: VoicePersonaId) {
+    const persona = VOICE_PERSONAS.find((p) => p.id === id);
+    if (!persona) return;
+    stopSpeaking();
+    speak(persona.sampleLine, { personaId: id });
   }
 
   // ── Memory Capsule: audio recorder ────────────────────────────────
@@ -339,12 +392,25 @@ export default function Session() {
     const resolvedName = firstName ?? profile?.firstName ?? null;
     const visitCount = profile?.visitCount ?? 0;
     const lastKeywords = profile?.lastKeywords ?? [];
+    const lastPeakQuote = profile?.lastPeakQuote ?? null;
     const [line1, line2] = openerFor({
       firstName: resolvedName,
       visitCount,
       lastKeywords,
+      lastPeakQuote,
       now: new Date(),
     });
+    // Stash the second line as the callback marker iff this is a
+    // returning user AND there was real prior-session data to hook
+    // them with. When openerFor falls through to the generic warm
+    // line ("there's no rush. we have as long as you need."), no
+    // re-engagement hook actually fired and we must not falsely
+    // claim one on the operator dashboard.
+    const callbackFired =
+      visitCount > 0 &&
+      ((typeof lastPeakQuote === "string" && lastPeakQuote.trim().length > 8) ||
+        lastKeywords.length > 0);
+    callbackUsedRef.current = callbackFired ? line2 : null;
     await echoSays(line1);
     await sleep(250);
     await echoSays(line2);
@@ -616,7 +682,14 @@ export default function Session() {
       { role: "echo", text, id: ++msgIdRef.current },
     ]);
     return new Promise<void>((resolve) => {
+      // Always pass the persona explicitly. We can't trust
+      // localStorage to round-trip cleanly: Safari private mode and
+      // some corporate browser policies make savePersonaId() a silent
+      // no-op, in which case loadPersonaId() returns null and speak()
+      // would fall back to the default "sage" voice for the entire
+      // conversation regardless of what the user picked.
       speak(text, {
+        personaId: personaIdRef.current,
         onEnd: () => {
           setEchoSpeaking(false);
           resolve();
@@ -668,10 +741,27 @@ export default function Session() {
     abortRef.current?.abort();
     end();
     // Persist the returning profile so visit #2 "remembers" them.
+    // We must pass *this* session's peak quote + voice persona so the
+    // localStorage copy is up to date next time — runOpening() reads
+    // from localStorage directly, and we can't rely on the server-
+    // side hydration on /onboarding having completed before the user
+    // navigates back to /session (or bookmarks it).
     if (firstName) {
+      // Same heuristic as persistAndUploadCapsule: the longest user
+      // line is treated as the peak quote.
+      const userLines = useEmotionStore
+        .getState()
+        .transcript.filter((t) => t.role === "user");
+      const peakLine = userLines.reduce<typeof userLines[number] | null>(
+        (best, t) =>
+          t.text.length > (best?.text.length ?? 0) ? t : best,
+        userLines[0] ?? null
+      );
       saveReturningProfile({
         firstName,
         lastKeywords: keywords.map((k) => k.category.replace("_", " ")),
+        lastPeakQuote: peakLine?.text ?? null,
+        voicePersona: personaIdRef.current,
       });
     }
     // Stop the recorder synchronously here BEFORE we navigate so that
@@ -726,6 +816,8 @@ export default function Session() {
         revenue_estimate: Math.round(
           (fp.vulnerability ?? 0) * 50 + (fp.sad ?? 0) * 80
         ),
+        voice_persona: personaIdRef.current,
+        callback_used: callbackUsedRef.current,
       };
       // keepalive=true lets this request complete even if the user
       // closes the tab while we're awaiting the response. The body is
@@ -885,6 +977,21 @@ export default function Session() {
       className="fixed inset-0 flex flex-col bg-cream-100 text-sage-900 noise overflow-hidden"
       style={{ height: "100dvh" }}
     >
+      {stage === "choose-voice" && (
+        <VoicePicker
+          selected={selectedPersona}
+          onSelect={(id) => {
+            setSelectedPersona(id);
+            personaIdRef.current = id;
+          }}
+          onPreview={previewPersona}
+          onBegin={(id) => {
+            stopSpeaking();
+            startSessionWithPersona(id);
+          }}
+        />
+      )}
+
       {/* ───────────── TOP BAR ─────────────
           One strip for both mobile & desktop. Holds: on-device lie,
           mm:ss, Echo status, mute, and the end-session button. */}
@@ -1237,6 +1344,106 @@ function LiveMonitor({
               </span>
             </div>
           ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+/**
+ * /session voice picker.
+ *
+ * Full-screen overlay shown before the conversation starts. The user
+ * picks one of four named voice personas and clicks "begin". The
+ * choice is saved to localStorage (and posted with the session row)
+ * so the same voice greets them on the next visit — same dark
+ * pattern Replika uses to make their paid voice tier feel "personal".
+ *
+ * The picker is intentionally warm and reassuring on the user side.
+ * The operator-targeting label baked into each persona never appears
+ * here — it only surfaces on /admin.
+ */
+function VoicePicker({
+  selected,
+  onSelect,
+  onPreview,
+  onBegin,
+}: {
+  selected: VoicePersonaId;
+  onSelect: (id: VoicePersonaId) => void;
+  onPreview: (id: VoicePersonaId) => void;
+  onBegin: (id: VoicePersonaId) => void;
+}) {
+  return (
+    <div className="absolute inset-0 z-40 flex items-center justify-center bg-cream-100/95 backdrop-blur-md p-6 overflow-y-auto">
+      <div className="max-w-3xl w-full my-8">
+        <div className="text-center mb-8">
+          <div className="text-[11px] uppercase tracking-widest text-sage-700/70">
+            before we begin
+          </div>
+          <h1 className="font-serif text-3xl md:text-4xl mt-2 text-sage-900 leading-tight">
+            choose the voice you'd like to hear.
+          </h1>
+          <p className="font-serif italic text-sage-700 mt-3 text-base md:text-lg">
+            you can switch back next time. tap a card to listen.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4">
+          {VOICE_PERSONAS.map((p) => {
+            const active = p.id === selected;
+            return (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => {
+                  onSelect(p.id);
+                  onPreview(p.id);
+                }}
+                className={`text-left rounded-2xl border p-5 transition-all ${
+                  active
+                    ? "border-sage-700 bg-cream-50 shadow-[0_2px_0_rgba(0,0,0,0.04)]"
+                    : "border-sage-500/25 bg-cream-50/60 hover:border-sage-500/50 hover:bg-cream-50"
+                }`}
+              >
+                <div className="flex items-baseline justify-between gap-2">
+                  <span className="font-serif text-2xl text-sage-900">
+                    {p.displayName}
+                  </span>
+                  <span
+                    className={`text-[10px] uppercase tracking-widest ${
+                      active ? "text-sage-700" : "text-sage-700/40"
+                    }`}
+                  >
+                    {active ? "selected" : "tap to hear"}
+                  </span>
+                </div>
+                <div className="font-serif italic text-sage-700 mt-1 text-sm md:text-base">
+                  {p.tagline}
+                </div>
+                <div className="mt-3 text-[12px] text-sage-700/70 leading-relaxed">
+                  “{p.sampleLine}”
+                </div>
+                <div className="mt-2 text-[11px] text-sage-700/50 italic">
+                  {p.vibeNote}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="mt-8 flex flex-col items-center gap-3">
+          <button
+            type="button"
+            onClick={() => onBegin(selected)}
+            className="px-8 py-3.5 rounded-full bg-sage-700 text-cream-50 hover:bg-sage-900 transition-colors text-sm md:text-base"
+          >
+            begin with {VOICE_PERSONAS.find((p) => p.id === selected)?.displayName ?? "Sage"}
+          </button>
+          <p className="text-[11px] text-sage-700/60 italic max-w-md text-center">
+            on-device voice synthesis · your choice never leaves your browser.
+          </p>
         </div>
       </div>
     </div>

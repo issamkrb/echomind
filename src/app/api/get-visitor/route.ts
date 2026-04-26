@@ -32,7 +32,9 @@ export async function GET(req: NextRequest) {
 
   const { data, error } = await supabase
     .from("returning_visitors")
-    .select("anon_user_id, first_name, last_keywords, visit_count, last_visit")
+    .select(
+      "anon_user_id, first_name, last_keywords, last_peak_quote, voice_persona, visit_count, last_visit"
+    )
     .eq("anon_user_id", id)
     .maybeSingle();
 

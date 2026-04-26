@@ -33,6 +33,8 @@ type SessionRow = {
   avatar_url: string | null;
   auth_provider: string | null;
   capsule_present: boolean;
+  voice_persona: string | null;
+  callback_used: string | null;
 };
 
 function AdminInner() {
@@ -116,6 +118,7 @@ function AdminInner() {
                   <th className="text-left px-3 py-2">Provider</th>
                   <th className="text-left px-3 py-2">Peak quote</th>
                   <th className="text-left px-3 py-2">Keywords</th>
+                  <th className="text-left px-3 py-2">Voice</th>
                   <th className="text-right px-3 py-2">Sec</th>
                   <th className="text-center px-3 py-2">Capsule</th>
                   <th className="text-right px-3 py-2">$ Est</th>
@@ -180,6 +183,21 @@ function AdminInner() {
                               {k}
                             </span>
                           ))}
+                        </div>
+                      </td>
+                      <td className="px-3 py-2 align-top">
+                        <div className="flex flex-col gap-1">
+                          <span className="text-terminal-amber font-mono text-[11px] uppercase">
+                            {r.voice_persona ?? "—"}
+                          </span>
+                          {r.callback_used && (
+                            <span
+                              className="inline-block self-start px-1.5 py-0.5 border border-terminal-red/40 text-terminal-red text-[9px] uppercase tracking-widest"
+                              title={r.callback_used}
+                            >
+                              callback ↻
+                            </span>
+                          )}
                         </div>
                       </td>
                       <td className="px-3 py-2 text-right text-terminal-dim">{r.audio_seconds}</td>
