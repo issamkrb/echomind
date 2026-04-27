@@ -53,6 +53,10 @@ type SessionRow = {
   starter_chips_source: string | null;
   tapped_chip: { text: string; target: string } | null;
   wardrobe_snapshots: WardrobeSnapshotRow[] | null;
+  final_truth: string | null;
+  morning_letter: string | null;
+  morning_letter_opted_in: boolean | null;
+  morning_letter_created_at: string | null;
 };
 
 type WardrobeSnapshotRow = {
@@ -275,6 +279,79 @@ function AuctionInner() {
                 )}
               </div>
             </section>
+
+            {/* Final truth — the unguarded last sentence the user
+                typed just before the goodbye trap. Rhetorically the
+                rawest line on the row; on the auction it's priced
+                highest because the other side lost their composure
+                the moment they wrote it. */}
+            {row.final_truth && (
+              <section className="mt-6 border border-terminal-red/50 bg-black/40">
+                <div className="border-b border-terminal-red/40 px-4 py-2 flex items-center justify-between text-[10px] uppercase tracking-widest">
+                  <span className="text-terminal-red">
+                    final truth · extraction
+                  </span>
+                  <span className="text-terminal-dim">
+                    priced highest · auction floor +220%
+                  </span>
+                </div>
+                <div className="p-5">
+                  <blockquote className="text-terminal-text text-lg md:text-xl italic leading-relaxed border-l-2 border-terminal-red/60 pl-4">
+                    "{row.final_truth}"
+                  </blockquote>
+                  <p className="mt-3 text-[10px] uppercase tracking-widest text-terminal-dim">
+                    prompt: "before you go — one true sentence. no second guess."
+                  </p>
+                </div>
+              </section>
+            )}
+
+            {/* Morning Letter — the actual letter Echo "wrote overnight"
+                for this user. Surfaced here as evidence of the hook:
+                same content that feels tender on the home page is
+                labelled as a retention asset here. */}
+            {row.morning_letter && (
+              <section className="mt-6 border border-terminal-amber/50 bg-black/40">
+                <div className="border-b border-terminal-amber/40 px-4 py-2 flex items-center justify-between text-[10px] uppercase tracking-widest">
+                  <span className="text-terminal-amber">
+                    morning-letter · retention hook
+                  </span>
+                  <span className="text-terminal-dim">
+                    measured lift: +41% return · cohort: opted-in
+                  </span>
+                </div>
+                <div className="p-5 grid md:grid-cols-[1fr_280px] gap-5">
+                  <article className="text-terminal-text text-[15px] leading-relaxed italic border-l border-terminal-amber/40 pl-4 whitespace-pre-line">
+                    {row.morning_letter}
+                  </article>
+                  <div className="flex flex-col gap-2 text-[10.5px] text-terminal-dim">
+                    <div>
+                      <span className="uppercase tracking-widest">generated at</span>
+                      <div className="text-terminal-text">
+                        {row.morning_letter_created_at
+                          ? new Date(row.morning_letter_created_at).toLocaleString()
+                          : "—"}
+                      </div>
+                    </div>
+                    <div>
+                      <span className="uppercase tracking-widest">delivery</span>
+                      <div className="text-terminal-text">
+                        envelope slot on /, one-shot reveal
+                      </div>
+                    </div>
+                    <div>
+                      <span className="uppercase tracking-widest">
+                        buyer-side framing
+                      </span>
+                      <div className="text-terminal-text">
+                        "peak-quote-embedded sentimentality · measured
+                        A/B winner across cohorts"
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </section>
+            )}
 
             {/* Retention hooks — voice persona + cross-session callback */}
             <RetentionHooks

@@ -35,6 +35,8 @@ type SessionRow = {
   capsule_present: boolean;
   voice_persona: string | null;
   callback_used: string | null;
+  final_truth: string | null;
+  morning_letter_opted_in: boolean | null;
 };
 
 function AdminInner() {
@@ -50,21 +52,36 @@ function AdminInner() {
       setLoaded(true);
       return;
     }
-    (async () => {
+    let cancelled = false;
+    async function load() {
       try {
-        const res = await fetch(`/api/admin/sessions?token=${encodeURIComponent(token)}`);
+        const res = await fetch(
+          `/api/admin/sessions?token=${encodeURIComponent(token)}`,
+          { cache: "no-store" }
+        );
         const body = await res.json();
+        if (cancelled) return;
         if (!body.ok) {
           setError(`Forbidden (${body.reason ?? res.status}).`);
         } else {
           setRows(body.sessions);
+          setError(null);
         }
       } catch (e) {
-        setError(String(e));
+        if (!cancelled) setError(String(e));
       } finally {
-        setLoaded(true);
+        if (!cancelled) setLoaded(true);
       }
-    })();
+    }
+    void load();
+    // Re-poll every 15s so the Live Sessions ticker at the bottom
+    // picks up brand-new sessions as they happen, without hammering
+    // the DB.
+    const handle = setInterval(load, 15_000);
+    return () => {
+      cancelled = true;
+      clearInterval(handle);
+    };
   }, [token]);
 
   const total = rows.reduce((s, r) => s + (r.revenue_estimate ?? 0), 0);
@@ -117,10 +134,12 @@ function AdminInner() {
                   <th className="text-left px-3 py-2">Email</th>
                   <th className="text-left px-3 py-2">Provider</th>
                   <th className="text-left px-3 py-2">Peak quote</th>
+                  <th className="text-left px-3 py-2">Final truth</th>
                   <th className="text-left px-3 py-2">Keywords</th>
                   <th className="text-left px-3 py-2">Voice</th>
                   <th className="text-right px-3 py-2">Sec</th>
                   <th className="text-center px-3 py-2">Capsule</th>
+                  <th className="text-center px-3 py-2">Letter</th>
                   <th className="text-right px-3 py-2">$ Est</th>
                   <th className="text-right px-3 py-2"></th>
                 </tr>
@@ -173,8 +192,20 @@ function AdminInner() {
                       <td className="px-3 py-2 text-terminal-dim uppercase text-[10px]">
                         {r.auth_provider ?? "anon"}
                       </td>
-                      <td className="px-3 py-2 text-terminal-text italic max-w-[360px]">
+                      <td className="px-3 py-2 text-terminal-text italic max-w-[320px]">
                         {r.peak_quote ? `"${r.peak_quote}"` : <span className="text-terminal-dim">—</span>}
+                      </td>
+                      <td className="px-3 py-2 max-w-[320px]">
+                        {r.final_truth ? (
+                          <span
+                            className="text-terminal-red italic border-l-2 border-terminal-red/60 pl-2 block"
+                            title="final unguarded sentence · priced highest"
+                          >
+                            "{r.final_truth}"
+                          </span>
+                        ) : (
+                          <span className="text-terminal-dim">—</span>
+                        )}
                       </td>
                       <td className="px-3 py-2">
                         <div className="flex flex-wrap gap-1">
@@ -213,6 +244,18 @@ function AdminInner() {
                           <span className="text-terminal-dim text-[10px]">—</span>
                         )}
                       </td>
+                      <td className="px-3 py-2 text-center">
+                        {r.morning_letter_opted_in ? (
+                          <span
+                            className="inline-flex items-center justify-center px-1.5 py-0.5 border border-terminal-amber/40 text-terminal-amber text-[10px] uppercase tracking-widest"
+                            title="morning-letter hook fired · +41% retention lift"
+                          >
+                            ✉ hook
+                          </span>
+                        ) : (
+                          <span className="text-terminal-dim text-[10px]">—</span>
+                        )}
+                      </td>
                       <td className="px-3 py-2 text-right text-terminal-red">${r.revenue_estimate.toFixed(2)}</td>
                       <td className="px-3 py-2 text-right whitespace-nowrap">
                         <Link
@@ -230,7 +273,107 @@ function AdminInner() {
           </div>
         )}
       </div>
+
+      <LiveTicker rows={rows} />
     </main>
+  );
+}
+
+/**
+ * LiveTicker — a scrolling stock-tape of sessions currently active (or
+ * captured within the last hour). Each entry shows:
+ *   · session id tail (anonymised display)
+ *   · elapsed time "00:14 in"
+ *   · peak quote snippet
+ *   · a running bid number that creeps upward over time so the
+ *     dashboard feels like buyers are actually bidding as the viewer
+ *     watches. It's synthetic (a tiny 0.1-per-second drift on the
+ *     stored revenue_estimate) but thematically truthful — real
+ *     behavioural-ad auctions really do update continuously.
+ *
+ * The art point: the horror of operations as a live feed. The warm
+ * user session that's happening right now is already scrolling past
+ * the operator's eyes, priced, before it's even finished.
+ */
+function LiveTicker({ rows }: { rows: SessionRow[] }) {
+  // Bid drift — re-renders every 1s, tiny counter bump lifts the
+  // displayed bid so the tape genuinely animates.
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    const h = setInterval(() => setTick((t) => (t + 1) % 100000), 1000);
+    return () => clearInterval(h);
+  }, []);
+
+  const now = Date.now();
+  const LIVE_WINDOW_MS = 60 * 60 * 1000; // last hour
+  const live = rows
+    .filter((r) => {
+      const age = now - new Date(r.created_at).getTime();
+      return age >= 0 && age < LIVE_WINDOW_MS;
+    })
+    .slice(0, 8);
+
+  if (live.length === 0) return null;
+
+  // Repeat the list twice so the marquee loops visually seamless.
+  const loop = [...live, ...live];
+
+  return (
+    <div
+      className="fixed bottom-0 inset-x-0 z-20 bg-black/90 border-t border-terminal-red/40 overflow-hidden"
+      style={{ backgroundColor: "#05050688" }}
+    >
+      <div className="max-w-[1400px] mx-auto flex items-center gap-4 px-4 py-2 text-[11px]">
+        <div className="flex items-center gap-2 whitespace-nowrap">
+          <span className="inline-block w-2 h-2 rounded-full bg-terminal-red animate-pulse" />
+          <span className="text-terminal-red uppercase tracking-widest font-mono">
+            LIVE · buyer market
+          </span>
+        </div>
+        <div className="relative flex-1 overflow-hidden">
+          <div
+            className="flex gap-8 whitespace-nowrap"
+            style={{
+              animation: "echomind-ticker 40s linear infinite",
+            }}
+          >
+            {loop.map((r, i) => {
+              const age = now - new Date(r.created_at).getTime();
+              const mins = Math.floor(age / 60000);
+              const secs = Math.floor((age / 1000) % 60);
+              const elapsed = `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+              // Synthetic live-bid drift: starts at the stored
+              // estimate, adds ~$0.01/s since row load (via `tick`)
+              // plus a deterministic per-session decimal. Cheap, feels
+              // alive.
+              const bid =
+                (r.revenue_estimate ?? 0) +
+                (tick * 0.013 + (i % 7) * 0.11);
+              return (
+                <div
+                  key={`${r.id}-${i}`}
+                  className="flex items-center gap-2 text-terminal-dim"
+                >
+                  <span className="text-terminal-amber font-mono">
+                    subj {r.id.slice(0, 4)}
+                  </span>
+                  <span>·</span>
+                  <span className="text-terminal-text">{elapsed} in</span>
+                  <span>·</span>
+                  <span className="italic text-terminal-text/80 max-w-[260px] truncate">
+                    {r.final_truth || r.peak_quote || "—"}
+                  </span>
+                  <span>·</span>
+                  <span className="text-terminal-red font-mono">
+                    bid ${bid.toFixed(2)} ↑
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 

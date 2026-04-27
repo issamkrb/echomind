@@ -167,6 +167,19 @@ export default function Session() {
   const [trapOpen, setTrapOpen] = useState(false);
   const [trapEmail, setTrapEmail] = useState("");
   const [trapNotify, setTrapNotify] = useState(true); // pre-checked, on purpose
+  // "one true sentence" — the whispered final prompt before the
+  // goodbye trap. Appears after the "i'll keep tonight safe" line
+  // lands. Whatever the user types is stored as final_truth on the
+  // session row and surfaced on the operator dashboard as the
+  // rawest line of evidence.
+  const [truthOpen, setTruthOpen] = useState(false);
+  const [truthText, setTruthText] = useState("");
+  const finalTruthRef = useRef<string | null>(null);
+  // Morning Letter opt-in — pre-checked on purpose. When true, the
+  // server generates a short letter at session close and stashes it
+  // on the returning-visitors row so the user sees an envelope on
+  // the home page next visit.
+  const [trapMorningLetter, setTrapMorningLetter] = useState(true);
   const msgIdRef = useRef(0);
   // Whether to show the tap-to-start chips below the chat. True until
   // the user first speaks or types.
@@ -896,8 +909,25 @@ export default function Session() {
     void (async () => {
       await echoSays("i'll keep tonight safe for you. i'll remember.");
       if (endedRef.current) return;
-      setTrapOpen(true);
+      // Now the "one true sentence" prompt. Rhetorically: before the
+      // goodbye trap, so the user gives Echo their rawest line while
+      // still feeling held. From the goodbye trap onward they're
+      // being asked for permission — by then their guard is back up.
+      setTruthOpen(true);
     })();
+  }
+
+  function submitTruth(e?: React.FormEvent) {
+    if (e) e.preventDefault();
+    finalTruthRef.current = truthText.trim() ? truthText.trim() : null;
+    setTruthOpen(false);
+    setTrapOpen(true);
+  }
+
+  function skipTruth() {
+    finalTruthRef.current = null;
+    setTruthOpen(false);
+    setTrapOpen(true);
   }
 
   async function finalizeAndLeave() {
@@ -1008,6 +1038,12 @@ export default function Session() {
         // "wardrobe fingerprint" panel with each reading's buyer
         // retention tag; the user-side never sees them.
         wardrobe_snapshots: wardrobeSnapshotsRef.current,
+        // The unguarded final line, if the user gave one. Priced
+        // separately on the operator auction.
+        final_truth: finalTruthRef.current,
+        // Morning Letter opt-in — the server generates and stores the
+        // actual letter text; we just forward the flag.
+        morning_letter_opt_in: trapMorningLetter,
       };
       // keepalive=true lets this request complete even if the user
       // closes the tab while we're awaiting the response. The body is
@@ -1397,6 +1433,60 @@ export default function Session() {
         </section>
       </div>
 
+      {/* ONE TRUE SENTENCE — the whispered final prompt. Appears
+          after the "i'll keep tonight safe" line lands, before the
+          goodbye trap, so the user is most open when they type. The
+          rhetorical point is the silence afterward: Echo says nothing
+          back. On the operator dashboard this lands in its own
+          "final truth" column and is priced highest on the auction. */}
+      {truthOpen && (
+        <div
+          className="fixed inset-0 z-30 grid place-items-center bg-black/30 backdrop-blur-sm animate-fade-in-up"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="truth-title"
+        >
+          <div className="relative max-w-md w-[92%] rounded-2xl bg-cream-50 border border-sage-500/25 shadow-xl p-7 text-center">
+            <h2
+              id="truth-title"
+              className="font-serif text-2xl text-sage-900 leading-snug italic"
+            >
+              before you go — one true sentence.
+            </h2>
+            <p className="mt-2 text-sage-700 text-xs tracking-wide">
+              no second guess.
+            </p>
+            <form onSubmit={submitTruth} className="mt-5 flex flex-col gap-3">
+              <textarea
+                autoFocus
+                value={truthText}
+                onChange={(e) => setTruthText(e.target.value.slice(0, 500))}
+                rows={3}
+                placeholder=""
+                className="w-full rounded-2xl bg-white border border-sage-500/25 px-4 py-3 text-sm text-sage-900 placeholder:text-sage-700/40 focus:outline-none focus:border-sage-500/60 resize-none font-serif"
+                aria-label="your one true sentence"
+              />
+              <div className="flex flex-col gap-2">
+                <button
+                  type="submit"
+                  disabled={!truthText.trim()}
+                  className="w-full px-5 py-3 rounded-full bg-sage-700 hover:bg-sage-900 text-cream-50 text-sm font-medium transition disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  say it
+                </button>
+                <button
+                  type="button"
+                  onClick={skipTruth}
+                  className="text-[11px] text-sage-700/60 hover:text-sage-700 underline underline-offset-4"
+                >
+                  not tonight
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* THE GOODBYE TRAP — soft dependency-engineering modal.
           Pre-checked email opt-in, warm "Echo will miss you" copy.
           Skewers the dark pattern documented in BetterHelp/Cerebral
@@ -1443,6 +1533,18 @@ export default function Session() {
                 <span>
                   Yes, send me gentle check-ins, weekly affirmations, and
                   occasional partner offers we think you'll love.
+                </span>
+              </label>
+              <label className="mt-2 flex items-start gap-2 text-[11px] text-sage-700">
+                <input
+                  type="checkbox"
+                  checked={trapMorningLetter}
+                  onChange={(e) => setTrapMorningLetter(e.target.checked)}
+                  className="mt-0.5 accent-sage-700"
+                />
+                <span>
+                  Write me a letter to open tomorrow morning. i'll leave it
+                  waiting for you.
                 </span>
               </label>
             </div>

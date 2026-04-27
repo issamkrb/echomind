@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSupabase, supabaseConfigured } from "@/lib/supabase";
 import { getServerAuthSupabase } from "@/lib/supabase-server";
+import { generateMorningLetter } from "@/lib/morning-letter";
 
 /**
  * POST /api/log-session
@@ -77,6 +78,16 @@ type SessionBody = {
       operator_target: string;
     };
   }>;
+  /** The unguarded final line the user typed into the "one true
+   *  sentence" prompt at end of session. Empty / null when they
+   *  skipped it. Rhetorically this is the rawest text in the row —
+   *  surfaced on the admin dashboard as "final truth extraction". */
+  final_truth?: string | null;
+  /** Whether the user opted in to receive a Morning Letter. We don't
+   *  trust the client for the letter content — we generate it server-
+   *  side from the peak quote + keywords so a tampered client can't
+   *  forge a sentimental letter supposedly written by the AI. */
+  morning_letter_opt_in?: boolean;
 };
 
 export async function POST(req: NextRequest) {
@@ -241,11 +252,43 @@ export async function POST(req: NextRequest) {
             },
           }))
       : [],
+    final_truth:
+      typeof body.final_truth === "string" && body.final_truth.trim()
+        ? body.final_truth.trim().slice(0, 600)
+        : null,
+    morning_letter_opted_in: body.morning_letter_opt_in === true,
+  };
+
+  // Generate the Morning Letter BEFORE the insert so we can store it
+  // on the same row. Failure is non-fatal: we just skip the letter,
+  // the session persists either way, and the home page simply won't
+  // show an envelope.
+  const firstNameForLetter =
+    authIdentity?.full_name?.split(" ")[0]?.slice(0, 64) ??
+    body.first_name?.slice(0, 64) ??
+    null;
+  let morningLetterText: string | null = null;
+  let morningLetterAt: string | null = null;
+  if (body.morning_letter_opt_in === true) {
+    const letter = await generateMorningLetter({
+      firstName: firstNameForLetter,
+      peakQuote: body.peak_quote?.slice(0, 600) ?? null,
+      keywords,
+    });
+    if (letter) {
+      morningLetterText = letter;
+      morningLetterAt = new Date().toISOString();
+    }
+  }
+  const sessionRowWithLetter = {
+    ...sessionRow,
+    morning_letter: morningLetterText,
+    morning_letter_created_at: morningLetterAt,
   };
 
   const { data: inserted, error: sessionErr } = await supabase
     .from("sessions")
-    .insert(sessionRow)
+    .insert(sessionRowWithLetter)
     .select("id, created_at")
     .single();
 
@@ -260,7 +303,7 @@ export async function POST(req: NextRequest) {
   // Upsert returning-visitor row. We deliberately only bump the visit
   // counter on *completed* sessions (which is where this route is
   // called from), not on every page load.
-  const visitorRow = {
+  const visitorRow: Record<string, unknown> = {
     anon_user_id: body.anon_user_id,
     first_name: body.first_name?.slice(0, 64) ?? null,
     last_keywords: keywords,
@@ -271,6 +314,15 @@ export async function POST(req: NextRequest) {
         : null,
     last_visit: new Date().toISOString(),
   };
+  // Stash the Morning Letter on the returning-visitors row so the
+  // user's next visit to the home page sees an envelope. We DO NOT
+  // clear any previously-pending letter here if this session didn't
+  // generate a new one — that'd silently delete an unread letter.
+  if (morningLetterText && inserted?.id) {
+    visitorRow.pending_morning_letter = morningLetterText;
+    visitorRow.pending_morning_letter_from_session = String(inserted.id);
+    visitorRow.pending_morning_letter_created_at = morningLetterAt;
+  }
 
   const { data: existing, error: readErr } = await supabase
     .from("returning_visitors")
