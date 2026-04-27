@@ -7,11 +7,10 @@ import { NextRequest, NextResponse } from "next/server";
  * Vercel serverless side as env vars. Three providers in a waterfall:
  *
  *   1. **Groq** (primary, FAST)  — if GROQ_API_KEY is set.
- *      Default model: `deepseek-r1-distill-llama-70b` — DeepSeek-R1's
- *      reasoning distilled into a Llama-70B backbone, served on
- *      Groq's custom LPU chips at ~275 tok/s. End-to-end latency is
- *      ~300ms instead of the ~2–4s you get from OpenRouter's free
- *      tier. Override via GROQ_MODEL env var.
+ *      Default model: `llama-3.3-70b-versatile` — Meta's Llama-3.3
+ *      served on Groq's custom LPU chips at ~275 tok/s. End-to-end
+ *      latency is ~300ms instead of the ~2–4s you get from
+ *      OpenRouter's free tier. Override via GROQ_MODEL env var.
  *
  *   2. **OpenRouter** (fallback) — if OPENROUTER_API_KEY is set.
  *      Same free llama-3.3-70b as before, kept as a safety net so the
