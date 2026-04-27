@@ -145,7 +145,7 @@ export function speak(
     utter.volume = 1;
     const lang = opts.lang ?? "en";
     const prefixes = ttsLocalePrefixesFor(lang);
-    const v = pickVoiceForPersona(persona, prefixes, voices);
+    const v = pickVoiceForPersona(persona, prefixes, voices, lang);
     if (v) utter.voice = v;
     // Ensure utter.lang matches even when we couldn't find a matching
     // voice — some TTS engines will route to an appropriate default.
