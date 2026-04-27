@@ -181,9 +181,11 @@ export default function PortfolioPage() {
 function ClaimInvitation() {
   // Signed-out users: the portfolio is literally inaccessible to them.
   // The copy frames the sign-in as "claiming" the archive Echo has
-  // already been keeping for them. Same Supabase email-OTP flow as
-  // /auth/sign-in — we just redirect to it with ?next=/portfolio so
-  // they land back here after verification.
+  // already been keeping for them. Two entry points, both landing on
+  // /auth/callback?next=/portfolio after verification:
+  //   1. Type your email here and receive a magic link directly
+  //      (POST /api/portfolio/send-unlock-email).
+  //   2. The classic /auth/sign-in route for Google OAuth.
   return (
     <main className="min-h-screen bg-cream-100 text-sage-900 noise">
       <div className="max-w-2xl mx-auto px-6 md:px-10 py-20 md:py-28">
@@ -198,28 +200,133 @@ function ClaimInvitation() {
           <br />
           your portfolio is ready to open.
         </p>
-        <div className="mt-12 rounded-2xl border border-sage-500/25 bg-cream-50 shadow-sm px-8 py-10 text-center">
-          <p className="font-serif text-lg text-sage-900">
-            sign in with your email — echo will hand you the archive.
-          </p>
-          <p className="mt-3 text-sm text-sage-700/80">
-            we&rsquo;ll send you a one-time code. the email is the key.
-          </p>
+        <ClaimEmailForm />
+        <div className="mt-6 text-center">
           <Link
             href="/auth/sign-in?next=/portfolio"
-            className="mt-6 inline-flex items-center gap-2 px-7 py-3 rounded-full bg-sage-700 text-cream-50 hover:bg-sage-900 transition-colors text-base"
+            className="text-xs underline underline-offset-2 text-sage-700/80 hover:text-sage-900"
           >
-            claim your portfolio  →
+            prefer Google? sign in here instead →
           </Link>
-          <p className="mt-5 text-xs text-sage-700/60">
-            already have an account? the link will just sign you in.
-          </p>
         </div>
         <p className="mt-14 text-center text-[11px] text-sage-700/50 font-mono tracking-widest uppercase">
           the archive exists whether you open it or not
         </p>
       </div>
     </main>
+  );
+}
+
+function ClaimEmailForm() {
+  const [email, setEmail] = useState("");
+  const [state, setState] = useState<
+    | { kind: "idle" }
+    | { kind: "sending" }
+    | { kind: "sent"; to: string; method: string }
+    | { kind: "error"; reason: string }
+  >({ kind: "idle" });
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    const trimmed = email.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+      setState({ kind: "error", reason: "that email doesn't look right." });
+      return;
+    }
+    setState({ kind: "sending" });
+    try {
+      const res = await fetch("/api/portfolio/send-unlock-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: trimmed }),
+      });
+      const body = await res.json();
+      if (!body?.ok) {
+        setState({
+          kind: "error",
+          reason: body?.reason || `HTTP ${res.status}`,
+        });
+        return;
+      }
+      setState({
+        kind: "sent",
+        to: body?.to || trimmed,
+        method: body?.method || "sent",
+      });
+    } catch (err) {
+      setState({ kind: "error", reason: String(err) });
+    }
+  }
+
+  if (state.kind === "sent") {
+    return (
+      <div className="mt-12 rounded-2xl border border-sage-500/25 bg-cream-50 shadow-sm px-8 py-10 text-center">
+        <p className="font-serif text-lg text-sage-900 italic">
+          check your inbox.
+        </p>
+        <p className="mt-3 text-sm text-sage-700/80">
+          a magic link is on its way to{" "}
+          <strong className="not-italic">{state.to}</strong>. the link signs
+          you straight into your portfolio — no password, no code to type.
+        </p>
+        <p className="mt-3 text-xs text-sage-700/60">
+          if it&rsquo;s not there in a minute, check spam. or{" "}
+          <button
+            type="button"
+            onClick={() => setState({ kind: "idle" })}
+            className="underline underline-offset-2 hover:text-sage-900"
+          >
+            try a different email
+          </button>
+          .
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <form
+      onSubmit={submit}
+      className="mt-12 rounded-2xl border border-sage-500/25 bg-cream-50 shadow-sm px-8 py-10"
+    >
+      <label
+        htmlFor="claim-email"
+        className="block text-center font-serif text-lg text-sage-900"
+      >
+        type your email — the link opens the archive.
+      </label>
+      <p className="mt-2 text-center text-sm text-sage-700/80">
+        no password. no signup. one link, straight to the memoir.
+      </p>
+      <div className="mt-6 flex flex-col sm:flex-row items-stretch gap-3 max-w-md mx-auto">
+        <input
+          id="claim-email"
+          type="email"
+          required
+          autoComplete="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="you@example.com"
+          disabled={state.kind === "sending"}
+          className="flex-1 rounded-full border border-sage-500/30 bg-white px-5 py-3 text-sage-900 placeholder:text-sage-700/40 focus:outline-none focus:border-sage-700 disabled:opacity-60"
+        />
+        <button
+          type="submit"
+          disabled={state.kind === "sending"}
+          className="rounded-full bg-sage-700 text-cream-50 hover:bg-sage-900 px-6 py-3 text-sm transition-colors disabled:opacity-60"
+        >
+          {state.kind === "sending" ? "sending…" : "email me the link"}
+        </button>
+      </div>
+      {state.kind === "error" && (
+        <p className="mt-4 text-center text-sm text-clay-800">
+          ({state.reason})
+        </p>
+      )}
+      <p className="mt-5 text-center text-xs text-sage-700/60">
+        the email is the key. use the same address you left at session end.
+      </p>
+    </form>
   );
 }
 

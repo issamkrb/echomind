@@ -96,7 +96,8 @@ export function PortfolioUnlockedNotice() {
             archive is ready to open.
           </p>
           <p className="mt-2 text-sm text-sage-700/80">
-            connect your email to claim it. one code, no password.
+            a magic link was sent to the email you left behind. if you
+            didn&rsquo;t see it, ask for another one.
           </p>
           <div className="mt-5 flex flex-wrap items-center gap-3">
             <Link
@@ -105,12 +106,73 @@ export function PortfolioUnlockedNotice() {
             >
               open my portfolio  →
             </Link>
-            <span className="text-xs text-sage-700/60">
-              the archive exists whether you open it or not.
-            </span>
+            <ResendButton />
           </div>
         </div>
       </div>
     </section>
+  );
+}
+
+function ResendButton() {
+  const [state, setState] = useState<
+    | { kind: "idle" }
+    | { kind: "sending" }
+    | { kind: "sent"; to: string | null }
+    | { kind: "error"; reason: string }
+  >({ kind: "idle" });
+
+  async function send() {
+    setState({ kind: "sending" });
+    try {
+      const anon = getOrCreateAnonUserId();
+      const res = await fetch("/api/portfolio/send-unlock-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ anon }),
+      });
+      const body = await res.json();
+      if (!body?.ok) {
+        setState({
+          kind: "error",
+          reason: body?.reason || `HTTP ${res.status}`,
+        });
+        return;
+      }
+      setState({ kind: "sent", to: body?.to ?? null });
+    } catch (e) {
+      setState({ kind: "error", reason: String(e) });
+    }
+  }
+
+  if (state.kind === "sent") {
+    return (
+      <span className="text-xs text-sage-700/80 italic">
+        sent to <strong className="not-italic">{state.to || "your inbox"}</strong>. check
+        spam just in case.
+      </span>
+    );
+  }
+  if (state.kind === "error") {
+    return (
+      <button
+        type="button"
+        onClick={send}
+        className="text-xs underline underline-offset-2 text-clay-700 hover:text-clay-900"
+        title={state.reason}
+      >
+        send didn&rsquo;t go through — try again
+      </button>
+    );
+  }
+  return (
+    <button
+      type="button"
+      onClick={send}
+      disabled={state.kind === "sending"}
+      className="text-xs underline underline-offset-2 text-sage-700/80 hover:text-sage-900 disabled:opacity-60"
+    >
+      {state.kind === "sending" ? "sending…" : "re-send the link to my email"}
+    </button>
   );
 }
