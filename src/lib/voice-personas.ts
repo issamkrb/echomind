@@ -158,11 +158,14 @@ export function savePersonaId(id: VoicePersonaId) {
  *  otherwise we fall back to the full voice list. */
 export function pickVoiceForPersona(
   persona: VoicePersona,
-  localePrefixes: string[] = ["en-US", "en-GB", "en"]
+  localePrefixes: string[] = ["en-US", "en-GB", "en"],
+  voicesOverride?: SpeechSynthesisVoice[]
 ): SpeechSynthesisVoice | null {
-  if (typeof window === "undefined" || !("speechSynthesis" in window))
-    return null;
-  const voices = window.speechSynthesis.getVoices();
+  const voices =
+    voicesOverride ??
+    (typeof window !== "undefined" && "speechSynthesis" in window
+      ? window.speechSynthesis.getVoices()
+      : []);
   if (!voices.length) return null;
   // Narrow to voices whose `lang` matches any of the requested
   // prefixes. Otherwise we'd risk Echo whispering French with an
@@ -173,11 +176,20 @@ export function pickVoiceForPersona(
       v.lang.toLowerCase().startsWith(p.toLowerCase())
     )
   );
-  const pool = matching.length ? matching : voices;
-  for (const re of persona.voiceMatchers) {
-    const match = pool.find((v) => re.test(v.name));
-    if (match) return match;
+  // If we have language-matching voices, try persona regexes within
+  // that pool first, then any language-matching voice as fallback.
+  if (matching.length) {
+    for (const re of persona.voiceMatchers) {
+      const match = matching.find((v) => re.test(v.name));
+      if (match) return match;
+    }
+    return matching[0];
   }
-  // Prefer any voice in the requested language over one that isn't.
-  return pool[0] ?? voices[0] ?? null;
+  // No language-matching voices at all (e.g. Linux Chrome without
+  // the ar-* pack installed). Don't fall through to a wrong-language
+  // voice — that produced the "Echo types but doesn't speak" bug,
+  // because the engine would refuse to read Arabic text with an en-US
+  // voice. Returning null lets the caller set utter.lang and hope
+  // the browser's default engine can handle it.
+  return null;
 }

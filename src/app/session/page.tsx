@@ -12,7 +12,7 @@ import {
 } from "@/lib/prompts";
 import { useEmotionStore } from "@/store/emotion-store";
 import { loadFaceModels, detectExpression } from "@/lib/face-api";
-import { speak, stopSpeaking } from "@/lib/voice";
+import { speak, stopSpeaking, warmUpVoices } from "@/lib/voice";
 import {
   VOICE_PERSONAS,
   loadPersonaId,
@@ -135,10 +135,11 @@ export default function Session() {
   const { lang, markSpoken } = useLang();
   const langRef = useRef<Lang>(lang);
   // Arabic dialect (when lang==="ar"). Updated passively as the
-  // user actually speaks. Darija is the default to match the
-  // Maghreb context of the project; swapped to MSA/Egyptian when
-  // the text signals those instead.
-  const langDialectRef = useRef<ArabicDialect>("darija");
+  // user actually speaks. MSA (Modern Standard / Classical Arabic,
+  // الفصحى) is the default — more TTS engines support it than
+  // Darija, and the written UI register reads cleaner. Swapped to
+  // Darija/Egyptian only when the text signals those colloquialisms.
+  const langDialectRef = useRef<ArabicDialect>("msa");
   // Timeline of code-switch events — each entry is {at, from, to,
   // sample} where `at` is the session-seconds timestamp. Shipped to
   // the session row so the operator dashboard can draw a vertical
@@ -275,10 +276,12 @@ export default function Session() {
     void loadFaceModels();
     void requestCam();
     void fetchDynamicChips();
-    // pre-warm speech voices list
-    if (typeof window !== "undefined" && "speechSynthesis" in window) {
-      window.speechSynthesis.getVoices();
-    }
+    // pre-warm speech voices list. Chrome/Edge load the voice
+    // registry asynchronously after the first getVoices() call —
+    // without this, the first `speak()` for Arabic would fall back
+    // to the default engine with no ar-* voice attached, which on
+    // many devices renders silently ("Echo types but doesn't speak").
+    warmUpVoices();
     return () => {
       cleanup();
     };
