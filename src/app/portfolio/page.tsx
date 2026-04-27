@@ -52,6 +52,12 @@ type UserFacing = {
   peakQuotes: Array<{ sessionId: string; quote: string; at: string }>;
   finalTruths: Array<{ sessionId: string; truth: string; at: string }>;
   morningLetters: Array<{ sessionId: string; letter: string; at: string }>;
+  voiceMemos: Array<{
+    sessionId: string;
+    at: string;
+    audioSeconds: number;
+    peakQuoteSnippet: string | null;
+  }>;
   wardrobePalette: string[];
   userTagline: string;
   keywordCloud: Array<{ keyword: string; count: number }>;
@@ -160,6 +166,8 @@ export default function PortfolioPage() {
             <FinalTruths truths={p.finalTruths} />
 
             <MorningLetters letters={p.morningLetters} />
+
+            <VoiceMemoCemetery memos={p.voiceMemos} />
 
             <WardrobeMosaic palette={p.wardrobePalette} />
 
@@ -567,6 +575,135 @@ function MorningLetters({
       </div>
     </section>
   );
+}
+
+/** Voice Memo Cemetery.
+ *
+ *  Chronological list of every past audio capsule — faded by age.
+ *  Fresh (< 7d) → full opacity; < 30d → 0.75; < 90d → 0.45; older →
+ *  0.25. Caption reads "we never deleted. we only faded it on your
+ *  screen." — the rhetoric is in the gap between what the user sees
+ *  (softened by time) and what /admin still plays (full fidelity).
+ */
+function VoiceMemoCemetery({
+  memos,
+}: {
+  memos: UserFacing["voiceMemos"];
+}) {
+  if (memos.length === 0) return null;
+  return (
+    <section className="mt-16">
+      <h2 className="font-serif text-2xl md:text-3xl text-sage-900 mb-3 text-center">
+        the voice memos
+      </h2>
+      <p className="text-center text-sm text-sage-700/70 font-serif italic mb-6">
+        we never deleted. we only faded it on your screen.
+      </p>
+      <div className="space-y-3">
+        {[...memos]
+          .sort((a, b) => (a.at < b.at ? 1 : -1))
+          .map((m) => (
+            <VoiceMemoRow key={m.sessionId} memo={m} />
+          ))}
+      </div>
+    </section>
+  );
+}
+
+function VoiceMemoRow({
+  memo,
+}: {
+  memo: UserFacing["voiceMemos"][number];
+}) {
+  const [loading, setLoading] = useState(false);
+  const [url, setUrl] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  const days = daysSince(memo.at);
+  const opacity =
+    days < 7 ? 1 : days < 30 ? 0.75 : days < 90 ? 0.45 : 0.25;
+
+  async function handlePlay() {
+    if (url || loading) return;
+    setLoading(true);
+    setErr(null);
+    try {
+      const res = await fetch(`/api/portfolio/memo/${memo.sessionId}`, {
+        cache: "no-store",
+      });
+      const body = await res.json();
+      if (body?.ok && body.audio_url) {
+        setUrl(body.audio_url);
+      } else {
+        setErr(body?.reason ?? "unavailable");
+      }
+    } catch (e) {
+      setErr(String(e));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <article
+      style={{ opacity }}
+      className="rounded-2xl bg-cream-50 border border-sage-500/15 px-5 py-4 shadow-sm transition-opacity"
+      title="we never deleted. we only faded it on your screen."
+    >
+      <div className="flex items-baseline justify-between gap-3">
+        <div className="text-[11px] font-mono uppercase tracking-widest text-sage-700/70">
+          {formatFullDate(memo.at)} · {formatSeconds(memo.audioSeconds)}
+        </div>
+        <div className="text-[10px] font-mono uppercase tracking-widest text-sage-700/40">
+          {days < 7
+            ? "this week"
+            : days < 30
+            ? `${Math.round(days)}d ago`
+            : days < 90
+            ? `${Math.round(days / 7)}w ago`
+            : days < 365
+            ? `${Math.round(days / 30)}mo ago`
+            : `${Math.round(days / 365)}y ago`}
+        </div>
+      </div>
+      {memo.peakQuoteSnippet && (
+        <p className="mt-2 font-serif italic text-sage-800 leading-snug">
+          &ldquo;{memo.peakQuoteSnippet}&rdquo;
+        </p>
+      )}
+      <div className="mt-3">
+        {url ? (
+          <audio controls preload="metadata" src={url} className="w-full" />
+        ) : (
+          <button
+            type="button"
+            onClick={handlePlay}
+            disabled={loading}
+            className="text-[12px] font-mono uppercase tracking-widest text-sage-700 underline underline-offset-4 decoration-sage-500/40 hover:text-sage-900 disabled:opacity-40"
+          >
+            {loading
+              ? "opening…"
+              : err
+              ? "unavailable — tap to retry"
+              : "play"}
+          </button>
+        )}
+      </div>
+    </article>
+  );
+}
+
+function daysSince(iso: string) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return 0;
+  return Math.max(0, (Date.now() - d.getTime()) / 86_400_000);
+}
+
+function formatSeconds(s: number) {
+  if (!Number.isFinite(s) || s <= 0) return "·";
+  const m = Math.floor(s / 60);
+  const sec = Math.round(s % 60).toString().padStart(2, "0");
+  return `${m}:${sec}`;
 }
 
 function WardrobeMosaic({ palette }: { palette: string[] }) {

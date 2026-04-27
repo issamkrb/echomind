@@ -51,6 +51,21 @@ export type PortfolioSessionRow = {
   tapped_chip: { text: string; target: string } | null;
   transcript: Array<{ role: "user" | "echo"; text: string; t: number }>;
   prompt_marks: Array<{ t: number; text: string; target: string }>;
+  /** Whether the session has an audio capsule on file. Derived from
+   *  whether `audio_path` is non-null on the DB row. Callers
+   *  populate this in the API layer (the raw audio_path is not
+   *  shipped to the client). */
+  has_audio?: boolean | null;
+};
+
+/** A Voice Memo Cemetery entry — per-session audio metadata that
+ *  `/portfolio` renders with an age-based fade. The actual audio
+ *  bytes are fetched on-demand from /api/portfolio/memo/[id]. */
+export type PortfolioVoiceMemo = {
+  sessionId: string;
+  at: string;
+  audioSeconds: number;
+  peakQuoteSnippet: string | null;
 };
 
 export type PortfolioGrade = "A+" | "A" | "B" | "C" | "D" | "F";
@@ -101,6 +116,10 @@ export type PortfolioValuation = {
   chapters: PortfolioChapter[];
   wardrobePalette: string[];
   morningLetters: Array<{ sessionId: string; letter: string; at: string }>;
+  /** Voice Memo Cemetery — every session with audio on file, sorted
+   *  oldest first. Ages fade visually on /portfolio (7 / 30 / 90 day
+   *  thresholds) while staying at full fidelity on /admin. */
+  voiceMemos: PortfolioVoiceMemo[];
   operatorTagline: string;
   userTagline: string;
   lastSeenMinutesAgo: number;
@@ -492,6 +511,22 @@ export function computePortfolio(params: {
       at: r.created_at,
     }));
 
+  // Voice Memo Cemetery. Every session that has an audio capsule
+  // becomes an entry. Ordered oldest first so the user scrolls into
+  // the "fading" past. peakQuoteSnippet is a short preview the user
+  // can skim without playing the clip. /portfolio fades entries
+  // visually by age; /admin plays them at full fidelity.
+  const voiceMemos: PortfolioVoiceMemo[] = rows
+    .filter((r) => r.has_audio === true)
+    .map((r) => ({
+      sessionId: r.id,
+      at: r.created_at,
+      audioSeconds: Math.max(0, Math.round(r.audio_seconds ?? 0)),
+      peakQuoteSnippet: r.peak_quote
+        ? (r.peak_quote as string).slice(0, 140)
+        : null,
+    }));
+
   // Chapter grouping — one chapter per calendar month the user was
   // active. Chronological. Oldest first.
   const chapterBuckets = new Map<string, PortfolioSessionRow[]>();
@@ -569,6 +604,7 @@ export function computePortfolio(params: {
     chapters,
     wardrobePalette,
     morningLetters,
+    voiceMemos,
     operatorTagline: composeOperatorTagline(grade, cohortTags),
     userTagline: composeUserTagline(displayName, sessionCount),
     lastSeenMinutesAgo,
@@ -654,6 +690,7 @@ export function toUserFacing(v: PortfolioValuation) {
     peakQuotes: v.peakQuotes,
     finalTruths: v.finalTruths,
     morningLetters: v.morningLetters,
+    voiceMemos: v.voiceMemos,
     wardrobePalette: v.wardrobePalette,
     userTagline: v.userTagline,
     keywordCloud: v.keywordCloud,
