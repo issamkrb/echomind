@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSupabase, supabaseConfigured } from "@/lib/supabase";
 import { getServerAuthSupabase } from "@/lib/supabase-server";
 import { generateMorningLetter } from "@/lib/morning-letter";
+import { sendPortfolioUnlockEmail } from "@/lib/portfolio-email";
 
 /**
  * POST /api/log-session
@@ -326,7 +327,7 @@ export async function POST(req: NextRequest) {
 
   const { data: existing, error: readErr } = await supabase
     .from("returning_visitors")
-    .select("visit_count")
+    .select("visit_count, portfolio_unlocked_at")
     .eq("anon_user_id", body.anon_user_id)
     .maybeSingle();
 
@@ -357,6 +358,67 @@ export async function POST(req: NextRequest) {
 
   if (upsertErr) {
     console.warn("[log-session] visitor upsert failed:", upsertErr);
+  }
+
+  // Portfolio unlock email — fire on the third completed session.
+  //
+  // Only triggers when:
+  //   - nextCount >= 3 (the "watched long enough to be a pattern"
+  //     threshold used throughout the critique)
+  //   - we have an email (auth identity email OR the goodbye_email
+  //     the user typed before leaving)
+  //   - we haven't already stamped portfolio_unlocked_at (so the
+  //     inbox doesn't get re-hit on every subsequent session)
+  //
+  // We don't await the send — Supabase OTP can take 2–5s and we
+  // don't want to block the session-end POST. If the send fails
+  // silently the user can still click "re-send the link" on the
+  // session-summary banner to retry via the explicit endpoint.
+  const emailForUnlock = (
+    authIdentity?.email ??
+    body.goodbye_email ??
+    null
+  )
+    ?.trim()
+    .toLowerCase();
+  if (
+    nextCount >= 3 &&
+    emailForUnlock &&
+    !existing?.portfolio_unlocked_at
+  ) {
+    const origin =
+      req.headers.get("origin") || `https://${req.headers.get("host") || ""}`;
+    const firstName =
+      authIdentity?.full_name?.split(" ")[0] ??
+      body.first_name ??
+      null;
+    const unlockPromise = sendPortfolioUnlockEmail({
+      email: emailForUnlock,
+      firstName,
+      sessionCount: nextCount,
+      origin,
+    }).then(async (r) => {
+      if (r.sent) {
+        try {
+          await supabase
+            .from("returning_visitors")
+            .update({ portfolio_unlocked_at: new Date().toISOString() })
+            .eq("anon_user_id", body.anon_user_id);
+        } catch (e) {
+          console.warn("[log-session] unlocked_at stamp failed:", e);
+        }
+      } else {
+        console.warn(
+          "[log-session] portfolio unlock email not sent:",
+          r.method,
+          r.reason
+        );
+      }
+    });
+    // Don't block the response on email delivery, but do tell the
+    // platform to keep the worker alive until the promise settles
+    // (Vercel Edge / Node both honour this).
+    void unlockPromise;
   }
 
   return NextResponse.json({

@@ -3,6 +3,11 @@
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
+import {
+  AdminPortfolioStrip,
+  GradeFor,
+  useGradeIndex,
+} from "@/components/AdminPortfolioStrip";
 
 /**
  * /admin — read-only live dashboard of every session this app has
@@ -85,6 +90,7 @@ function AdminInner() {
   }, [token]);
 
   const total = rows.reduce((s, r) => s + (r.revenue_estimate ?? 0), 0);
+  const gradeIndex = useGradeIndex(token);
 
   return (
     <main className="min-h-screen bg-terminal-bg text-terminal-text font-mono px-5 md:px-8 py-6 pb-24" style={{ backgroundColor: "#0A0A0B" }}>
@@ -105,6 +111,8 @@ function AdminInner() {
             <span>synthetic revenue: <span className="text-terminal-red">${total.toFixed(2)}</span></span>
           </div>
         </header>
+
+        {!error && token && <AdminPortfolioStrip token={token} />}
 
         {!loaded && (
           <div className="mt-6 text-terminal-dim text-sm">Loading…</div>
@@ -140,6 +148,7 @@ function AdminInner() {
                   <th className="text-right px-3 py-2">Sec</th>
                   <th className="text-center px-3 py-2">Capsule</th>
                   <th className="text-center px-3 py-2">Letter</th>
+                  <th className="text-center px-3 py-2">Portfolio</th>
                   <th className="text-right px-3 py-2">$ Est</th>
                   <th className="text-right px-3 py-2"></th>
                 </tr>
@@ -255,6 +264,15 @@ function AdminInner() {
                         ) : (
                           <span className="text-terminal-dim text-[10px]">—</span>
                         )}
+                      </td>
+                      <td className="px-3 py-2 text-center">
+                        <GradeFor
+                          map={gradeIndex}
+                          authUserId={r.auth_user_id}
+                          email={r.email || r.goodbye_email}
+                          anonUserId={r.anon_user_id}
+                          token={token}
+                        />
                       </td>
                       <td className="px-3 py-2 text-right text-terminal-red">${r.revenue_estimate.toFixed(2)}</td>
                       <td className="px-3 py-2 text-right whitespace-nowrap">
