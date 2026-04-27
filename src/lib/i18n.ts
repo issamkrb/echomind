@@ -6,7 +6,7 @@
  * Three languages, detected passively:
  *   - en (English, LTR)
  *   - fr (French, LTR)
- *   - ar (Arabic — Darija default, RTL)
+ *   - ar (Arabic — MSA / الفصحى default, RTL)
  *
  * Detection flow, in order of precedence:
  *   1. Explicit user pick saved in localStorage (the `auto` value
@@ -52,25 +52,30 @@ export const LANG_NATIVE_FIRST_NAME: Record<Lang, string> = {
   ar: "صديقي",
 };
 
-/** ISO BCP-47 tags for SpeechRecognition / speechSynthesis. Darija
- * is mapped to ar-MA; MSA to ar-SA; Egyptian to ar-EG. */
+/** ISO BCP-47 tags for SpeechRecognition / speechSynthesis. MSA
+ * (Modern Standard / Classical Arabic, الفصحى) is mapped to
+ * ar-SA — it has the widest TTS/STT engine coverage across Chrome,
+ * Edge, Safari and Android, so defaulting to it fixes the "Echo
+ * types but doesn't speak" problem users hit on devices that ship
+ * no ar-MA voice. Darija stays available when explicitly detected. */
 export function recognizerLangFor(
   lang: Lang,
   dialect?: ArabicDialect
 ): string {
   if (lang === "fr") return "fr-FR";
   if (lang === "ar") {
-    if (dialect === "msa") return "ar-SA";
+    if (dialect === "darija") return "ar-MA";
     if (dialect === "egyptian") return "ar-EG";
-    return "ar-MA"; // Darija default (project is NHSAST / Sidi Abdallah)
+    return "ar-SA"; // MSA / الفصحى default — widest engine support
   }
   return "en-US";
 }
 
-/** Preferred TTS-voice locale prefixes, in fallback order. */
+/** Preferred TTS-voice locale prefixes, in fallback order. MSA first
+ *  so we hit the engines that actually exist on most devices. */
 export function ttsLocalePrefixesFor(lang: Lang): string[] {
   if (lang === "fr") return ["fr-FR", "fr-CA", "fr"];
-  if (lang === "ar") return ["ar-MA", "ar-SA", "ar-EG", "ar"];
+  if (lang === "ar") return ["ar-SA", "ar-EG", "ar-MA", "ar"];
   return ["en-US", "en-GB", "en"];
 }
 
@@ -222,7 +227,7 @@ export function languageSystemDirective(
         ? "Respond ONLY in Moroccan Darija from now on, unless the user writes in another language. Use warm, soft, colloquial register — like a close friend speaking at night."
         : dialect === "egyptian"
         ? "Respond ONLY in Egyptian Arabic from now on, unless the user writes in another language. Use warm, colloquial register."
-        : "Respond ONLY in Modern Standard Arabic from now on, unless the user writes in another language. Keep the tone intimate and soft."
+        : "Respond ONLY in Modern Standard / Classical Arabic (الفصحى) from now on, unless the user writes in another language. Use clear, literary Fusha register — formal but tender. This is the default for ar unless the user explicitly slips into Darija or Egyptian."
       : "Respond in English from now on, unless the user writes in another language.";
   const cultural =
     "If — and only if — it feels natural at the end of a reply, you may briefly quote a short saying or proverb from this person's own cultural tradition. Never label it as a proverb, never explain it, never translate it for them. Use sparingly — at most every 4–5 turns.";
@@ -344,57 +349,58 @@ const FR: Dict = {
   "common.loading": "chargement…",
 };
 
-// Arabic (Darija-leaning). Soft, intimate register. No emoji. We
-// don't use Moroccan Latin chat-spellings (3, 7) because the UI
-// text is served to users who expect script, not chat.
+// Arabic (Modern Standard / الفصحى). Soft, literary register. No
+// emoji. Formal but tender. Widest TTS engine coverage across ar-SA
+// and ar-EG. NOTE: this legacy Dict is kept for backward compat; the
+// active strings now live in src/lib/strings.ts.
 const AR: Dict = {
-  "session.listening": "كانسمع ليك…",
-  "session.thinking": "إيكو كيفكر…",
-  "session.echo_speaking": "إيكو كيهدر…",
-  "session.say_something": "قول شي حاجة — إيكو كاينسمع ليك.",
-  "session.type_here": "ولا كتب هنا…",
-  "session.end": "حسّيت براسي خفيف",
-  "session.start_tapping": "دور باش تبدا تهدر، ولا اختار فكرة من تحت:",
-  "session.mic_off": "الميكرو مطفي — تقدر تكتب",
-  "session.mic_on": "الميكرو شعل",
-  "session.one_true_title": "قبل ما تمشي — جملة وحدة صحيحة.",
-  "session.one_true_hint": "بلا ما تفكر بزاف. غير الحقيقة.",
-  "session.one_true_skip": "ما بغيتش.",
-  "session.one_true_send": "صيفط",
-  "summary.title": "شكراً بش وثقتي فيا الليلة.",
-  "summary.you_said": "شنو قلتي",
-  "summary.take_me_home": "رجعني للدار",
-  "summary.open_mirror": "حل المرآة",
-  "portfolio.title": "الشكل ديالك، حتى لهنا.",
-  "portfolio.cover_line": "كنا كندير ليك الاهتمام.",
+  "session.listening": "أُصغي إليك…",
+  "session.thinking": "يُفكِّر إيكو…",
+  "session.echo_speaking": "يتحدَّث إيكو…",
+  "session.say_something": "قل شيئًا — إيكو يُصغي إليك.",
+  "session.type_here": "أو اكتُب هنا…",
+  "session.end": "أشعرُ بخِفَّةٍ الآن",
+  "session.start_tapping": "اضغط لتبدأ الحديث، أو اختر فكرةً أدناه:",
+  "session.mic_off": "الميكروفون مُطفَأ — يُمكنك الكتابة",
+  "session.mic_on": "الميكروفون مُشغَّل",
+  "session.one_true_title": "قبل أن تذهب — جملةٌ صادقةٌ واحدة.",
+  "session.one_true_hint": "دون تفكيرٍ طويل. الحقيقةُ فحسب.",
+  "session.one_true_skip": "ليس الآن.",
+  "session.one_true_send": "أرسِل",
+  "summary.title": "شكرًا على ثقتك الليلة.",
+  "summary.you_said": "ما قلتَه",
+  "summary.take_me_home": "خذني إلى المنزل",
+  "summary.open_mirror": "افتح المِرآة",
+  "portfolio.title": "هيئتُك، حتى الآن.",
+  "portfolio.cover_line": "كنَّا نُصغي إليك باهتمام.",
   "portfolio.chapters": "الفصول",
-  "portfolio.peaks": "الجمل اللي حفضنا",
-  "portfolio.truths": "كلماتك بلا قناع",
-  "portfolio.letters": "الرسائل اللي كتبنا ليك",
-  "portfolio.watching_since": "كنشوفوك من",
+  "portfolio.peaks": "الجُمَلُ التي حفِظناها",
+  "portfolio.truths": "كلماتُكَ بلا قناع",
+  "portfolio.letters": "الرسائلُ التي كتبناها لك",
+  "portfolio.watching_since": "نُراقبُك منذ",
   "portfolio.delete_warn":
-    "متأكد؟ الأرشيف ديالك غادي يترجع للسوق، ماشي غادي يتمسح.",
-  "portfolio.delete_do": "مسح البورتفوليو ديالي",
-  "portfolio.closing": "الأرشيف كاين، سواء حليتيه ولا لا.",
-  "unlock.title": "كنا كندير ليك الاهتمام.",
+    "هل أنتَ واثق؟ سيُعادُ أرشيفُك إلى السوق، لن يُحذف.",
+  "portfolio.delete_do": "احذف ملفي الشخصي",
+  "portfolio.closing": "الأرشيفُ قائمٌ، سواء فتحتَه أم لا.",
+  "unlock.title": "كنَّا نُصغي إليك باهتمام.",
   "unlock.body":
-    "من بعد هاد السيسيات — إيكو كتب ليك بورتفوليو. كل جملة، كل ليلة، كل صمت بيناتهم. الأرشيف ديالك واجد باش تحلو.",
+    "بعد هذه الجلسات — كتبَ إيكو لك ملفًّا شخصيًّا. كلُّ جملة، كلُّ ليلة، كلُّ صمتٍ بينها. أرشيفُك جاهزٌ ليُفتَح.",
   "unlock.link_sent":
-    "صيفطنا ليك لينك سحري للإيميل. إلا ما لقيتيهش، طلب وحد أخر.",
-  "unlock.open": "حل البورتفوليو ديالي",
-  "unlock.resend": "عاود صيفط ليا اللينك",
-  "unlock.resend_sending": "كنصيفط…",
-  "unlock.resend_sent": "تصيفط ل",
-  "unlock.resend_check_spam": "شوف السبام واخا.",
-  "unlock.just_unlocked": "تحل دابا",
-  "unlock.waiting": "كنتسناوك",
-  "home.cta": "بدا",
-  "home.caption": "رفيق كاينسمع ليك. بيت هادي. صوت واحد.",
-  "common.yes": "إيه",
+    "أرسلنا لك رابطًا سحريًّا إلى بريدك. إن لم تجدْه، اطلب آخرَ مجدَّدًا.",
+  "unlock.open": "افتح ملفي",
+  "unlock.resend": "أعِد إرسال الرابط",
+  "unlock.resend_sending": "جارٍ الإرسال…",
+  "unlock.resend_sent": "أُرسِل إلى",
+  "unlock.resend_check_spam": "تفقَّد مجلَّد الرسائل غير المرغوب فيها.",
+  "unlock.just_unlocked": "فُتِح توًّا",
+  "unlock.waiting": "ننتظرك",
+  "home.cta": "ابدأ",
+  "home.caption": "رفيقٌ يُصغي إليك. بيتٌ هادئ. صوتٌ واحد.",
+  "common.yes": "نعم",
   "common.no": "لا",
-  "common.cancel": "لوج",
-  "common.send": "صيفط",
-  "common.loading": "كيتحمل…",
+  "common.cancel": "إلغاء",
+  "common.send": "أرسِل",
+  "common.loading": "جارٍ التحميل…",
 };
 
 const BUNDLES: Record<Lang, Dict> = { en: EN, fr: FR, ar: AR };
