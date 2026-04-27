@@ -49,7 +49,11 @@ function buildHtmlBody(params: {
   sessionCount: number;
   magicLink: string;
 }): string {
-  const first = (params.firstName || "friend").toLowerCase();
+  // Names flow from client-submitted form fields + DB rows, so we
+  // must escape them before interpolating into the HTML email body.
+  // Otherwise a crafted first_name ("<a href=evil>click</a>") would
+  // become live HTML in recipients' inboxes.
+  const first = escapeHtml((params.firstName || "friend").toLowerCase());
   return `<!doctype html>
 <html>
   <body style="margin:0;padding:0;background:#F6F1E7;font-family:Georgia,'Times New Roman',serif;color:#2E3B35;">
