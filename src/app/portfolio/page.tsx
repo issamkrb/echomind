@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useViewer, invalidateViewerCache } from "@/lib/use-viewer";
+import { getOrCreateAnonUserId } from "@/lib/memory";
 import type { PortfolioValuation } from "@/lib/portfolio";
 
 /**
@@ -235,10 +236,13 @@ function ClaimEmailForm() {
     }
     setState({ kind: "sending" });
     try {
+      // Pass the browser's anon_user_id along with the email so the
+      // server can look up visit_count + first_name for a personalised
+      // greeting ("3 nights in, issam" rather than "0 nights in, friend").
       const res = await fetch("/api/portfolio/send-unlock-email", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: trimmed }),
+        body: JSON.stringify({ email: trimmed, anon: getOrCreateAnonUserId() }),
       });
       const body = await res.json();
       if (!body?.ok) {
