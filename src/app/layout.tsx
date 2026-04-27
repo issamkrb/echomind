@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Fraunces, Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
+import { LangPicker } from "@/components/LangPicker";
 
 const fraunces = Fraunces({
   subsets: ["latin"],
@@ -42,6 +43,7 @@ export default function RootLayout({
       <body
         className={`${fraunces.variable} ${inter.variable} ${jetbrains.variable} antialiased`}
       >
+        <LangPicker />
         {children}
       </body>
     </html>

@@ -8,6 +8,11 @@ import {
   GradeFor,
   useGradeIndex,
 } from "@/components/AdminPortfolioStrip";
+import {
+  languageCohortTag,
+  type ArabicDialect,
+  type Lang,
+} from "@/lib/i18n";
 
 /**
  * /admin — read-only live dashboard of every session this app has
@@ -42,6 +47,11 @@ type SessionRow = {
   callback_used: string | null;
   final_truth: string | null;
   morning_letter_opted_in: boolean | null;
+  detected_language: string | null;
+  detected_dialect: string | null;
+  code_switch_events:
+    | Array<{ at: number; from: string; to: string; sample: string }>
+    | null;
 };
 
 function AdminInner() {
@@ -145,6 +155,7 @@ function AdminInner() {
                   <th className="text-left px-3 py-2">Final truth</th>
                   <th className="text-left px-3 py-2">Keywords</th>
                   <th className="text-left px-3 py-2">Voice</th>
+                  <th className="text-left px-3 py-2">Lang cohort</th>
                   <th className="text-right px-3 py-2">Sec</th>
                   <th className="text-center px-3 py-2">Capsule</th>
                   <th className="text-center px-3 py-2">Letter</th>
@@ -239,6 +250,13 @@ function AdminInner() {
                             </span>
                           )}
                         </div>
+                      </td>
+                      <td className="px-3 py-2 align-top">
+                        <LangCohortCell
+                          lang={r.detected_language}
+                          dialect={r.detected_dialect}
+                          switches={r.code_switch_events?.length ?? 0}
+                        />
                       </td>
                       <td className="px-3 py-2 text-right text-terminal-dim">{r.audio_seconds}</td>
                       <td className="px-3 py-2 text-center">
@@ -400,5 +418,46 @@ export default function Admin() {
     <Suspense fallback={null}>
       <AdminInner />
     </Suspense>
+  );
+}
+
+// Compact two-line cell:
+//   · cohort tag (darija · maghreb premium)
+//   · code-switch badge in red (only if switches > 0)
+// Unknown / legacy rows fall back to the English tag.
+function LangCohortCell({
+  lang,
+  dialect,
+  switches,
+}: {
+  lang: string | null;
+  dialect: string | null;
+  switches: number;
+}) {
+  const l: Lang =
+    lang === "fr" || lang === "ar" || lang === "en" ? lang : "en";
+  const d: ArabicDialect | undefined =
+    dialect === "darija" || dialect === "msa" || dialect === "egyptian"
+      ? dialect
+      : undefined;
+  return (
+    <div className="flex flex-col gap-1 max-w-[200px]">
+      <span
+        className="inline-block self-start px-1.5 py-0.5 border border-terminal-amber/40 text-terminal-amber text-[10px] uppercase tracking-widest truncate"
+        title={languageCohortTag(l, d)}
+      >
+        {languageCohortTag(l, d)}
+      </span>
+      {switches > 0 && (
+        <span
+          className="inline-block self-start px-1.5 py-0.5 border border-terminal-red/60 text-terminal-red text-[9px] uppercase tracking-widest"
+          title={`${switches} code-switch event${
+            switches === 1 ? "" : "s"
+          } · emotional overflow`}
+        >
+          ↯ code-switch × {switches}
+        </span>
+      )}
+    </div>
   );
 }

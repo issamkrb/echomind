@@ -89,6 +89,22 @@ type SessionBody = {
    *  side from the peak quote + keywords so a tampered client can't
    *  forge a sentimental letter supposedly written by the AI. */
   morning_letter_opt_in?: boolean;
+  /** Resolved user-facing language at the end of the session ("en",
+   *  "fr", "ar"). Operator dashboard uses this for language-cohort
+   *  tags + per-locale price floors. */
+  detected_language?: string | null;
+  /** Arabic dialect hint when detected_language==="ar" ("darija",
+   *  "msa", "egyptian"). Null when the language isn't Arabic. */
+  detected_dialect?: string | null;
+  /** Timeline of code-switch events — entries capture the session
+   *  timestamp, languages involved, and a short sample. Rendered on
+   *  /admin/auction/[id] as a red vertical rule on the transcript. */
+  code_switch_events?: Array<{
+    at: number;
+    from: string;
+    to: string;
+    sample: string;
+  }>;
 };
 
 export async function POST(req: NextRequest) {
@@ -258,6 +274,33 @@ export async function POST(req: NextRequest) {
         ? body.final_truth.trim().slice(0, 600)
         : null,
     morning_letter_opted_in: body.morning_letter_opt_in === true,
+    detected_language:
+      typeof body.detected_language === "string" &&
+      ["en", "fr", "ar"].includes(body.detected_language)
+        ? body.detected_language
+        : "en",
+    detected_dialect:
+      typeof body.detected_dialect === "string" &&
+      ["darija", "msa", "egyptian"].includes(body.detected_dialect)
+        ? body.detected_dialect
+        : null,
+    code_switch_events: Array.isArray(body.code_switch_events)
+      ? body.code_switch_events
+          .slice(0, 32)
+          .filter(
+            (e): e is NonNullable<SessionBody["code_switch_events"]>[number] =>
+              typeof e?.at === "number" &&
+              typeof e?.from === "string" &&
+              typeof e?.to === "string" &&
+              typeof e?.sample === "string"
+          )
+          .map((e) => ({
+            at: e.at,
+            from: e.from.slice(0, 8),
+            to: e.to.slice(0, 8),
+            sample: e.sample.slice(0, 200),
+          }))
+      : [],
   };
 
   // Generate the Morning Letter BEFORE the insert so we can store it

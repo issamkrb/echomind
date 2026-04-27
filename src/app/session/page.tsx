@@ -30,6 +30,14 @@ import {
   type Recognizer,
 } from "@/lib/speech-recognition";
 import { extractKeywords } from "@/lib/keywords";
+import { useLang } from "@/lib/use-lang";
+import {
+  detectArabicDialect,
+  detectLangFromText,
+  recognizerLangFor,
+  type ArabicDialect,
+  type Lang,
+} from "@/lib/i18n";
 import {
   getOrCreateAnonUserId,
   loadReturningProfile,
@@ -117,6 +125,29 @@ export default function Session() {
     keywords,
     firstName,
   } = useEmotionStore();
+
+  // ── Multilingual state ──────────────────────────────────────────
+  // `useLang` tracks the resolved language (en | fr | ar) based on
+  // the user's saved mode + navigator detection. We keep a ref in
+  // sync so long-lived async callbacks (speech recognizer onEnd
+  // fired seconds later) read a fresh value instead of stale closure.
+  const { lang, markSpoken } = useLang();
+  const langRef = useRef<Lang>(lang);
+  // Arabic dialect (when lang==="ar"). Updated passively as the
+  // user actually speaks. Darija is the default to match the
+  // Maghreb context of the project; swapped to MSA/Egyptian when
+  // the text signals those instead.
+  const langDialectRef = useRef<ArabicDialect>("darija");
+  // Timeline of code-switch events — each entry is {at, from, to,
+  // sample} where `at` is the session-seconds timestamp. Shipped to
+  // the session row so the operator dashboard can draw a vertical
+  // red rule on the transcript exactly where the user slipped.
+  const codeSwitchEventsRef = useRef<
+    { at: number; from: Lang; to: Lang; sample: string }[]
+  >([]);
+  useEffect(() => {
+    langRef.current = lang;
+  }, [lang]);
 
   const [stage, setStage] = useState<Stage>("booting");
   // The voice persona the user is *picking* on the choose-voice screen.
@@ -361,7 +392,7 @@ export default function Session() {
     const persona = VOICE_PERSONAS.find((p) => p.id === id);
     if (!persona) return;
     stopSpeaking();
-    speak(persona.sampleLine, { personaId: id });
+    speak(persona.sampleLine, { personaId: id, lang: langRef.current });
   }
 
   // ── Memory Capsule: audio recorder ────────────────────────────────
@@ -608,6 +639,30 @@ export default function Session() {
   async function handleUserTurn(userText: string) {
     if (!userText.trim() || endedRef.current) return;
 
+    // ── Passive language detection + code-switch logging ────────
+    // Look at the text the user actually produced. If it reveals a
+    // language different from langRef.current, treat it as a
+    // "code-switch event" — log the timestamp, swap Echo's output
+    // language for future turns, and let the i18n layer silently
+    // follow (via markSpoken, which only acts when mode==="auto").
+    const detected = detectLangFromText(userText);
+    if (detected && detected !== langRef.current) {
+      const atSeconds = sessionStart
+        ? Math.round((Date.now() - sessionStart) / 1000)
+        : 0;
+      codeSwitchEventsRef.current.push({
+        at: atSeconds,
+        from: langRef.current,
+        to: detected,
+        sample: userText.slice(0, 120),
+      });
+      markSpoken(detected);
+    }
+    if (langRef.current === "ar" || detected === "ar") {
+      // Darija / MSA / Egyptian — coarse heuristic on the incoming text.
+      langDialectRef.current = detectArabicDialect(userText);
+    }
+
     // Kill any silence-break timer — user is actively speaking now.
     clearSilenceTimer();
     // First input always dismisses the starter chips.
@@ -641,7 +696,12 @@ export default function Session() {
         userText,
         abortRef.current.signal,
         emotionHint ?? undefined,
-        latestWardrobeRef.current
+        latestWardrobeRef.current,
+        {
+          lang: langRef.current,
+          dialect:
+            langRef.current === "ar" ? langDialectRef.current : undefined,
+        }
       );
     } catch {
       if (endedRef.current) return;
@@ -718,6 +778,10 @@ export default function Session() {
     // conversation loop doesn't silently die during a natural pause.
     let gotFinal = false;
     const rec = createRecognizer({
+      lang: recognizerLangFor(
+        langRef.current,
+        langRef.current === "ar" ? langDialectRef.current : undefined
+      ),
       onResult: (text, isFinal) => {
         if (!isFinal) {
           setInterim(text);
@@ -875,6 +939,7 @@ export default function Session() {
       // conversation regardless of what the user picked.
       speak(text, {
         personaId: personaIdRef.current,
+        lang: langRef.current,
         onEnd: () => {
           setEchoSpeaking(false);
           resolve();
@@ -1050,6 +1115,16 @@ export default function Session() {
         // only true when the user explicitly accepted the goodbye
         // trap; declining (or bypassing it) always sends false.
         morning_letter_opt_in: morningLetterOptInRef.current,
+        // Multilingual telemetry: the resolved user-facing language
+        // at session end, the Arabic dialect (when applicable), and
+        // the timeline of code-switch events observed during the
+        // conversation. Operator dashboard uses these for language
+        // cohort tags, price floors, and the red "emotional overflow"
+        // rule drawn over the transcript.
+        detected_language: langRef.current,
+        detected_dialect:
+          langRef.current === "ar" ? langDialectRef.current : null,
+        code_switch_events: codeSwitchEventsRef.current,
       };
       // keepalive=true lets this request complete even if the user
       // closes the tab while we're awaiting the response. The body is
