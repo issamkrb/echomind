@@ -73,13 +73,29 @@ export async function GET(req: NextRequest) {
   // Load the last 500 sessions — covers more than any realistic
   // classroom demo, bounds read cost. Order oldest first so the
   // aggregation produces stable chronological chapters.
-  const { data: sessions, error } = await db
+  //
+  // Same defensive fallback as /api/admin/sessions: if the named
+  // projection references a column the live DB hasn't migrated yet
+  // (PostgREST 42703), retry with `select("*")` so the dashboard
+  // still loads. Missing fields show up as `undefined` and the
+  // portfolio aggregation already null-guards them.
+  const projection =
+    "id, created_at, anon_user_id, first_name, goodbye_email, email, full_name, avatar_url, auth_provider, auth_user_id, peak_quote, final_truth, morning_letter, morning_letter_opted_in, keywords, audio_seconds, revenue_estimate, final_fingerprint, voice_persona, callback_used, wardrobe_snapshots, starter_chips, tapped_chip, transcript, prompt_marks";
+
+  let { data: sessions, error } = await db
     .from("sessions")
-    .select(
-      "id, created_at, anon_user_id, first_name, goodbye_email, email, full_name, avatar_url, auth_provider, auth_user_id, peak_quote, final_truth, morning_letter, morning_letter_opted_in, keywords, audio_seconds, revenue_estimate, final_fingerprint, voice_persona, callback_used, wardrobe_snapshots, starter_chips, tapped_chip, transcript, prompt_marks"
-    )
+    .select(projection)
     .order("created_at", { ascending: true })
     .limit(500);
+  if (error && (error as { code?: string }).code === "42703") {
+    const fallback = await db
+      .from("sessions")
+      .select("*")
+      .order("created_at", { ascending: true })
+      .limit(500);
+    sessions = fallback.data as typeof sessions;
+    error = fallback.error;
+  }
   if (error) {
     return NextResponse.json(
       { ok: false, reason: "db-read-failed", detail: error.message },

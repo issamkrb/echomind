@@ -82,7 +82,9 @@ function AdminInner() {
         const body = await res.json();
         if (cancelled) return;
         if (!body.ok) {
-          setError(`Forbidden (${body.reason ?? res.status}).`);
+          const reason = body.reason ?? res.status;
+          const detail = body.detail ? ` — ${body.detail}` : "";
+          setError(`Forbidden (${reason})${detail}.`);
         } else {
           setRows(body.sessions);
           setError(null);

@@ -64,13 +64,28 @@ export async function GET(
   // the per-session admin view can render synchronized playback —
   // each transcript line lights up as the audio reaches its `t`
   // timestamp. Same with `peak_emotion_t` for the still-frame label.
-  const { data, error } = await supabase
+  //
+  // Falls back to `select("*")` when a newer column the projection
+  // names doesn't exist yet on the live database (PostgREST 42703).
+  // See /api/admin/sessions for the same defensive pattern.
+  const projection =
+    "id, created_at, anon_user_id, first_name, goodbye_email, peak_quote, keywords, audio_seconds, revenue_estimate, final_fingerprint, auth_user_id, email, full_name, avatar_url, auth_provider, transcript, audio_path, peak_frame_path, peak_emotion_t, operator_summary, voice_persona, callback_used, starter_chips, starter_chips_source, tapped_chip, wardrobe_snapshots, final_truth, morning_letter, morning_letter_opted_in, morning_letter_created_at, detected_language, detected_dialect, code_switch_events";
+
+  let { data, error } = await supabase
     .from("sessions")
-    .select(
-      "id, created_at, anon_user_id, first_name, goodbye_email, peak_quote, keywords, audio_seconds, revenue_estimate, final_fingerprint, auth_user_id, email, full_name, avatar_url, auth_provider, transcript, audio_path, peak_frame_path, peak_emotion_t, operator_summary, voice_persona, callback_used, starter_chips, starter_chips_source, tapped_chip, wardrobe_snapshots, final_truth, morning_letter, morning_letter_opted_in, morning_letter_created_at, detected_language, detected_dialect, code_switch_events"
-    )
+    .select(projection)
     .eq("id", params.id)
     .maybeSingle();
+
+  if (error && (error as { code?: string }).code === "42703") {
+    const fallback = await supabase
+      .from("sessions")
+      .select("*")
+      .eq("id", params.id)
+      .maybeSingle();
+    data = fallback.data as typeof data;
+    error = fallback.error;
+  }
 
   if (error) {
     return NextResponse.json(
