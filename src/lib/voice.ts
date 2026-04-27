@@ -81,6 +81,14 @@ function logVoicePick(lang: Lang, voice: SpeechSynthesisVoice | null, pool: Spee
   );
 }
 
+// Module-level registry of pending cancel functions. Every live
+// `speak()` call registers its cancel here so the global
+// `stopSpeaking()` can tear down speech that hasn't actually started
+// yet — e.g. an utterance still waiting on `waitForVoices()` to
+// resolve. Without this, cleanup during voice loading lets a stale
+// utterance slip through and speak on a dead session.
+const pendingCancels = new Set<() => void>();
+
 export function speak(
   text: string,
   opts: {
@@ -108,13 +116,24 @@ export function speak(
   // loop can't wedge.
   let settled = false;
   let timer: ReturnType<typeof setTimeout> | null = null;
+  let cancelled = false;
+
+  const cancel = () => {
+    if (cancelled) return;
+    cancelled = true;
+    synth.cancel();
+    finish();
+  };
+
   const finish = () => {
     if (settled) return;
     settled = true;
     if (timer) clearTimeout(timer);
+    pendingCancels.delete(cancel);
     opts.onEnd?.();
   };
-  let cancelled = false;
+
+  pendingCancels.add(cancel);
 
   const speakNow = (voices: SpeechSynthesisVoice[]) => {
     if (cancelled) return;
@@ -145,16 +164,16 @@ export function speak(
   // resolves synchronously on the next microtask.
   waitForVoices().then(speakNow);
 
-  return () => {
-    cancelled = true;
-    synth.cancel();
-    finish();
-  };
+  return cancel;
 }
 
 export function stopSpeaking() {
   if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
   window.speechSynthesis.cancel();
+  // Cancel any utterances still waiting on `waitForVoices()` so they
+  // don't start speaking after the caller has torn the session down.
+  // Iterate over a snapshot because each cancel mutates the set.
+  for (const c of Array.from(pendingCancels)) c();
 }
 
 /** Eagerly warm up the browser's voice list. Call once on page mount
