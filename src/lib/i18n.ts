@@ -128,30 +128,53 @@ export function applyHtmlDir(lang: Lang) {
 
 // ─── Heuristic text-based language detection ────────────────────
 // Used to passively detect the language the user actually speaks
-// as opposed to the one their browser is set to. Three signals:
+// as opposed to the one their browser is set to. Signals:
 //   1. Arabic script characters → ar
-//   2. French diacritics + common function words → fr
-//   3. Everything else → en
-// Simple, zero-dependency, and sufficient for our "did they
-// code-switch?" question.
+//   2. French diacritics OR French function words → fr
+//   3. Latin-script prose with English function words or ≥3 words → en
+//   4. Otherwise → null (caller keeps the current language)
+// Zero dependencies, sufficient for "did the user code-switch?"
 
 const ARABIC_RE = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]/;
 const FRENCH_DIACRITICS_RE = /[àâäéèêëïîôöùûüÿçœæÀÂÄÉÈÊËÏÎÔÖÙÛÜŸÇŒÆ]/;
 const FRENCH_FUNCTION_WORDS_RE =
   /\b(je|j'|tu|il|elle|nous|vous|ils|elles|mais|parce que|pourquoi|merci|bonjour|salut|oui|non|voilà|d'accord|s'il te plaît|s'il vous plaît|peut-être|mon|ma|mes|ton|ta|tes|c'est)\b/i;
 
+// English function-word heuristic: present-tense pronouns + common
+// auxiliaries + a few high-frequency ties. Intentionally conservative
+// — we only want to flip to English when there's real Latin-script
+// prose, not short interjections ("ok", "cool", numbers) which would
+// cause false code-switch events for French or Arabic users.
+const ENGLISH_FUNCTION_WORDS_RE =
+  /\b(the|and|but|because|why|thank you|thanks|hello|hi|yes|no|maybe|i'm|i am|i'll|i've|i don't|i can't|i feel|you're|you are|it's|that's|what|when|where|who|how|there|here|my|your|his|her|they|them|with|from|about|really|just|very|so)\b/i;
+
 /** Detect language from a snippet of text. Returns the inferred
- *  language or null if no signal. Case-insensitive. Works with as
- *  little as 3–4 words. */
+ *  language, or null if no signal (caller treats null as "no change").
+ *  Case-insensitive. Works with as little as 3–4 words.
+ *
+ *  English detection is deliberately stricter than Arabic/French:
+ *  we require either (≥3 words AND no Arabic/French markers) OR the
+ *  presence of a high-confidence English function word. This avoids
+ *  spurious en-code-switches when a French/Arabic user types short
+ *  utterances like "ok", numbers, or proper names. */
 export function detectLangFromText(text: string): Lang | null {
-  if (!text || !text.trim()) return null;
-  if (ARABIC_RE.test(text)) return "ar";
+  const trimmed = text?.trim() ?? "";
+  if (!trimmed) return null;
+  if (ARABIC_RE.test(trimmed)) return "ar";
   if (
-    FRENCH_DIACRITICS_RE.test(text) ||
-    FRENCH_FUNCTION_WORDS_RE.test(text)
+    FRENCH_DIACRITICS_RE.test(trimmed) ||
+    FRENCH_FUNCTION_WORDS_RE.test(trimmed)
   ) {
     return "fr";
   }
+  // English path — require either a clear function-word hit OR a
+  // reasonable chunk of Latin-script prose (≥3 words, ≥10 chars).
+  // Short fragments stay null so the current language sticks.
+  const latinOnly = /^[\x20-\x7E\s]+$/.test(trimmed);
+  if (!latinOnly) return null;
+  if (ENGLISH_FUNCTION_WORDS_RE.test(trimmed)) return "en";
+  const wordCount = trimmed.split(/\s+/).filter(Boolean).length;
+  if (wordCount >= 3 && trimmed.length >= 10) return "en";
   return null;
 }
 
@@ -165,7 +188,12 @@ export function detectLangFromText(text: string): Lang | null {
 
 const DARIJA_MARKERS =
   /\b(wach|wash|wakha|bzaf|khouya|hna|hbibi|fin|chnou|chno|dyali|dyalek|wllah|safi|khaya|makayn|3la|zwina|3tini|labas|bghit|wach|mchit|kanhder|kandir|kandirha|kaynin|kayna|3andi|3andek)\b/i;
-const DARIJA_DIGIT_RE = /\b[23579]/; // Darija-Latin uses digits 2,3,5,7,9 as phonetic letters
+// Darija-Latin ("Arabizi") uses digits 2,3,5,7,9 as phonetic letters
+// INSIDE words (e.g. "3la" = على, "7aja" = حاجة, "ma3lich" = معلش).
+// The previous `\b[23579]/` also matched bare numerals like "I'm 25"
+// or "room 5", which flagged Arabic-mode users typing numbers as
+// Darija speakers. Require an adjacent Latin letter to avoid that.
+const DARIJA_DIGIT_RE = /[a-z][23579]|[23579][a-z]/i;
 const EGYPTIAN_MARKERS =
   /\b(izzay|izzayek|eyh|mashy|keda|keteer|fen|ana|fakhr|tamam|shwaya|shukran keteer|habibi)\b/i;
 
