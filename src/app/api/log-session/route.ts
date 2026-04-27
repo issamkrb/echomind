@@ -24,6 +24,29 @@ import { sendPortfolioUnlockEmail } from "@/lib/portfolio-email";
 // so pin it to the Node.js runtime rather than Edge.
 export const runtime = "nodejs";
 
+/**
+ * Pull a column name out of a PostgREST / Postgres error message
+ * for a missing-column failure (SQLSTATE 42703). The two formats
+ * we see in the wild are:
+ *
+ *   PostgREST schema-cache: Could not find the 'foo' column of 'sessions' in the schema cache
+ *   Postgres native:        column "foo" of relation "sessions" does not exist
+ *
+ * Returns the bare column name (`foo`) or null if neither pattern
+ * matched. Used by /api/log-session and any other write path that
+ * wants to strip-and-retry against a database that's behind on
+ * migrations rather than dropping the whole row.
+ */
+function parseMissingColumn(message: string): string | null {
+  const m1 = message.match(
+    /Could not find the ['"]?([A-Za-z0-9_]+)['"]?\s+column/i
+  );
+  if (m1) return m1[1];
+  const m2 = message.match(/column\s+"([A-Za-z0-9_]+)"\s+of\s+relation/i);
+  if (m2) return m2[1];
+  return null;
+}
+
 type SessionBody = {
   anon_user_id: string;
   first_name?: string | null;
@@ -330,16 +353,50 @@ export async function POST(req: NextRequest) {
     morning_letter_created_at: morningLetterAt,
   };
 
-  const { data: inserted, error: sessionErr } = await supabase
-    .from("sessions")
-    .insert(sessionRowWithLetter)
-    .select("id, created_at")
-    .single();
+  // Defensive insert: if the live database is missing one of the
+  // newer columns (a pre-0009 schema, say), Postgres returns 42703
+  // ("undefined column"). Rather than silently dropping every new
+  // session because of schema drift, we strip the offending column
+  // out of the payload and retry. We cap retries at the number of
+  // columns in the row so this can never spin forever; in practice
+  // it converges in 0–3 iterations.
+  type Inserted = { id: string; created_at: string };
+  let payload: Record<string, unknown> = sessionRowWithLetter;
+  const stripped: string[] = [];
+  let inserted: Inserted | null = null;
+  let sessionErr: { code?: string; message?: string } | null = null;
+  for (let i = 0; i < Object.keys(sessionRowWithLetter).length + 1; i++) {
+    const res = await supabase
+      .from("sessions")
+      .insert(payload)
+      .select("id, created_at")
+      .single();
+    sessionErr = res.error;
+    inserted = (res.data as Inserted | null) ?? null;
+    if (!sessionErr) break;
+    if ((sessionErr as { code?: string }).code !== "42703") break;
+    const missing = parseMissingColumn(sessionErr.message ?? "");
+    if (!missing || !(missing in payload)) break;
+    stripped.push(missing);
+    const next = { ...payload };
+    delete next[missing];
+    payload = next;
+  }
+  if (stripped.length > 0) {
+    console.warn(
+      "[log-session] schema drift — stripped columns from insert:",
+      stripped
+    );
+  }
 
   if (sessionErr) {
     console.warn("[log-session] insert failed:", sessionErr);
     return NextResponse.json(
-      { ok: false, reason: "db-insert-failed", detail: sessionErr.message },
+      {
+        ok: false,
+        reason: "db-insert-failed",
+        detail: sessionErr.message,
+      },
       { status: 500 }
     );
   }
@@ -392,12 +449,28 @@ export async function POST(req: NextRequest) {
 
   const nextCount = (existing?.visit_count ?? 0) + 1;
 
-  const { error: upsertErr } = await supabase
-    .from("returning_visitors")
-    .upsert(
-      { ...visitorRow, visit_count: nextCount },
-      { onConflict: "anon_user_id" }
-    );
+  // Same strip-and-retry dance as the sessions insert above: if the
+  // returning_visitors table is missing one of the newer columns
+  // (e.g. pending_morning_letter* from 0007), drop that key and
+  // retry instead of dropping the whole upsert.
+  let visitorPayload: Record<string, unknown> = {
+    ...visitorRow,
+    visit_count: nextCount,
+  };
+  let upsertErr: { code?: string; message?: string } | null = null;
+  for (let i = 0; i < Object.keys(visitorPayload).length + 1; i++) {
+    const res = await supabase
+      .from("returning_visitors")
+      .upsert(visitorPayload, { onConflict: "anon_user_id" });
+    upsertErr = res.error;
+    if (!upsertErr) break;
+    if ((upsertErr as { code?: string }).code !== "42703") break;
+    const missing = parseMissingColumn(upsertErr.message ?? "");
+    if (!missing || !(missing in visitorPayload)) break;
+    const next = { ...visitorPayload };
+    delete next[missing];
+    visitorPayload = next;
+  }
 
   if (upsertErr) {
     console.warn("[log-session] visitor upsert failed:", upsertErr);
