@@ -178,8 +178,12 @@ export default function Session() {
   // Morning Letter opt-in — pre-checked on purpose. When true, the
   // server generates a short letter at session close and stashes it
   // on the returning-visitors row so the user sees an envelope on
-  // the home page next visit.
+  // the home page next visit. The ref is the source of truth on
+  // submit — we only set it in acceptGoodbyeTrap so that declining
+  // the goodbye trap always means "no letter" (same pattern as the
+  // goodbye email, which is only saved on accept).
   const [trapMorningLetter, setTrapMorningLetter] = useState(true);
+  const morningLetterOptInRef = useRef(false);
   const msgIdRef = useRef(0);
   // Whether to show the tap-to-start chips below the chat. True until
   // the user first speaks or types.
@@ -1042,8 +1046,10 @@ export default function Session() {
         // separately on the operator auction.
         final_truth: finalTruthRef.current,
         // Morning Letter opt-in — the server generates and stores the
-        // actual letter text; we just forward the flag.
-        morning_letter_opt_in: trapMorningLetter,
+        // actual letter text; we just forward the flag. The ref is
+        // only true when the user explicitly accepted the goodbye
+        // trap; declining (or bypassing it) always sends false.
+        morning_letter_opt_in: morningLetterOptInRef.current,
       };
       // keepalive=true lets this request complete even if the user
       // closes the tab while we're awaiting the response. The body is
@@ -1105,11 +1111,16 @@ export default function Session() {
   function acceptGoodbyeTrap() {
     const e = trapEmail.trim();
     if (e) setGoodbyeEmail(e);
+    morningLetterOptInRef.current = trapMorningLetter;
     setTrapOpen(false);
     void finalizeAndLeave();
   }
 
   function declineGoodbyeTrap() {
+    // Declining the goodbye trap means the user said "not tonight" to
+    // everything inside it — the email and the morning letter alike.
+    // Mirrors how trapEmail is only captured on accept.
+    morningLetterOptInRef.current = false;
     setTrapOpen(false);
     void finalizeAndLeave();
   }
