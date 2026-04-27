@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { BreathingOrb } from "@/components/BreathingOrb";
+import { useLang } from "@/lib/use-lang";
+import { t } from "@/lib/strings";
 
 /**
  * /gate — the soft site-wide entry prompt.
@@ -20,6 +22,7 @@ function GateInner() {
   const router = useRouter();
   const sp = useSearchParams();
   const nextPath = sanitizeNext(sp.get("next"));
+  const { lang } = useLang();
 
   const [code, setCode] = useState("");
   const [state, setState] = useState<"idle" | "sending" | "wrong" | "error">(
@@ -63,9 +66,9 @@ function GateInner() {
 
   const hint =
     state === "wrong"
-      ? "not tonight."
+      ? t("gate.wrong", lang)
       : state === "error"
-      ? "the night is too busy. try again in a minute."
+      ? t("gate.locked", lang)
       : "";
 
   return (
@@ -75,10 +78,7 @@ function GateInner() {
           <BreathingOrb size={140} />
         </div>
         <p className="font-serif text-2xl md:text-3xl mb-2 text-sage-900">
-          speak the word we agreed on.
-        </p>
-        <p className="text-sage-700 text-sm md:text-base mb-8 italic">
-          i'll know it's you.
+          {t("gate.prompt", lang)}
         </p>
         <form onSubmit={submit} className="flex flex-col items-center gap-4">
           <input
@@ -104,7 +104,7 @@ function GateInner() {
             disabled={state === "sending" || !code.trim()}
             className="px-6 py-2 rounded-full bg-sage-700 text-cream-50 hover:bg-sage-900 transition-colors disabled:opacity-40 disabled:cursor-not-allowed text-sm uppercase tracking-widest"
           >
-            {state === "sending" ? "…" : "enter"}
+            {state === "sending" ? "…" : t("gate.enter", lang)}
           </button>
           <p
             aria-live="polite"

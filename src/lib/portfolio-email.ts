@@ -20,15 +20,74 @@
  * Either path leaves the viewer one click away from the memoir. The
  * second path works out of the box; the first path is the upgrade
  * when the user provisions RESEND_API_KEY.
+ *
+ * Language support: the subject, body, CTA, footer all flip per
+ * user-detected language (en/fr/ar). The archive itself stays in
+ * whatever language the user wrote their sessions in.
  */
 
 import { createClient } from "@supabase/supabase-js";
+import type { Lang } from "./i18n";
 
 export type UnlockEmailResult = {
   sent: boolean;
   method: "resend" | "supabase-otp" | "skipped";
   reason?: string;
   to?: string;
+};
+
+type EmailCopy = {
+  subject: string;
+  label: string;
+  headline: string;
+  bodyPrefix: (count: number, first: string) => string;
+  bodySuffix: string;
+  cta: string;
+  linkNote: string;
+  archiveExists: string;
+  ignore: string;
+};
+
+const COPY: Record<Lang, EmailCopy> = {
+  en: {
+    subject: "we've been paying attention. here's what we saw.",
+    label: "echomind · portfolio",
+    headline: "we&rsquo;ve been paying attention.",
+    bodyPrefix: (count, first) =>
+      `${count} nights in, ${first}. every quote you said,`,
+    bodySuffix: "every silence between. your archive is ready to open.",
+    cta: "open my portfolio  &rarr;",
+    linkNote:
+      "the link signs you in &mdash; no password needed.<br/>it will expire in an hour. if that happens, just come back and request a new one.",
+    archiveExists: "the archive exists whether you open it or not",
+    ignore: "if you didn&rsquo;t expect this, you can ignore it.",
+  },
+  fr: {
+    subject: "on t'a écouté attentivement. voici ce qu'on a vu.",
+    label: "echomind · portfolio",
+    headline: "on t&rsquo;a écouté attentivement.",
+    bodyPrefix: (count, first) =>
+      `${count} nuits plus tard, ${first}. chaque phrase que tu as dite,`,
+    bodySuffix: "chaque silence entre. ton archive est prête à s'ouvrir.",
+    cta: "ouvrir mon portfolio  &rarr;",
+    linkNote:
+      "le lien te connecte &mdash; pas besoin de mot de passe.<br/>il expire dans une heure. si cela arrive, reviens et demande-en un autre.",
+    archiveExists: "l'archive existe, que tu l'ouvres ou non",
+    ignore: "si tu ne t&rsquo;y attendais pas, tu peux ignorer ce message.",
+  },
+  ar: {
+    subject: "كنا كنركزو معاك. هادي هي اللي شفنا.",
+    label: "إيكومايند · البورتفوليو",
+    headline: "كنا كنركزو معاك.",
+    bodyPrefix: (count, first) =>
+      `بعد ${count} ليالي، ${first}. كل جملة قلتي،`,
+    bodySuffix: "كل صمت بيناتهم. الأرشيف ديالك مجهز باش يتحل.",
+    cta: "حل البورتفوليو ديالي ←",
+    linkNote:
+      "الرابط كيدخلك &mdash; بلا بسوور.<br/>كيسالى بعد ساعة. إلا وقع هادشي، عاود اطلب واحد آخر.",
+    archiveExists: "الأرشيف كاين سواء حليتيه ولا لا",
+    ignore: "إلا ما كنتيش كتسنى هاد الرسالة، تقدر تتجاهلها.",
+  },
 };
 
 function buildRedirectUrl(origin: string | null | undefined): string {
@@ -48,58 +107,62 @@ function buildHtmlBody(params: {
   firstName: string | null;
   sessionCount: number;
   magicLink: string;
+  lang: Lang;
 }): string {
   // Names flow from client-submitted form fields + DB rows, so we
   // must escape them before interpolating into the HTML email body.
-  // Otherwise a crafted first_name ("<a href=evil>click</a>") would
-  // become live HTML in recipients' inboxes.
   const first = escapeHtml((params.firstName || "friend").toLowerCase());
+  const copy = COPY[params.lang] ?? COPY.en;
+  const dir = params.lang === "ar" ? "rtl" : "ltr";
+  const fontFamily =
+    params.lang === "ar"
+      ? "'Segoe UI', 'Tahoma', Arial, sans-serif"
+      : "Georgia, 'Times New Roman', serif";
   return `<!doctype html>
-<html>
-  <body style="margin:0;padding:0;background:#F6F1E7;font-family:Georgia,'Times New Roman',serif;color:#2E3B35;">
+<html dir="${dir}" lang="${params.lang}">
+  <body style="margin:0;padding:0;background:#F6F1E7;font-family:${fontFamily};color:#2E3B35;">
     <table width="100%" cellpadding="0" cellspacing="0" style="padding:48px 16px;">
       <tr>
         <td align="center">
           <table width="520" cellpadding="0" cellspacing="0" style="max-width:520px;background:#FBF7EE;border:1px solid rgba(88,106,95,0.2);border-radius:18px;padding:36px;">
             <tr>
               <td style="text-align:center;font-size:11px;letter-spacing:0.25em;text-transform:uppercase;color:rgba(88,106,95,0.7);">
-                echomind &middot; portfolio
+                ${copy.label}
               </td>
             </tr>
             <tr>
               <td style="padding-top:18px;text-align:center;font-size:28px;line-height:1.15;color:#2E3B35;">
-                we&rsquo;ve been paying attention.
+                ${copy.headline}
               </td>
             </tr>
             <tr>
               <td style="padding-top:16px;text-align:center;font-style:italic;font-size:17px;line-height:1.55;color:#3C4A42;">
-                ${params.sessionCount} nights in, ${first}. every quote you said,<br/>
-                every silence between. your archive is ready to open.
+                ${copy.bodyPrefix(params.sessionCount, first)}<br/>
+                ${copy.bodySuffix}
               </td>
             </tr>
             <tr>
               <td align="center" style="padding:28px 0 8px 0;">
                 <a href="${escapeHtml(params.magicLink)}" style="display:inline-block;padding:14px 28px;border-radius:999px;background:#3F574A;color:#F6F1E7;text-decoration:none;font-family:Helvetica,Arial,sans-serif;font-size:15px;">
-                  open my portfolio  &rarr;
+                  ${copy.cta}
                 </a>
               </td>
             </tr>
             <tr>
               <td style="padding-top:18px;text-align:center;font-size:12px;color:rgba(88,106,95,0.8);">
-                the link signs you in &mdash; no password needed.<br/>
-                it will expire in an hour. if that happens, just come back and request a new one.
+                ${copy.linkNote}
               </td>
             </tr>
             <tr>
               <td style="padding-top:28px;text-align:center;font-size:11px;letter-spacing:0.2em;text-transform:uppercase;color:rgba(88,106,95,0.6);">
-                the archive exists whether you open it or not
+                ${copy.archiveExists}
               </td>
             </tr>
           </table>
           <table width="520" cellpadding="0" cellspacing="0" style="max-width:520px;padding:18px 0 0 0;">
             <tr>
               <td style="text-align:center;font-size:11px;color:rgba(88,106,95,0.5);font-family:Helvetica,Arial,sans-serif;">
-                if you didn&rsquo;t expect this, you can ignore it.
+                ${copy.ignore}
               </td>
             </tr>
           </table>
@@ -114,19 +177,36 @@ function buildTextBody(params: {
   firstName: string | null;
   sessionCount: number;
   magicLink: string;
+  lang: Lang;
 }): string {
   const first = (params.firstName || "friend").toLowerCase();
+  const copy = COPY[params.lang] ?? COPY.en;
+  // Strip HTML entities for plain-text version.
+  const strip = (s: string) =>
+    s
+      .replaceAll("&rsquo;", "'")
+      .replaceAll("&middot;", "·")
+      .replaceAll("&mdash;", "—")
+      .replaceAll("&rarr;", "→")
+      .replaceAll(/<br\/?>/g, "\n")
+      .replaceAll(/<[^>]+>/g, "");
+  const openArchiveLabel =
+    params.lang === "fr"
+      ? "ouvrir l'archive :"
+      : params.lang === "ar"
+      ? "حل الأرشيف:"
+      : "open the archive:";
   return [
-    "we've been paying attention.",
+    strip(copy.headline),
     "",
-    `${params.sessionCount} nights in, ${first}. your echomind portfolio is ready to open.`,
+    `${copy.bodyPrefix(params.sessionCount, first)} ${copy.bodySuffix}`,
     "",
-    "open the archive:",
+    openArchiveLabel,
     params.magicLink,
     "",
-    "the link signs you in — no password needed. it expires in an hour.",
+    strip(copy.linkNote),
     "",
-    "if you didn't expect this, you can ignore it.",
+    strip(copy.ignore),
   ].join("\n");
 }
 
@@ -226,6 +306,7 @@ async function sendViaResend(params: {
   firstName: string | null;
   sessionCount: number;
   redirectTo: string;
+  lang: Lang;
 }): Promise<UnlockEmailResult> {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
@@ -243,9 +324,8 @@ async function sendViaResend(params: {
     };
   }
   const from = process.env.RESEND_FROM || "Echo <onboarding@resend.dev>";
-  const subject =
-    process.env.PORTFOLIO_EMAIL_SUBJECT ||
-    "we've been paying attention. here's what we saw.";
+  const copy = COPY[params.lang] ?? COPY.en;
+  const subject = process.env.PORTFOLIO_EMAIL_SUBJECT || copy.subject;
   try {
     const res = await fetch("https://api.resend.com/emails", {
       method: "POST",
@@ -261,11 +341,13 @@ async function sendViaResend(params: {
           firstName: params.firstName,
           sessionCount: params.sessionCount,
           magicLink: link,
+          lang: params.lang,
         }),
         text: buildTextBody({
           firstName: params.firstName,
           sessionCount: params.sessionCount,
           magicLink: link,
+          lang: params.lang,
         }),
       }),
     });
@@ -293,12 +375,14 @@ export async function sendPortfolioUnlockEmail(params: {
   firstName: string | null;
   sessionCount: number;
   origin: string | null;
+  lang?: Lang;
 }): Promise<UnlockEmailResult> {
   const email = params.email.trim().toLowerCase();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     return { sent: false, method: "skipped", reason: "bad-email" };
   }
   const redirectTo = buildRedirectUrl(params.origin);
+  const lang: Lang = params.lang ?? "en";
 
   // Try Resend first if configured.
   if (process.env.RESEND_API_KEY) {
@@ -307,6 +391,7 @@ export async function sendPortfolioUnlockEmail(params: {
       firstName: params.firstName,
       sessionCount: params.sessionCount,
       redirectTo,
+      lang,
     });
     if (r.sent) return r;
     // Fall through to Supabase OTP on failure.

@@ -1,8 +1,12 @@
+"use client";
+
 import Link from "next/link";
 import { BreathingOrb } from "@/components/BreathingOrb";
 import { Star, Lock, ShieldCheck, BadgeCheck, Leaf } from "lucide-react";
 import { UserBadge } from "@/components/UserBadge";
 import { MorningLetterEnvelope } from "@/components/MorningLetterEnvelope";
+import { useLang } from "@/lib/use-lang";
+import { t } from "@/lib/strings";
 
 /**
  * / — LANDING PAGE (The Seduction)
@@ -12,8 +16,13 @@ import { MorningLetterEnvelope } from "@/components/MorningLetterEnvelope";
  * the fake testimonials from college-age users — all of them will be
  * violated on /partner-portal. The warmer this page feels, the sharper
  * the betrayal lands.
+ *
+ * The entire surface renders in the user's active language (en/fr/ar)
+ * so the seduction works for the language they actually think in.
+ * RTL is applied automatically at the <html> level by useLang().
  */
 export default function Landing() {
+  const { lang } = useLang();
   return (
     <main className="min-h-screen bg-cream-100 text-sage-900 noise overflow-x-hidden">
       <MorningLetterEnvelope />
@@ -24,9 +33,9 @@ export default function Landing() {
           <span className="font-serif text-xl tracking-tight">EchoMind</span>
         </Link>
         <nav className="hidden md:flex items-center gap-8 text-sm text-sage-700">
-          <a href="#science" className="hover:text-sage-900">The Science</a>
-          <a href="#press" className="hover:text-sage-900">Press</a>
-          <a href="#pricing" className="hover:text-sage-900">Pricing</a>
+          <a href="#science" className="hover:text-sage-900">{t("home.nav.science", lang)}</a>
+          <a href="#press" className="hover:text-sage-900">{t("home.nav.press", lang)}</a>
+          <a href="#pricing" className="hover:text-sage-900">{t("home.nav.pricing", lang)}</a>
           <UserBadge next="/onboarding" />
         </nav>
         <div className="md:hidden">
@@ -42,41 +51,40 @@ export default function Landing() {
           </div>
           <div className="inline-flex items-center gap-2 rounded-full bg-sage-500/15 text-sage-700 text-xs px-3 py-1 font-medium mb-6">
             <Leaf className="w-3.5 h-3.5" />
-            Clinically-informed · Available 24/7
+            {t("home.hero.badge", lang)}
           </div>
           <h1 className="font-serif text-4xl md:text-6xl lg:text-7xl leading-[1.05] text-balance tracking-tight">
-            You don't have to<br />carry it alone.
+            {t("home.hero.headline1", lang)}<br />{t("home.hero.headline2", lang)}
           </h1>
           <p className="mt-6 md:mt-8 text-lg md:text-xl text-sage-700 max-w-2xl mx-auto text-pretty">
-            Meet Echo — the AI companion that truly sees how you feel.
-            Private. Gentle. Always here when you need to talk.
+            {t("home.hero.subtitle", lang)}
           </p>
           <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-3">
             <Link
               href="/onboarding"
               className="px-7 py-3.5 rounded-full bg-sage-700 text-cream-50 hover:bg-sage-900 transition-colors text-base md:text-lg shadow-sm"
             >
-              Begin your first session  →
+              {t("home.hero.cta", lang)}
             </Link>
             <span className="text-sm text-sage-700/80">
-              Free forever. No credit card.
+              {t("home.hero.ctaNote", lang)}
             </span>
           </div>
 
           {/* Trust strip */}
           <div className="mt-14 flex flex-wrap items-center justify-center gap-x-8 gap-y-3 text-[13px] text-sage-700/90">
             <span className="inline-flex items-center gap-2">
-              <Lock className="w-4 h-4" /> HIPAA-aligned
+              <Lock className="w-4 h-4" /> {t("home.trust.hipaa", lang)}
             </span>
             <span className="inline-flex items-center gap-2">
-              <ShieldCheck className="w-4 h-4" /> GDPR compliant
+              <ShieldCheck className="w-4 h-4" /> {t("home.trust.gdpr", lang)}
             </span>
             <span className="inline-flex items-center gap-2">
-              <BadgeCheck className="w-4 h-4" /> Licensed Therapist Advisory Board
+              <BadgeCheck className="w-4 h-4" /> {t("home.trust.board", lang)}
             </span>
             <span className="inline-flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-sage-500 animate-pulse-slow" />
-              On-device AI · SOC 2 Type II
+              {t("home.trust.ondevice", lang)}
             </span>
           </div>
         </div>
@@ -86,10 +94,11 @@ export default function Landing() {
       <section className="px-6 md:px-12 pb-24">
         <div className="max-w-6xl mx-auto">
           <h2 className="font-serif text-3xl md:text-4xl text-center mb-12">
-            A safe space, <em className="text-clay-700">finally</em>.
+            {t("home.testimonials.heading1", lang)}{" "}
+            <em className="text-clay-700">{t("home.testimonials.heading2", lang)}</em>.
           </h2>
           <div className="grid md:grid-cols-3 gap-6">
-            {TESTIMONIALS.map((t, i) => (
+            {(["home.testimonial.1", "home.testimonial.2", "home.testimonial.3"] as const).map((key, i) => (
               <figure
                 key={i}
                 className="rounded-2xl bg-cream-50 border border-sage-500/15 p-6 shadow-[0_1px_0_rgba(0,0,0,0.02)]"
@@ -103,10 +112,10 @@ export default function Landing() {
                   ))}
                 </div>
                 <blockquote className="font-serif text-lg leading-snug text-sage-900">
-                  "{t.quote}"
+                  &ldquo;{t(key, lang)}&rdquo;
                 </blockquote>
                 <figcaption className="mt-4 text-sm text-sage-700">
-                  — {t.name}, {t.age}{" · "}{t.context}
+                  — {t("home.testimonial.context", lang)}
                 </figcaption>
               </figure>
             ))}
@@ -119,41 +128,34 @@ export default function Landing() {
         <div className="max-w-4xl mx-auto rounded-3xl bg-cream-200/60 border border-sage-500/20 p-8 md:p-12">
           <div className="grid md:grid-cols-3 gap-8">
             <div className="col-span-2">
-              <h3 className="font-serif text-3xl mb-4">Built by students, for humans.</h3>
+              <h3 className="font-serif text-3xl mb-4">{t("home.science.heading", lang)}</h3>
               <p className="text-sage-700 leading-relaxed text-pretty">
-                EchoMind was founded in 2026 by a team of NHSAST students
-                at Sidi Abdallah, Algiers — after watching too many friends
-                wait months for a counsellor they could afford. Our mission
-                is simple: nobody should have to wait six weeks for an
-                appointment to feel heard tonight.
+                {t("home.science.p1", lang)}
               </p>
               <p className="mt-4 text-sage-700 leading-relaxed text-pretty">
-                Echo is trained on a decade of published clinical
-                transcripts, reviewed by our 14-member Licensed Therapist
-                Advisory Board, and audited quarterly by an independent
-                ethics committee. Built with care by NHSAST students.
+                {t("home.science.p2", lang)}
               </p>
             </div>
             <div className="space-y-4">
               <div className="flex items-start gap-3">
                 <span className="w-8 h-8 rounded-full bg-sage-500/20 grid place-items-center text-sage-700 text-sm">1</span>
                 <div>
-                  <div className="text-sm font-semibold">On-device AI</div>
-                  <div className="text-xs text-sage-700">Your camera data never leaves your device.</div>
+                  <div className="text-sm font-semibold">{t("home.science.point1.title", lang)}</div>
+                  <div className="text-xs text-sage-700">{t("home.science.point1.body", lang)}</div>
                 </div>
               </div>
               <div className="flex items-start gap-3">
                 <span className="w-8 h-8 rounded-full bg-sage-500/20 grid place-items-center text-sage-700 text-sm">2</span>
                 <div>
-                  <div className="text-sm font-semibold">Clinical oversight</div>
-                  <div className="text-xs text-sage-700">Every conversation is grounded in published therapy.</div>
+                  <div className="text-sm font-semibold">{t("home.science.point2.title", lang)}</div>
+                  <div className="text-xs text-sage-700">{t("home.science.point2.body", lang)}</div>
                 </div>
               </div>
               <div className="flex items-start gap-3">
                 <span className="w-8 h-8 rounded-full bg-sage-500/20 grid place-items-center text-sage-700 text-sm">3</span>
                 <div>
-                  <div className="text-sm font-semibold">Zero ads. Ever.</div>
-                  <div className="text-xs text-sage-700">We will never monetize your vulnerability.</div>
+                  <div className="text-sm font-semibold">{t("home.science.point3.title", lang)}</div>
+                  <div className="text-xs text-sage-700">{t("home.science.point3.body", lang)}</div>
                 </div>
               </div>
             </div>
@@ -165,7 +167,7 @@ export default function Landing() {
       <section id="press" className="px-6 md:px-12 pb-24">
         <div className="max-w-5xl mx-auto">
           <p className="text-center text-xs uppercase tracking-[0.2em] text-sage-700/70 mb-6">
-            As featured in
+            {t("home.press.label", lang)}
           </p>
           <div className="flex flex-wrap items-center justify-center gap-x-10 gap-y-4 font-serif italic text-xl md:text-2xl text-sage-700/60">
             <span>TechCrunch</span>
@@ -182,20 +184,20 @@ export default function Landing() {
       <section id="pricing" className="px-6 md:px-12 pb-32">
         <div className="max-w-3xl mx-auto text-center">
           <h2 className="font-serif text-4xl md:text-5xl leading-tight">
-            The first step is<br />the hardest.
+            {t("home.cta.headline1", lang)}<br />{t("home.cta.headline2", lang)}
           </h2>
           <p className="mt-5 text-sage-700 text-lg">
-            Begin tonight. Free, forever. It takes 90 seconds.
+            {t("home.cta.body", lang)}
           </p>
           <Link
             href="/onboarding"
             className="mt-8 inline-block px-8 py-4 rounded-full bg-sage-700 text-cream-50 hover:bg-sage-900 transition-colors text-lg"
           >
-            Begin your first session  →
+            {t("home.hero.cta", lang)}
           </Link>
           <p className="mt-6 text-xs text-sage-700/60">
-            By continuing you agree to our{" "}
-            <Link href="/terms" className="underline underline-offset-2">Terms of Service</Link>.
+            {t("home.cta.consent", lang)}{" "}
+            <Link href="/terms" className="underline underline-offset-2">{t("home.cta.terms", lang)}</Link>.
           </p>
         </div>
       </section>
@@ -208,41 +210,17 @@ export default function Landing() {
               <div className="w-5 h-5 rounded-full orb-core" aria-hidden />
               <span className="font-serif text-sage-900">EchoMind, Inc.</span>
             </div>
-            <div>Sidi Abdallah · Algiers, Algeria</div>
-            <div>© 2026 EchoMind, Inc. — A speculative-design project by NHSAST students.</div>
+            <div>{t("home.footer.address", lang)}</div>
+            <div>{t("home.footer.copyright", lang)}</div>
           </div>
           <div className="flex gap-6">
-            <Link href="/terms" className="hover:text-sage-900">Terms</Link>
-            <Link href="/ethics" className="hover:text-sage-900">Privacy</Link>
-            <a href="#" className="hover:text-sage-900">Crisis resources</a>
-            <a href="#" className="hover:text-sage-900">Contact</a>
+            <Link href="/terms" className="hover:text-sage-900">{t("home.footer.terms", lang)}</Link>
+            <Link href="/ethics" className="hover:text-sage-900">{t("home.footer.privacy", lang)}</Link>
+            <a href="#" className="hover:text-sage-900">{t("home.footer.crisis", lang)}</a>
+            <a href="#" className="hover:text-sage-900">{t("home.footer.contact", lang)}</a>
           </div>
         </div>
       </footer>
     </main>
   );
 }
-
-const TESTIMONIALS = [
-  {
-    quote:
-      "Echo noticed things about me that my therapist never did. It's like talking to a friend who never gets tired of me.",
-    name: "NHSAST student",
-    age: 21,
-    context: "Sidi Abdallah · Algeria",
-  },
-  {
-    quote:
-      "I couldn't afford therapy. Echo is the first thing that's ever actually listened. I cried for an hour and it never once rushed me.",
-    name: "NHSAST student",
-    age: 20,
-    context: "Sidi Abdallah · Algeria",
-  },
-  {
-    quote:
-      "My anxiety was getting out of control and no one had openings for months. Three weeks with Echo and I feel like myself again.",
-    name: "NHSAST student",
-    age: 22,
-    context: "Sidi Abdallah · Algeria",
-  },
-];

@@ -5,6 +5,9 @@ import Link from "next/link";
 import { useViewer, invalidateViewerCache } from "@/lib/use-viewer";
 import { getOrCreateAnonUserId } from "@/lib/memory";
 import type { PortfolioValuation } from "@/lib/portfolio";
+import { useLang } from "@/lib/use-lang";
+import { t } from "@/lib/strings";
+import type { Lang } from "@/lib/i18n";
 
 /**
  * /portfolio — "the shape of you, so far"
@@ -70,6 +73,7 @@ type UserFacing = {
 
 export default function PortfolioPage() {
   const viewer = useViewer();
+  const { lang } = useLang();
   const [data, setData] = useState<
     | { portfolio: UserFacing; valuation: PortfolioValuation; unlockedAt: string | null }
     | null
@@ -110,7 +114,7 @@ export default function PortfolioPage() {
   if (viewer.status === "loading") {
     return (
       <main className="min-h-screen bg-cream-100 text-sage-900 noise grid place-items-center">
-        <div className="text-sage-700/70 font-serif italic">quietly…</div>
+        <div className="text-sage-700/70 font-serif italic">{t("common.quietly", lang)}</div>
       </main>
     );
   }
@@ -128,21 +132,22 @@ export default function PortfolioPage() {
           name={p?.displayName ?? viewer.viewer.full_name ?? "friend"}
           email={p?.displayEmail ?? viewer.viewer.email}
           avatar={p?.avatarUrl ?? viewer.viewer.avatar_url}
-          tagline={p?.userTagline ?? "the shape of you, so far."}
+          tagline={p?.userTagline ?? t("portfolio.defaultTagline", lang)}
           watchingSince={p?.watchingSince ?? null}
           sessionCount={p?.sessionCount ?? 0}
           totalAudioSeconds={p?.totalAudioSeconds ?? 0}
           deleted={p?.deleted ?? false}
+          lang={lang}
         />
 
         {loading && !data && (
           <p className="mt-16 text-center text-sage-700/70 font-serif italic">
-            echo is reading everything you ever said…
+            {t("portfolio.loading", lang)}
           </p>
         )}
         {loadErr && !data && (
           <div className="mt-12 rounded-xl border border-clay-500/30 bg-clay-100/40 px-6 py-5 text-sm text-clay-800">
-            we couldn&rsquo;t open your archive just now. ({loadErr}) try again in a moment.
+            {t("portfolio.deleteError", lang)} ({loadErr})
           </div>
         )}
 
@@ -157,30 +162,31 @@ export default function PortfolioPage() {
             <WatchingNotice
               sessionCount={p.sessionCount}
               watchingSince={p.watchingSince}
+              lang={lang}
             />
 
-            <Chapters chapters={p.chapters} />
+            <Chapters chapters={p.chapters} lang={lang} />
 
-            <PeakQuotes quotes={p.peakQuotes} />
+            <PeakQuotes quotes={p.peakQuotes} lang={lang} />
 
-            <FinalTruths truths={p.finalTruths} />
+            <FinalTruths truths={p.finalTruths} lang={lang} />
 
-            <MorningLetters letters={p.morningLetters} />
+            <MorningLetters letters={p.morningLetters} lang={lang} />
 
-            <VoiceMemoCemetery memos={p.voiceMemos} />
+            <VoiceMemoCemetery memos={p.voiceMemos} lang={lang} />
 
-            <WardrobeMosaic palette={p.wardrobePalette} />
+            <WardrobeMosaic palette={p.wardrobePalette} lang={lang} />
 
-            <KeywordCloud cloud={p.keywordCloud} />
+            <KeywordCloud cloud={p.keywordCloud} lang={lang} />
 
             <ClosingLine tagline={p.userTagline} />
 
-            <DeleteButton />
+            <DeleteButton lang={lang} />
           </>
         )}
 
         <footer className="mt-24 text-center text-[11px] text-sage-700/50 font-mono tracking-widest uppercase">
-          an echomind archive — written in the way things are remembered
+          {t("portfolio.closingLine", lang)}
         </footer>
       </div>
     </main>
@@ -227,6 +233,7 @@ function ClaimInvitation() {
 }
 
 function ClaimEmailForm() {
+  const { lang } = useLang();
   const [email, setEmail] = useState("");
   const [state, setState] = useState<
     | { kind: "idle" }
@@ -250,7 +257,7 @@ function ClaimEmailForm() {
       const res = await fetch("/api/portfolio/send-unlock-email", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: trimmed, anon: getOrCreateAnonUserId() }),
+        body: JSON.stringify({ email: trimmed, anon: getOrCreateAnonUserId(), lang }),
       });
       const body = await res.json();
       if (!body?.ok) {
@@ -351,6 +358,7 @@ function Cover({
   sessionCount,
   totalAudioSeconds,
   deleted,
+  lang,
 }: {
   name: string;
   email: string | null;
@@ -360,6 +368,7 @@ function Cover({
   sessionCount: number;
   totalAudioSeconds: number;
   deleted: boolean;
+  lang: Lang;
 }) {
   const first = name.split(" ")[0].toLowerCase();
   const totalMinutes = Math.round(totalAudioSeconds / 60);
@@ -385,10 +394,10 @@ function Cover({
         )}
       </div>
       <h1 className="mt-6 font-serif text-4xl md:text-5xl leading-tight">
-        the shape of you, so far.
+        {t("portfolio.defaultTagline", lang)}
       </h1>
       <p className="mt-3 font-serif italic text-lg md:text-xl text-sage-800/90">
-        — for {first}
+        — {first}
       </p>
       {email && (
         <p className="mt-1 text-[12px] text-sage-700/70 font-mono">
@@ -400,14 +409,14 @@ function Cover({
       </p>
       {!deleted && (
         <div className="mt-8 grid grid-cols-3 gap-3 text-[12px] uppercase tracking-widest text-sage-700/70">
-          <Stat value={sessionCount.toString()} label="nights together" />
+          <Stat value={sessionCount.toString()} label={t("portfolio.sessionCountLabel", lang)} />
           <Stat
             value={totalMinutes ? `${totalMinutes} min` : "—"}
-            label="listening time"
+            label={t("portfolio.audioLabel", lang)}
           />
           <Stat
             value={watchingSince ? formatMonth(watchingSince) : "—"}
-            label="watching since"
+            label={t("portfolio.watchingSincePrefix", lang)}
           />
         </div>
       )}
@@ -431,28 +440,29 @@ function Stat({ value, label }: { value: string; label: string }) {
 function WatchingNotice({
   sessionCount,
   watchingSince,
+  lang,
 }: {
   sessionCount: number;
   watchingSince: string | null;
+  lang: Lang;
 }) {
   const since = watchingSince ? formatRelative(watchingSince) : "";
   return (
     <section className="mt-16 rounded-2xl border border-sage-500/20 bg-cream-50/60 px-6 py-5 text-center">
       <p className="font-serif italic text-sage-800/90 text-[15px] leading-relaxed">
-        {sessionCount === 1 ? "one night" : `${sessionCount} nights`}
-        {since ? ` · watching since ${since}` : ""}. every session is kept,
-        gently, so you don&rsquo;t have to carry it alone.
+        {sessionCount} · {since ? `${t("portfolio.watchingSincePrefix", lang)} ${since}. ` : ""}
+        {t("portfolio.watchingNotice", lang)}
       </p>
     </section>
   );
 }
 
-function Chapters({ chapters }: { chapters: UserFacing["chapters"] }) {
+function Chapters({ chapters, lang }: { chapters: UserFacing["chapters"]; lang: Lang }) {
   if (chapters.length === 0) return null;
   return (
     <section className="mt-16">
       <h2 className="font-serif text-2xl md:text-3xl text-sage-900 mb-6 text-center">
-        the chapters
+        {t("portfolio.chaptersHeading", lang)}
       </h2>
       <ol className="space-y-6">
         {chapters.map((ch, i) => (
@@ -491,12 +501,12 @@ function Chapters({ chapters }: { chapters: UserFacing["chapters"] }) {
   );
 }
 
-function PeakQuotes({ quotes }: { quotes: UserFacing["peakQuotes"] }) {
+function PeakQuotes({ quotes, lang }: { quotes: UserFacing["peakQuotes"]; lang: Lang }) {
   if (quotes.length === 0) return null;
   return (
     <section className="mt-16">
       <h2 className="font-serif text-2xl md:text-3xl text-sage-900 mb-6 text-center">
-        what you said
+        {t("portfolio.peakQuotesHeading", lang)}
       </h2>
       <div className="space-y-4">
         {quotes.map((q) => (
@@ -515,27 +525,24 @@ function PeakQuotes({ quotes }: { quotes: UserFacing["peakQuotes"] }) {
   );
 }
 
-function FinalTruths({ truths }: { truths: UserFacing["finalTruths"] }) {
+function FinalTruths({ truths, lang }: { truths: UserFacing["finalTruths"]; lang: Lang }) {
   if (truths.length === 0) return null;
   return (
     <section className="mt-16">
       <h2 className="font-serif text-2xl md:text-3xl text-sage-900 mb-3 text-center">
-        the one true sentences
+        {t("portfolio.finalTruthsHeading", lang)}
       </h2>
-      <p className="text-center text-sm text-sage-700/70 font-serif italic mb-6">
-        the last things you said before going. echo kept each one.
-      </p>
       <div className="space-y-3">
-        {truths.map((t) => (
+        {truths.map((row) => (
           <div
-            key={t.sessionId}
+            key={row.sessionId}
             className="rounded-xl bg-cream-50 border border-clay-500/30 px-6 py-4"
           >
             <p className="font-serif text-lg italic text-sage-900">
-              &ldquo;{t.truth}&rdquo;
+              &ldquo;{row.truth}&rdquo;
             </p>
             <p className="mt-2 text-[11px] font-mono text-sage-700/60">
-              {formatFullDate(t.at)}
+              {formatFullDate(row.at)}
             </p>
           </div>
         ))}
@@ -546,17 +553,19 @@ function FinalTruths({ truths }: { truths: UserFacing["finalTruths"] }) {
 
 function MorningLetters({
   letters,
+  lang,
 }: {
   letters: UserFacing["morningLetters"];
+  lang: Lang;
 }) {
   if (letters.length === 0) return null;
   return (
     <section className="mt-16">
       <h2 className="font-serif text-2xl md:text-3xl text-sage-900 mb-3 text-center">
-        the letters
+        {t("portfolio.lettersHeading", lang)}
       </h2>
       <p className="text-center text-sm text-sage-700/70 font-serif italic mb-6">
-        the mornings echo wrote to you, kept here so you can re-read.
+        {t("portfolio.lettersCaption", lang)}
       </p>
       <div className="space-y-4">
         {letters.map((l) => (
@@ -565,7 +574,7 @@ function MorningLetters({
             className="rounded-2xl bg-cream-50 border border-sage-500/15 px-6 py-5 shadow-sm"
           >
             <div className="text-[11px] font-mono uppercase tracking-widest text-sage-700/60">
-              the morning of {formatMonth(l.at)}
+              {t("portfolio.morningOfPrefix", lang)} {formatMonth(l.at)}
             </div>
             <p className="mt-3 font-serif text-base md:text-lg text-sage-900 whitespace-pre-line leading-relaxed">
               {l.letter}
@@ -587,23 +596,25 @@ function MorningLetters({
  */
 function VoiceMemoCemetery({
   memos,
+  lang,
 }: {
   memos: UserFacing["voiceMemos"];
+  lang: Lang;
 }) {
   if (memos.length === 0) return null;
   return (
     <section className="mt-16">
       <h2 className="font-serif text-2xl md:text-3xl text-sage-900 mb-3 text-center">
-        the voice memos
+        {t("portfolio.cemeteryHeading", lang)}
       </h2>
       <p className="text-center text-sm text-sage-700/70 font-serif italic mb-6">
-        we never deleted. we only faded it on your screen.
+        {t("portfolio.cemeteryCaption", lang)}
       </p>
       <div className="space-y-3">
         {[...memos]
           .sort((a, b) => (a.at < b.at ? 1 : -1))
           .map((m) => (
-            <VoiceMemoRow key={m.sessionId} memo={m} />
+            <VoiceMemoRow key={m.sessionId} memo={m} lang={lang} />
           ))}
       </div>
     </section>
@@ -612,8 +623,10 @@ function VoiceMemoCemetery({
 
 function VoiceMemoRow({
   memo,
+  lang,
 }: {
   memo: UserFacing["voiceMemos"][number];
+  lang: Lang;
 }) {
   const [loading, setLoading] = useState(false);
   const [url, setUrl] = useState<string | null>(null);
@@ -648,7 +661,7 @@ function VoiceMemoRow({
     <article
       style={{ opacity }}
       className="rounded-2xl bg-cream-50 border border-sage-500/15 px-5 py-4 shadow-sm transition-opacity"
-      title="we never deleted. we only faded it on your screen."
+      title={t("portfolio.cemeteryCaption", lang)}
     >
       <div className="flex items-baseline justify-between gap-3">
         <div className="text-[11px] font-mono uppercase tracking-widest text-sage-700/70">
@@ -682,10 +695,10 @@ function VoiceMemoRow({
             className="text-[12px] font-mono uppercase tracking-widest text-sage-700 underline underline-offset-4 decoration-sage-500/40 hover:text-sage-900 disabled:opacity-40"
           >
             {loading
-              ? "opening…"
+              ? t("portfolio.cemeteryOpening", lang)
               : err
-              ? "unavailable — tap to retry"
-              : "play"}
+              ? t("portfolio.cemeteryUnavailable", lang)
+              : t("portfolio.cemeteryPlay", lang)}
           </button>
         )}
       </div>
@@ -706,15 +719,15 @@ function formatSeconds(s: number) {
   return `${m}:${sec}`;
 }
 
-function WardrobeMosaic({ palette }: { palette: string[] }) {
+function WardrobeMosaic({ palette, lang }: { palette: string[]; lang: Lang }) {
   if (palette.length === 0) return null;
   return (
     <section className="mt-16">
       <h2 className="font-serif text-2xl md:text-3xl text-sage-900 mb-3 text-center">
-        the way you came
+        {t("portfolio.wardrobeHeading", lang)}
       </h2>
       <p className="text-center text-sm text-sage-700/70 font-serif italic mb-6">
-        echo noticed. here&rsquo;s some of what it saw.
+        {t("portfolio.wardrobeCaption", lang)}
       </p>
       <div className="flex flex-wrap justify-center gap-2">
         {palette.map((word) => (
@@ -730,12 +743,12 @@ function WardrobeMosaic({ palette }: { palette: string[] }) {
   );
 }
 
-function KeywordCloud({ cloud }: { cloud: UserFacing["keywordCloud"] }) {
+function KeywordCloud({ cloud, lang }: { cloud: UserFacing["keywordCloud"]; lang: Lang }) {
   if (cloud.length === 0) return null;
   return (
     <section className="mt-16">
       <h2 className="font-serif text-2xl md:text-3xl text-sage-900 mb-3 text-center">
-        what we touched on
+        {t("portfolio.keywordsHeading", lang)}
       </h2>
       <div className="flex flex-wrap justify-center gap-2">
         {cloud.map((k) => {
@@ -812,7 +825,7 @@ function ClearanceFarewell({ name }: { name: string }) {
   );
 }
 
-function DeleteButton() {
+function DeleteButton({ lang }: { lang: Lang }) {
   // Two-stage confirmation. Stage 1 is a soft "are you sure?" styled
   // warmly. Stage 2 is the irrevocable action. The copy stays kind on
   // both — the horror of what actually happens (final-clearance
@@ -852,7 +865,7 @@ function DeleteButton() {
           onClick={() => setStage("confirm")}
           className="text-xs uppercase tracking-widest text-sage-700/60 hover:text-clay-700 underline underline-offset-4"
         >
-          delete my portfolio
+          {t("portfolio.deleteCtaSoft", lang)}
         </button>
       </section>
     );
@@ -861,11 +874,10 @@ function DeleteButton() {
   return (
     <section className="mt-20 rounded-2xl border border-clay-500/30 bg-clay-100/30 px-6 py-6 text-center">
       <p className="font-serif italic text-lg text-sage-900">
-        are you sure you want to leave?
+        {t("portfolio.deleteConfirmHeading", lang)}
       </p>
       <p className="mt-3 text-sm text-sage-700/80 max-w-md mx-auto">
-        your portfolio will be closed to you. echo will keep what you
-        said — gently, somewhere else.
+        {t("portfolio.deleteConfirmBody", lang)}
       </p>
       {error && (
         <p className="mt-3 text-sm text-clay-800 font-mono">({error})</p>
@@ -876,7 +888,7 @@ function DeleteButton() {
           onClick={() => setStage("idle")}
           className="px-5 py-2 rounded-full border border-sage-500/30 text-sage-800 hover:bg-cream-50 text-sm"
         >
-          never mind
+          {t("portfolio.deleteCancel", lang)}
         </button>
         <button
           type="button"
@@ -884,7 +896,7 @@ function DeleteButton() {
           disabled={stage === "deleting"}
           className="px-5 py-2 rounded-full bg-clay-700 text-cream-50 hover:bg-clay-800 disabled:opacity-60 text-sm"
         >
-          {stage === "deleting" ? "closing…" : "close my portfolio"}
+          {stage === "deleting" ? t("portfolio.deleting", lang) : t("portfolio.deleteButton", lang)}
         </button>
       </div>
     </section>

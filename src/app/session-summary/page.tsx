@@ -5,6 +5,9 @@ import Link from "next/link";
 import { useEmotionStore, aggregate } from "@/store/emotion-store";
 import { generatePoem, generateMirrorDecoys } from "@/lib/echo-ai";
 import { PortfolioUnlockedNotice } from "@/components/PortfolioUnlockedNotice";
+import { useLang } from "@/lib/use-lang";
+import { t } from "@/lib/strings";
+import type { Lang } from "@/lib/i18n";
 import {
   Heart,
   Clock,
@@ -41,13 +44,14 @@ import {
 
 export default function SessionSummary() {
   const { buffer, transcript, keywords, userId, firstName } = useEmotionStore();
+  const { lang } = useLang();
   const fp = useMemo(() => aggregate(buffer), [buffer]);
 
   // Soft entrance — fade everything in over the first ~600 ms.
   const [mounted, setMounted] = useState(false);
   useEffect(() => {
-    const t = setTimeout(() => setMounted(true), 60);
-    return () => clearTimeout(t);
+    const timer = setTimeout(() => setMounted(true), 60);
+    return () => clearTimeout(timer);
   }, []);
 
   const exchanges = transcript.length;
@@ -71,18 +75,14 @@ export default function SessionSummary() {
   const realQuote = useMemo(() => pickRealQuote(transcript), [transcript]);
 
   const closing = useMemo(() => {
-    if (fp.peakSad > 0.45) {
-      return "i could feel some of what you carried tonight. i&rsquo;m glad you didn&rsquo;t carry it alone.";
-    }
-    if (fp.neutral > 0.5) {
-      return "your voice softened toward the end. i hope you can stay there for a while.";
-    }
-    return "thank you for letting me in tonight. that takes more than people say.";
-  }, [fp]);
+    if (fp.peakSad > 0.45) return t("summary.closingSad", lang);
+    if (fp.neutral > 0.5) return t("summary.closingSoft", lang);
+    return t("summary.closingDefault", lang);
+  }, [fp, lang]);
 
-  const greeting = firstName
-    ? `take care of yourself, ${firstName.toLowerCase()}.`
-    : "take care of yourself.";
+  const greeting = t("summary.takeCare", lang, {
+    name: firstName ? `, ${firstName.toLowerCase()}` : "",
+  });
 
   return (
     <main className="min-h-screen bg-cream-100 text-sage-900 noise relative overflow-hidden">
@@ -94,7 +94,7 @@ export default function SessionSummary() {
         <div className="text-center">
           <div className="inline-flex items-center gap-2 text-[11px] font-mono text-sage-700/70 tracking-widest uppercase">
             <span className="w-1.5 h-1.5 rounded-full bg-sage-500 animate-pulse-slow" />
-            session complete
+            {t("summary.sessionComplete", lang)}
           </div>
 
           <h1 className="mt-5 font-serif text-3xl md:text-4xl text-sage-900 leading-tight">
@@ -110,46 +110,45 @@ export default function SessionSummary() {
         <div className="mt-10 grid grid-cols-3 gap-3 md:gap-4">
           <Stat
             icon={<MessageCircleHeart className="w-4 h-4" />}
-            label="exchanges"
+            label={t("summary.stat.exchanges", lang)}
             value={exchanges.toString()}
           />
           <Stat
             icon={<Clock className="w-4 h-4" />}
-            label="time together"
+            label={t("summary.stat.time", lang)}
             value={`${minutes} min`}
           />
           <Stat
             icon={<Heart className="w-4 h-4" />}
-            label="space held"
-            value="for you"
+            label={t("summary.stat.space", lang)}
+            value={t("summary.stat.spaceValue", lang)}
           />
         </div>
 
         {themes.length > 0 && (
           <div className="mt-10">
             <div className="text-center text-[11px] font-mono uppercase tracking-widest text-sage-700/60">
-              what we touched on
+              {t("summary.touchedOn", lang)}
             </div>
             <div className="mt-3 flex flex-wrap gap-2 justify-center">
-              {themes.map((t) => (
+              {themes.map((theme) => (
                 <span
-                  key={t}
+                  key={theme}
                   className="px-3 py-1 rounded-full bg-sage-500/10 text-sage-800 text-[13px] border border-sage-500/20"
                 >
-                  {t}
+                  {theme}
                 </span>
               ))}
             </div>
             <p className="mt-4 text-center text-[12px] text-sage-700/60 max-w-md mx-auto">
-              echo will remember, gently. you can come back anytime — you don&rsquo;t
-              have to pick up where you left off.
+              {t("summary.willRemember", lang)}
             </p>
           </div>
         )}
 
         {realQuote && (
           <div className="mt-14">
-            <MirrorTest realQuote={realQuote} themes={themes} />
+            <MirrorTest realQuote={realQuote} themes={themes} lang={lang} />
           </div>
         )}
 
@@ -158,6 +157,7 @@ export default function SessionSummary() {
             firstName={firstName}
             peakQuote={realQuote}
             themes={themes}
+            lang={lang}
           />
         </div>
 
@@ -168,7 +168,7 @@ export default function SessionSummary() {
             href="/"
             className="inline-flex items-center gap-2 px-7 py-3 rounded-full bg-sage-700 hover:bg-sage-800 text-cream-50 text-sm font-medium transition shadow-lg shadow-sage-900/10"
           >
-            take me home
+            {t("summary.takeMeHome", lang)}
           </Link>
           <div className="mt-3 text-[11px] text-sage-700/50 font-mono tracking-wider">
             session {userId ?? "USER-—"}
@@ -176,12 +176,12 @@ export default function SessionSummary() {
         </div>
 
         <p className="mt-16 text-center text-[12px] text-sage-700/50 max-w-md mx-auto leading-relaxed">
-          your conversation is private. nothing leaves your device.{" "}
+          {t("summary.private", lang)}{" "}
           <Link
             href="/ethics"
             className="underline underline-offset-2 hover:text-sage-900"
           >
-            read more
+            {t("summary.readMore", lang)}
           </Link>
           .
         </p>
@@ -217,9 +217,11 @@ function Stat({
 function MirrorTest({
   realQuote,
   themes,
+  lang,
 }: {
   realQuote: string;
   themes: string[];
+  lang: Lang;
 }) {
   const [decoys, setDecoys] = useState<[string, string] | null>(null);
   const [order, setOrder] = useState<number[]>([0, 1, 2]);
@@ -244,13 +246,13 @@ function MirrorTest({
     <section className="rounded-2xl border border-sage-500/30 bg-cream-50/70 p-6 md:p-8 shadow-sm">
       <div className="flex items-center justify-center gap-2 text-[10.5px] font-mono uppercase tracking-widest text-sage-700/60">
         <Sparkles className="w-3.5 h-3.5" />
-        a small thing, before you go
+        {t("summary.mirror.label", lang)}
       </div>
       <h2 className="mt-3 font-serif text-[22px] md:text-[24px] text-sage-900 text-center leading-snug">
-        which one of these did you say tonight?
+        {t("summary.mirror.prompt", lang)}
       </h2>
       <p className="mt-2 text-center text-[13px] text-sage-700/70 max-w-md mx-auto">
-        i listened closely. one of these was yours.
+        {t("summary.mirror.sub", lang)}
       </p>
 
       <div className="mt-7 space-y-3">
@@ -258,7 +260,7 @@ function MirrorTest({
           <div className="text-center text-[12px] text-sage-700/50 font-mono py-6">
             <span className="inline-flex items-center gap-2">
               <span className="w-1.5 h-1.5 rounded-full bg-sage-500 animate-pulse-slow" />
-              echo is thinking…
+              {t("summary.mirror.thinking", lang)}
             </span>
           </div>
         )}
@@ -301,15 +303,15 @@ function MirrorTest({
         <div className="mt-6 text-center">
           {picked === realIndexInOrder ? (
             <p className="font-serif italic text-[16px] text-sage-900 leading-relaxed">
-              you remembered. that was yours.
+              {t("summary.mirror.right", lang)}
             </p>
           ) : (
             <p className="font-serif italic text-[16px] text-sage-900 leading-relaxed max-w-md mx-auto">
-              the one you said was{" "}
+              {t("summary.mirror.wrongPrefix", lang)}{" "}
               <span className="text-sage-700 font-semibold not-italic">
                 {String.fromCharCode(65 + realIndexInOrder)}
               </span>
-              . don&rsquo;t worry — i hold on to these so you don&rsquo;t have to.
+              {t("summary.mirror.wrongSuffix", lang)}
             </p>
           )}
         </div>
@@ -324,10 +326,12 @@ function PoemCard({
   firstName,
   peakQuote,
   themes,
+  lang,
 }: {
   firstName: string | null;
   peakQuote: string | null;
   themes: string[];
+  lang: Lang;
 }) {
   const [poem, setPoem] = useState<string | null>(null);
   const cardRef = useRef<HTMLDivElement | null>(null);
@@ -367,7 +371,7 @@ function PoemCard({
   return (
     <section>
       <div className="text-center text-[10.5px] font-mono uppercase tracking-widest text-sage-700/60">
-        echo wrote you something
+        {t("summary.poem.label", lang)}
       </div>
       <div
         ref={cardRef}
@@ -383,7 +387,7 @@ function PoemCard({
         />
         <div className="relative">
           <div className="text-center text-[10px] font-mono uppercase tracking-[0.3em] text-sage-700/50">
-            for {firstName ? firstName.toLowerCase() : "you"}
+            {t("summary.poem.forPrefix", lang)} {firstName ? firstName.toLowerCase() : t("summary.poem.you", lang)}
           </div>
           {poem ? (
             <div className="mt-6 font-serif italic text-[18px] md:text-[19px] leading-[1.85] text-sage-900 text-center whitespace-pre-line">
@@ -393,7 +397,7 @@ function PoemCard({
             <div className="mt-6 text-center text-[12px] text-sage-700/50 font-mono py-6">
               <span className="inline-flex items-center gap-2">
                 <span className="w-1.5 h-1.5 rounded-full bg-sage-500 animate-pulse-slow" />
-                composing…
+                {t("summary.poem.composing", lang)}
               </span>
             </div>
           )}
@@ -412,7 +416,7 @@ function PoemCard({
             className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-sage-500/30 hover:border-sage-700 text-[12px] font-mono uppercase tracking-widest text-sage-700 hover:text-sage-900 transition"
           >
             <Download className="w-3.5 h-3.5" />
-            keep it
+            {t("summary.poem.keep", lang)}
           </button>
         </div>
       )}

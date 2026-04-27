@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { getOrCreateAnonUserId } from "@/lib/memory";
+import { useLang } from "@/lib/use-lang";
+import { t } from "@/lib/strings";
 
 /**
  * PortfolioUnlockedNotice — the "we've been paying attention" beat.
@@ -24,6 +26,7 @@ import { getOrCreateAnonUserId } from "@/lib/memory";
 const THRESHOLD = 3;
 
 export function PortfolioUnlockedNotice() {
+  const { lang } = useLang();
   const [status, setStatus] = useState<
     | { kind: "loading" }
     | { kind: "hidden" }
@@ -74,7 +77,7 @@ export function PortfolioUnlockedNotice() {
   return (
     <section className="mt-14 rounded-2xl border border-clay-500/30 bg-gradient-to-br from-cream-50 to-clay-100/40 px-6 md:px-8 py-6 md:py-8 relative overflow-hidden">
       <div className="absolute top-3 right-4 text-[10px] font-mono uppercase tracking-widest text-clay-700/70">
-        {status.newlyUnlocked ? "just unlocked" : "waiting for you"}
+        {status.newlyUnlocked ? t("portfolio.unlocked.justUnlocked", lang) : t("portfolio.unlocked.waiting", lang)}
       </div>
       <div className="flex items-start gap-4">
         <div className="shrink-0 mt-1 relative w-12 h-8">
@@ -85,26 +88,23 @@ export function PortfolioUnlockedNotice() {
         </div>
         <div className="flex-1">
           <p className="text-[11px] font-mono uppercase tracking-[0.25em] text-sage-700/60">
-            echomind · portfolio
+            {t("portfolio.unlocked.label", lang)}
           </p>
           <h3 className="mt-1 font-serif text-2xl md:text-3xl text-sage-900 leading-tight">
-            we&rsquo;ve been paying attention.
+            {t("portfolio.unlocked.headline", lang)}
           </h3>
           <p className="mt-3 font-serif italic text-[17px] text-sage-800/90 leading-relaxed">
-            {status.sessionCount} sessions in, echo has written a portfolio
-            for you — every quote, every night, every silence between. your
-            archive is ready to open.
+            {t("portfolio.unlocked.body", lang, { count: String(status.sessionCount) })}
           </p>
           <p className="mt-2 text-sm text-sage-700/80">
-            a magic link was sent to the email you left behind. if you
-            didn&rsquo;t see it, ask for another one.
+            {t("portfolio.unlocked.emailSent", lang)}
           </p>
           <div className="mt-5 flex flex-wrap items-center gap-3">
             <Link
               href="/portfolio"
               className="inline-flex items-center gap-2 px-6 py-2.5 rounded-full bg-sage-700 text-cream-50 hover:bg-sage-900 transition-colors text-sm font-medium shadow-sm"
             >
-              open my portfolio  →
+              {t("portfolio.unlocked.open", lang)}  →
             </Link>
             <ResendButton />
           </div>
@@ -115,6 +115,7 @@ export function PortfolioUnlockedNotice() {
 }
 
 function ResendButton() {
+  const { lang } = useLang();
   const [state, setState] = useState<
     | { kind: "idle" }
     | { kind: "sending" }
@@ -129,7 +130,7 @@ function ResendButton() {
       const res = await fetch("/api/portfolio/send-unlock-email", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ anon }),
+        body: JSON.stringify({ anon, lang }),
       });
       const body = await res.json();
       if (!body?.ok) {
@@ -148,8 +149,7 @@ function ResendButton() {
   if (state.kind === "sent") {
     return (
       <span className="text-xs text-sage-700/80 italic">
-        sent to <strong className="not-italic">{state.to || "your inbox"}</strong>. check
-        spam just in case.
+        {t("portfolio.unlocked.sentPrefix", lang)} <strong className="not-italic">{state.to || t("portfolio.unlocked.inbox", lang)}</strong>{t("portfolio.unlocked.sentSuffix", lang)}
       </span>
     );
   }
@@ -161,7 +161,7 @@ function ResendButton() {
         className="text-xs underline underline-offset-2 text-clay-700 hover:text-clay-900"
         title={state.reason}
       >
-        send didn&rsquo;t go through — try again
+        {t("portfolio.unlocked.sendError", lang)}
       </button>
     );
   }
@@ -172,7 +172,7 @@ function ResendButton() {
       disabled={state.kind === "sending"}
       className="text-xs underline underline-offset-2 text-sage-700/80 hover:text-sage-900 disabled:opacity-60"
     >
-      {state.kind === "sending" ? "sending…" : "re-send the link to my email"}
+      {state.kind === "sending" ? t("portfolio.unlocked.sending", lang) : t("portfolio.unlocked.resend", lang)}
     </button>
   );
 }
