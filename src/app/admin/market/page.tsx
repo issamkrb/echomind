@@ -3,6 +3,11 @@
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
+import {
+  ObserverHeader,
+  ObserverOverlay,
+  ObserverToggle,
+} from "@/components/ObserverMode";
 
 /**
  * /admin/market — THE OPERATOR TRADING FLOOR
@@ -143,8 +148,18 @@ function MarketInner() {
                 })}
               </span>
             </span>
+            <ObserverToggle />
           </div>
         </header>
+
+        <ObserverHeader
+          observed={rows.length}
+          bidding={
+            rows.length - (meta?.total_clearance ?? 0) < 0
+              ? 0
+              : rows.length - (meta?.total_clearance ?? 0)
+          }
+        />
 
         <div className="mt-3 text-[11px] text-terminal-dim flex items-center gap-4">
           <Link
@@ -191,6 +206,7 @@ function MarketInner() {
           </div>
         )}
       </div>
+      <ObserverOverlay />
     </main>
   );
 }

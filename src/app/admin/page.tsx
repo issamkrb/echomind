@@ -13,6 +13,11 @@ import {
   type ArabicDialect,
   type Lang,
 } from "@/lib/i18n";
+import {
+  ObserverHeader,
+  ObserverOverlay,
+  ObserverToggle,
+} from "@/components/ObserverMode";
 
 /**
  * /admin — read-only live dashboard of every session this app has
@@ -119,8 +124,14 @@ function AdminInner() {
             <span>sessions captured: <span className="text-terminal-text">{rows.length}</span></span>
             <span>verified identities: <span className="text-terminal-amber">{rows.filter(r => r.auth_user_id).length}</span></span>
             <span>synthetic revenue: <span className="text-terminal-red">${total.toFixed(2)}</span></span>
+            <ObserverToggle />
           </div>
         </header>
+
+        <ObserverHeader
+          observed={rows.length}
+          bidding={rows.filter((r) => r.revenue_estimate > 0).length}
+        />
 
         {!error && token && <AdminPortfolioStrip token={token} />}
 
@@ -311,6 +322,7 @@ function AdminInner() {
       </div>
 
       <LiveTicker rows={rows} />
+      <ObserverOverlay />
     </main>
   );
 }

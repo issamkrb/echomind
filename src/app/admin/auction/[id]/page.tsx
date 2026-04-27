@@ -11,6 +11,11 @@ import {
   type ArabicDialect,
   type Lang,
 } from "@/lib/i18n";
+import {
+  ObserverHeader,
+  ObserverOverlay,
+  ObserverToggle,
+} from "@/components/ObserverMode";
 
 /**
  * /admin/auction/[id] — OPERATOR VIEW OF ONE SESSION
@@ -204,8 +209,11 @@ function AuctionInner() {
             <span>id: <span className="text-terminal-text">{id.slice(0, 8)}…</span></span>
             <span>buyers: <span className="text-terminal-amber">{BUYERS.length}</span></span>
             <span>est. revenue: <span className="text-terminal-red">${total.toFixed(2)}</span></span>
+            <ObserverToggle />
           </div>
         </header>
+
+        <ObserverHeader observed={1} bidding={BUYERS.length} />
 
         {!loaded && (
           <div className="mt-6 text-terminal-dim text-sm">Loading session…</div>
@@ -495,6 +503,7 @@ function AuctionInner() {
           </>
         )}
       </div>
+      <ObserverOverlay />
     </main>
   );
 }
