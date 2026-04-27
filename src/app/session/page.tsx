@@ -15,7 +15,9 @@ import { loadFaceModels, detectExpression } from "@/lib/face-api";
 import { speak, stopSpeaking, warmUpVoices } from "@/lib/voice";
 import {
   VOICE_PERSONAS,
+  hasVoiceForLocale,
   loadPersonaId,
+  personaLocale,
   savePersonaId,
   type VoicePersonaId,
 } from "@/lib/voice-personas";
@@ -269,6 +271,36 @@ export default function Session() {
     stageRef.current = stage;
   }, [stage]);
 
+  // `true` when the browser has ZERO voices installed for the active
+  // site language — used to show a kind diagnostic on the picker
+  // ("install the Arabic language pack to hear Echo") instead of
+  // silently falling back to the default engine.
+  const [noLangVoice, setNoLangVoice] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    const check = async () => {
+      const { ttsLocalePrefixesFor } = await import("@/lib/i18n");
+      const prefixes = ttsLocalePrefixesFor(lang);
+      // Give voices up to 2s to load before we draw any conclusions
+      // about "no voice available" — otherwise Chrome's async empty
+      // first-call would trigger the banner on every fresh tab.
+      const startedAt = Date.now();
+      while (Date.now() - startedAt < 2000) {
+        if (cancelled) return;
+        if (hasVoiceForLocale(prefixes)) {
+          setNoLangVoice(false);
+          return;
+        }
+        await new Promise((r) => setTimeout(r, 150));
+      }
+      if (!cancelled) setNoLangVoice(!hasVoiceForLocale(prefixes));
+    };
+    void check();
+    return () => {
+      cancelled = true;
+    };
+  }, [lang]);
+
   // ---------- init session ----------
   useEffect(() => {
     setSttSupported(isSpeechRecognitionAvailable());
@@ -396,7 +428,8 @@ export default function Session() {
     const persona = VOICE_PERSONAS.find((p) => p.id === id);
     if (!persona) return;
     stopSpeaking();
-    speak(persona.sampleLine, { personaId: id, lang: langRef.current });
+    const loc = personaLocale(persona, langRef.current);
+    speak(loc.sampleLine, { personaId: id, lang: langRef.current });
   }
 
   // ── Memory Capsule: audio recorder ────────────────────────────────
@@ -1305,6 +1338,8 @@ export default function Session() {
             stopSpeaking();
             startSessionWithPersona(id);
           }}
+          lang={lang}
+          missingVoice={noLangVoice}
         />
       )}
 
@@ -1754,30 +1789,70 @@ function VoicePicker({
   onSelect,
   onPreview,
   onBegin,
+  lang,
+  missingVoice,
 }: {
   selected: VoicePersonaId;
   onSelect: (id: VoicePersonaId) => void;
   onPreview: (id: VoicePersonaId) => void;
   onBegin: (id: VoicePersonaId) => void;
+  lang: Lang;
+  missingVoice: boolean;
 }) {
+  const pickerCopy =
+    lang === "ar"
+      ? {
+          kicker: "قبل أن نبدأ",
+          title: "اختَر الصَّوتَ الذي تُحبُّ أن تسمعَه.",
+          sub: "يمكنُكَ تغييرُه في المرَّة القادمة. اضغط بطاقةً لسَماعه.",
+          selected: "مُختار",
+          tapToHear: "اضغط للاستماع",
+          missing:
+            "لم نجد صوتًا عربيًّا على جهازك. لا بأس — سيتحدَّثُ إيكو بصوتِ المحرِّك الافتراضي. لتجربةٍ أفضل، ثبِّت حزمة اللُّغة العربيَّة في إعدادات نظام التَّشغيل ثم أعد تحميل الصَّفحة.",
+        }
+      : lang === "fr"
+      ? {
+          kicker: "avant de commencer",
+          title: "choisis la voix que tu veux entendre.",
+          sub: "tu pourras changer la prochaine fois. tape sur une carte pour écouter.",
+          selected: "sélectionnée",
+          tapToHear: "tape pour écouter",
+          missing:
+            "aucune voix française n'a été trouvée sur cet appareil. pas de souci — echo utilisera la voix par défaut du navigateur. pour une meilleure expérience, installe le pack linguistique français dans les réglages de ton système puis recharge la page.",
+        }
+      : {
+          kicker: "before we begin",
+          title: "choose the voice you'd like to hear.",
+          sub: "you can switch back next time. tap a card to listen.",
+          selected: "selected",
+          tapToHear: "tap to hear",
+          missing:
+            "no voice found for this language on this device. no worries — echo will speak with the browser's default engine. for a better experience, install the language pack in your OS settings and refresh the page.",
+        };
   return (
     <div className="absolute inset-0 z-40 flex items-center justify-center bg-cream-100/95 backdrop-blur-md p-6 overflow-y-auto">
       <div className="max-w-3xl w-full my-8">
         <div className="text-center mb-8">
           <div className="text-[11px] uppercase tracking-widest text-sage-700/70">
-            before we begin
+            {pickerCopy.kicker}
           </div>
           <h1 className="font-serif text-3xl md:text-4xl mt-2 text-sage-900 leading-tight">
-            choose the voice you'd like to hear.
+            {pickerCopy.title}
           </h1>
           <p className="font-serif italic text-sage-700 mt-3 text-base md:text-lg">
-            you can switch back next time. tap a card to listen.
+            {pickerCopy.sub}
           </p>
+          {missingVoice && (
+            <div className="mt-5 mx-auto max-w-xl rounded-xl border border-amber-500/40 bg-amber-50/70 p-3 text-[12px] leading-relaxed text-amber-900">
+              {pickerCopy.missing}
+            </div>
+          )}
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4">
           {VOICE_PERSONAS.map((p) => {
             const active = p.id === selected;
+            const loc = personaLocale(p, lang);
             return (
               <button
                 key={p.id}
@@ -1794,24 +1869,24 @@ function VoicePicker({
               >
                 <div className="flex items-baseline justify-between gap-2">
                   <span className="font-serif text-2xl text-sage-900">
-                    {p.displayName}
+                    {loc.displayName}
                   </span>
                   <span
                     className={`text-[10px] uppercase tracking-widest ${
                       active ? "text-sage-700" : "text-sage-700/40"
                     }`}
                   >
-                    {active ? "selected" : "tap to hear"}
+                    {active ? pickerCopy.selected : pickerCopy.tapToHear}
                   </span>
                 </div>
                 <div className="font-serif italic text-sage-700 mt-1 text-sm md:text-base">
-                  {p.tagline}
+                  {loc.tagline}
                 </div>
                 <div className="mt-3 text-[12px] text-sage-700/70 leading-relaxed">
-                  “{p.sampleLine}”
+                  “{loc.sampleLine}”
                 </div>
                 <div className="mt-2 text-[11px] text-sage-700/50 italic">
-                  {p.vibeNote}
+                  {loc.vibeNote}
                 </div>
               </button>
             );
@@ -1824,10 +1899,22 @@ function VoicePicker({
             onClick={() => onBegin(selected)}
             className="px-8 py-3.5 rounded-full bg-sage-700 text-cream-50 hover:bg-sage-900 transition-colors text-sm md:text-base"
           >
-            begin with {VOICE_PERSONAS.find((p) => p.id === selected)?.displayName ?? "Sage"}
+            {(() => {
+              const p = VOICE_PERSONAS.find((x) => x.id === selected);
+              const name = p ? personaLocale(p, lang).displayName : "Sage";
+              return lang === "ar"
+                ? `ابدأ مع ${name}`
+                : lang === "fr"
+                ? `commencer avec ${name}`
+                : `begin with ${name}`;
+            })()}
           </button>
           <p className="text-[11px] text-sage-700/60 italic max-w-md text-center">
-            on-device voice synthesis · your choice never leaves your browser.
+            {lang === "ar"
+              ? "توليدُ الصَّوتِ على الجهاز · اختيارُك لا يُغادرُ متصفِّحك."
+              : lang === "fr"
+              ? "synthèse vocale sur l'appareil · ton choix ne quitte jamais ton navigateur."
+              : "on-device voice synthesis · your choice never leaves your browser."}
           </p>
         </div>
       </div>

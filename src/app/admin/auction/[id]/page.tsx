@@ -761,10 +761,10 @@ function RetentionHooks({
           {persona ? (
             <>
               <div className="mt-2 font-mono text-terminal-amber text-base">
-                {persona.id} · {persona.displayName}
+                {persona.id} · {persona.i18n.en.displayName}
               </div>
               <div className="mt-1 text-terminal-dim italic text-[12px]">
-                {persona.tagline}
+                {persona.i18n.en.tagline}
               </div>
               <div className="mt-3 text-[10.5px] uppercase tracking-widest text-terminal-dim">
                 operator target
