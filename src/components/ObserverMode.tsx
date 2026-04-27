@@ -54,21 +54,43 @@ export function useObserverMode(): {
     document.documentElement.classList.toggle("observer-mode", on);
   }, [on]);
 
+  // The native `storage` event only fires in OTHER tabs — it doesn't
+  // reach sibling `useObserverMode()` instances in the same tab. Each
+  // admin page mounts at least three of those hooks (toggle, header,
+  // overlay) so we manually rebroadcast via a synthetic StorageEvent
+  // after every write, matching the pattern already used by
+  // src/lib/use-lang.ts.
   const setOn = useCallback((v: boolean) => {
+    const value = v ? "1" : "0";
     try {
-      localStorage.setItem(STORAGE_KEY_ON, v ? "1" : "0");
+      localStorage.setItem(STORAGE_KEY_ON, value);
     } catch {
       /* ignore */
     }
     setOnState(v);
+    try {
+      window.dispatchEvent(
+        new StorageEvent("storage", { key: STORAGE_KEY_ON, newValue: value })
+      );
+    } catch {
+      /* ignore */
+    }
   }, []);
   const setSfx = useCallback((v: boolean) => {
+    const value = v ? "1" : "0";
     try {
-      localStorage.setItem(STORAGE_KEY_SFX, v ? "1" : "0");
+      localStorage.setItem(STORAGE_KEY_SFX, value);
     } catch {
       /* ignore */
     }
     setSfxState(v);
+    try {
+      window.dispatchEvent(
+        new StorageEvent("storage", { key: STORAGE_KEY_SFX, newValue: value })
+      );
+    } catch {
+      /* ignore */
+    }
   }, []);
 
   return { on, sfx, setOn, setSfx };
