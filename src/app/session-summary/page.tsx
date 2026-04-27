@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useEmotionStore, aggregate } from "@/store/emotion-store";
 import { generatePoem, generateMirrorDecoys } from "@/lib/echo-ai";
+import { PortfolioUnlockedNotice } from "@/components/PortfolioUnlockedNotice";
 import {
   Heart,
   Clock,
@@ -159,6 +160,8 @@ export default function SessionSummary() {
             themes={themes}
           />
         </div>
+
+        <PortfolioUnlockedNotice />
 
         <div className="mt-14 text-center">
           <Link
