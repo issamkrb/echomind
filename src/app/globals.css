@@ -100,3 +100,11 @@ body {
 .terminal-scrollbar::-webkit-scrollbar-thumb:hover {
   background: #2F2F32;
 }
+
+/* Live-ticker marquee for /admin. Keyed off transform so it stays
+   GPU-accelerated; each cycle slides the duplicated content list by
+   exactly half-width so the loop is seamless. */
+@keyframes echomind-ticker {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}

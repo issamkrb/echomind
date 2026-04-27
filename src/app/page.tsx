@@ -2,6 +2,7 @@ import Link from "next/link";
 import { BreathingOrb } from "@/components/BreathingOrb";
 import { Star, Lock, ShieldCheck, BadgeCheck, Leaf } from "lucide-react";
 import { UserBadge } from "@/components/UserBadge";
+import { MorningLetterEnvelope } from "@/components/MorningLetterEnvelope";
 
 /**
  * / — LANDING PAGE (The Seduction)
@@ -15,6 +16,7 @@ import { UserBadge } from "@/components/UserBadge";
 export default function Landing() {
   return (
     <main className="min-h-screen bg-cream-100 text-sage-900 noise overflow-x-hidden">
+      <MorningLetterEnvelope />
       {/* NAV */}
       <header className="px-6 md:px-12 py-5 flex items-center justify-between">
         <Link href="/" className="flex items-center gap-2">
