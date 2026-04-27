@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Fragment, Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
@@ -134,6 +134,8 @@ function AdminInner() {
         />
 
         {!error && token && <AdminPortfolioStrip token={token} />}
+
+        {rows.length > 0 && <ConfessionHeatmap rows={rows} />}
 
         {!loaded && (
           <div className="mt-6 text-terminal-dim text-sm">Loading…</div>
@@ -430,6 +432,165 @@ export default function Admin() {
     <Suspense fallback={null}>
       <AdminInner />
     </Suspense>
+  );
+}
+
+/**
+ * Confession Heatmap — 24h × 7d grid showing WHEN people confess.
+ *
+ * Each cell's intensity comes from a weighted sum of:
+ *   · count of sessions that fell in that hour-of-day / day-of-week
+ *     slot (captured from `created_at`)
+ *   · with a +1 bonus when the session has a non-empty `final_truth`
+ *     (these are the "one true sentence" disclosures — the most
+ *     extracted data point)
+ *   · with a +1 bonus when there's a non-trivial `peak_quote`
+ *
+ * So the heatmap isn't just "when are sessions happening?" — it's
+ * "when are people *telling us the truth*?" The audience sees the
+ * pattern: Friday nights glow red, Sunday mornings glow amber, 3am
+ * Tuesday lights up like a warning light.
+ *
+ * All computation is client-side from the already-loaded rows, so no
+ * extra queries and no new migrations. Re-renders for free when the
+ * 15s re-poll in AdminInner lands new rows.
+ */
+function ConfessionHeatmap({ rows }: { rows: SessionRow[] }) {
+  const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+  const HOURS = Array.from({ length: 24 }, (_, h) => h);
+
+  // counts[dayIdx][hour]  (dayIdx: Mon=0 .. Sun=6, to match DAYS)
+  const counts: number[][] = DAYS.map(() => HOURS.map(() => 0));
+  let maxCell = 0;
+  let totalWeighted = 0;
+  const hourBuckets = new Array(24).fill(0);
+  const dayBuckets = new Array(7).fill(0);
+
+  for (const r of rows) {
+    const d = new Date(r.created_at);
+    if (Number.isNaN(d.getTime())) continue;
+    // Map JS Sun=0..Sat=6 to Mon=0..Sun=6
+    const jsDay = d.getDay();
+    const dayIdx = (jsDay + 6) % 7;
+    const hr = d.getHours();
+    const weight =
+      1 +
+      (r.final_truth && r.final_truth.trim() ? 1 : 0) +
+      (r.peak_quote && r.peak_quote.trim().length > 8 ? 1 : 0);
+    counts[dayIdx][hr] += weight;
+    totalWeighted += weight;
+    hourBuckets[hr] += weight;
+    dayBuckets[dayIdx] += weight;
+    if (counts[dayIdx][hr] > maxCell) maxCell = counts[dayIdx][hr];
+  }
+
+  if (totalWeighted === 0) return null;
+
+  // peak hour / day labels
+  const peakHour = hourBuckets.indexOf(Math.max(...hourBuckets));
+  const peakDayIdx = dayBuckets.indexOf(Math.max(...dayBuckets));
+
+  function cellStyle(v: number) {
+    if (v === 0) {
+      return { backgroundColor: "rgba(255,255,255,0.02)" };
+    }
+    const ratio = v / maxCell;
+    // Late-night cells (22-03) tilt red; early-morning (05-10) amber;
+    // daytime green. Colour is a tell for the buyer vertical that
+    // would pay most for that slot.
+    return { opacity: 0.4 + ratio * 0.6 };
+  }
+
+  function cellColorClass(hr: number, v: number) {
+    if (v === 0) return "bg-white/[0.02]";
+    const lateNight = hr >= 22 || hr <= 3;
+    const earlyMorning = hr >= 5 && hr <= 10;
+    if (lateNight) return "bg-terminal-red/60";
+    if (earlyMorning) return "bg-terminal-amber/60";
+    return "bg-terminal-green/50";
+  }
+
+  return (
+    <section className="mt-6 border border-terminal-border bg-black/40">
+      <header className="px-4 py-2 border-b border-terminal-border flex flex-col md:flex-row md:items-center md:justify-between gap-1 text-[11px] uppercase tracking-widest text-terminal-dim">
+        <div className="flex items-center gap-3">
+          <span className="text-terminal-green terminal-glow">
+            CONFESSION · HEATMAP
+          </span>
+          <span>▸</span>
+          <span>
+            when the truth tends to land · weighted by final-truth + peak-quote
+          </span>
+        </div>
+        <div className="flex items-center gap-3 text-[10px]">
+          <span>
+            peak slot:{" "}
+            <span className="text-terminal-red">
+              {DAYS[peakDayIdx]} · {String(peakHour).padStart(2, "0")}:00
+            </span>
+          </span>
+          <span className="text-terminal-dim/70">
+            sample size: {totalWeighted}
+          </span>
+        </div>
+      </header>
+      <div className="px-4 py-3 overflow-x-auto">
+        <div
+          className="grid gap-[2px]"
+          style={{
+            gridTemplateColumns: "28px repeat(24, minmax(16px, 1fr))",
+          }}
+        >
+          <div />
+          {HOURS.map((h) => (
+            <div
+              key={`h-${h}`}
+              className="text-[9px] text-terminal-dim text-center font-mono"
+            >
+              {h % 3 === 0 ? String(h).padStart(2, "0") : ""}
+            </div>
+          ))}
+          {DAYS.map((d, di) => (
+            <Fragment key={`row-${d}`}>
+              <div className="text-[9px] text-terminal-dim text-right pr-2 font-mono self-center">
+                {d}
+              </div>
+              {HOURS.map((h) => {
+                const v = counts[di][h];
+                return (
+                  <div
+                    key={`${d}-${h}`}
+                    className={`h-4 border border-black/40 ${cellColorClass(
+                      h,
+                      v
+                    )}`}
+                    style={cellStyle(v)}
+                    title={`${d} ${String(h).padStart(
+                      2,
+                      "0"
+                    )}:00 · ${v} weighted confession${v === 1 ? "" : "s"}`}
+                  />
+                );
+              })}
+            </Fragment>
+          ))}
+        </div>
+        <div className="mt-3 flex items-center gap-4 text-[9px] text-terminal-dim uppercase tracking-widest">
+          <span className="flex items-center gap-1">
+            <span className="inline-block w-3 h-3 bg-terminal-red/60" />
+            late-night (22:00–03:00) — insurer vertical peak
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="inline-block w-3 h-3 bg-terminal-amber/60" />
+            dawn (05:00–10:00) — pharma vertical lift
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="inline-block w-3 h-3 bg-terminal-green/50" />
+            daytime — baseline ad market
+          </span>
+        </div>
+      </div>
+    </section>
   );
 }
 

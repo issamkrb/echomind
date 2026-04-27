@@ -78,7 +78,7 @@ export async function GET(_req: NextRequest) {
     .select(
       // Full row except audio_path / peak_frame_path (those are
       // admin-only storage keys).
-      "id, created_at, anon_user_id, first_name, goodbye_email, email, full_name, avatar_url, auth_provider, auth_user_id, peak_quote, final_truth, morning_letter, morning_letter_opted_in, keywords, audio_seconds, revenue_estimate, final_fingerprint, voice_persona, callback_used, wardrobe_snapshots, starter_chips, tapped_chip, transcript, prompt_marks"
+      "id, created_at, anon_user_id, first_name, goodbye_email, email, full_name, avatar_url, auth_provider, auth_user_id, peak_quote, final_truth, morning_letter, morning_letter_opted_in, keywords, audio_seconds, revenue_estimate, final_fingerprint, voice_persona, callback_used, wardrobe_snapshots, starter_chips, tapped_chip, transcript, prompt_marks, audio_path"
     )
     .or(orClause)
     .order("created_at", { ascending: true })
@@ -100,8 +100,24 @@ export async function GET(_req: NextRequest) {
     .eq("id", user.id)
     .maybeSingle();
 
+  // Normalise the raw DB row into the PortfolioSessionRow shape the
+  // valuation pipeline expects. We derive `has_audio` from
+  // audio_path here so the storage key itself never reaches the
+  // client (only the boolean presence leaves the server).
+  type RawSessionRow = Omit<PortfolioSessionRow, "has_audio"> & {
+    audio_path?: string | null;
+  };
+  const normalisedRows: PortfolioSessionRow[] = ((sessions ??
+    []) as unknown as RawSessionRow[]).map((r) => {
+    const { audio_path, ...rest } = r;
+    return {
+      ...rest,
+      has_audio: !!audio_path,
+    };
+  });
+
   const valuation = computePortfolio({
-    rows: (sessions ?? []) as unknown as PortfolioSessionRow[],
+    rows: normalisedRows,
     deletedAt: profile?.portfolio_deleted_at ?? null,
     clearanceMultiplier: profile?.portfolio_clearance_multiplier ?? null,
     fallbackDisplayName:
