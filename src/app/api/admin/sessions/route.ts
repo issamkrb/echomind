@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSupabase, supabaseConfigured } from "@/lib/supabase";
 import { getServerAuthSupabase } from "@/lib/supabase-server";
 import { isAdminEmail } from "@/lib/admin-auth";
+import { looksLikeMissingColumn } from "@/lib/schema-drift";
 
 /**
  * GET /api/admin/sessions?token=<ADMIN_TOKEN>
@@ -82,7 +83,7 @@ export async function GET(req: NextRequest) {
     .order("created_at", { ascending: false })
     .limit(100);
 
-  if (error && (error as { code?: string }).code === "42703") {
+  if (error && looksLikeMissingColumn(error)) {
     const fallback = await supabase
       .from("sessions")
       .select("*")
