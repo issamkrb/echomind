@@ -108,3 +108,37 @@ body {
   0%   { transform: translateX(0); }
   100% { transform: translateX(-50%); }
 }
+
+/* Observer Mode — applied when <html class="observer-mode"> is present
+   (toggled by src/components/ObserverMode.tsx). Bumps the base admin
+   type scale up so the dashboard reads from the back of a classroom,
+   and adds a subtle green text tint so screens feel like monitoring
+   terminals rather than slide decks. */
+html.observer-mode body {
+  background: #000;
+  color: #c9e7c3;
+}
+html.observer-mode {
+  font-size: 16.5px;
+}
+html.observer-mode .font-mono,
+html.observer-mode pre,
+html.observer-mode code {
+  letter-spacing: 0.04em;
+}
+html.observer-mode h1,
+html.observer-mode h2 {
+  text-shadow: 0 0 8px rgba(0, 255, 120, 0.25);
+}
+/* Hold the LIVE-FEED pulse slightly past its animation so the scan-line
+   overlay doesn't feel synced to the same tick. */
+@keyframes echomind-observer-flicker {
+  0%   { opacity: 1; }
+  45%  { opacity: 0.82; }
+  48%  { opacity: 0.96; }
+  52%  { opacity: 0.78; }
+  100% { opacity: 1; }
+}
+html.observer-mode .observer-flicker {
+  animation: echomind-observer-flicker 4.5s ease-in-out infinite;
+}
