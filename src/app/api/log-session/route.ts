@@ -435,11 +435,17 @@ export async function POST(req: NextRequest) {
       authIdentity?.full_name?.split(" ")[0] ??
       body.first_name ??
       null;
+    const detectedLang =
+      typeof body.detected_language === "string" &&
+      ["en", "fr", "ar"].includes(body.detected_language)
+        ? (body.detected_language as "en" | "fr" | "ar")
+        : "en";
     const unlockPromise = sendPortfolioUnlockEmail({
       email: emailForUnlock,
       firstName,
       sessionCount: nextCount,
       origin,
+      lang: detectedLang,
     }).then(async (r) => {
       if (r.sent) {
         try {

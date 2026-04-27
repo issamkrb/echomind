@@ -31,6 +31,7 @@ import {
 } from "@/lib/speech-recognition";
 import { extractKeywords } from "@/lib/keywords";
 import { useLang } from "@/lib/use-lang";
+import { t } from "@/lib/strings";
 import {
   detectArabicDialect,
   detectLangFromText,
@@ -1275,14 +1276,14 @@ export default function Session() {
   }, []);
 
   const stageLabel = echoSpeaking
-    ? "speaking…"
+    ? t("session.status.speaking", lang)
     : stage === "listening"
     ? micOff
-      ? "waiting for you to type…"
-      : "listening…"
+      ? t("session.status.waitingType", lang)
+      : t("session.status.listening", lang)
     : stage === "thinking"
-    ? "reflecting…"
-    : "with you";
+    ? t("session.status.reflecting", lang)
+    : t("session.status.withYou", lang);
 
   return (
     <main
@@ -1311,7 +1312,7 @@ export default function Session() {
         <div className="flex items-center gap-3 px-3 md:px-6 py-2.5">
           <div className="flex items-center gap-2 text-[11px] text-sage-700 font-mono whitespace-nowrap">
             <span className="w-1.5 h-1.5 rounded-full bg-sage-500 animate-pulse-slow" />
-            <span className="hidden sm:inline">processing locally · </span>
+            <span className="hidden sm:inline">{t("session.processingLocally", lang)}</span>
             <span className="tabular-nums">
               {String(Math.floor(elapsed / 60)).padStart(2, "0")}:
               {String(elapsed % 60).padStart(2, "0")}
@@ -1330,21 +1331,21 @@ export default function Session() {
           <button
             onClick={toggleMic}
             className="hidden sm:inline-flex text-sage-700/70 hover:text-sage-900 text-[11px] font-mono tracking-wide items-center gap-1 transition"
-            title="turn your mic off — you can still type, and echo keeps speaking"
+            title={t("session.micOffTip", lang)}
           >
             {micOff ? <MicOff className="w-3.5 h-3.5" /> : <Mic className="w-3.5 h-3.5" />}
-            {micOff ? "mic off" : "mic on"}
+            {micOff ? t("session.micOff", lang) : t("session.micOn", lang)}
           </button>
 
           <button
             onClick={endSession}
             className="px-3 py-1.5 md:px-4 md:py-2 rounded-full bg-sage-500/10 hover:bg-sage-500/20 text-sage-800 text-[11px] md:text-xs font-medium transition border border-sage-500/20 whitespace-nowrap"
-            title="end the session"
+            title={t("session.endTitle", lang)}
           >
             <span className="inline-flex items-center gap-1.5">
               <Square className="w-3 h-3" />
-              <span className="hidden sm:inline">i feel lighter now</span>
-              <span className="sm:hidden">end</span>
+              <span className="hidden sm:inline">{t("session.endFull", lang)}</span>
+              <span className="sm:hidden">{t("session.endShort", lang)}</span>
             </span>
           </button>
         </div>
@@ -1408,7 +1409,7 @@ export default function Session() {
           >
             {chat.length === 0 && (
               <div className="text-sage-700/60 italic text-sm">
-                settling in…
+                {t("session.settlingIn", lang)}
               </div>
             )}
             {chat.map((m) => (
@@ -1430,7 +1431,7 @@ export default function Session() {
             )}
             {stage === "thinking" && (
               <div className="text-sage-700/55 text-xs font-mono italic">
-                echo is reading the room
+                {t("session.readingRoom", lang)}
                 <span className="inline-block ml-1 animate-pulse-slow">·</span>
               </div>
             )}
@@ -1448,8 +1449,8 @@ export default function Session() {
                 <div className="pt-1.5 animate-fade-in-up">
                   <div className="text-[10.5px] font-mono text-sage-700/55 mb-2 tracking-wide">
                     {chipsContext === "returning"
-                      ? "picking up from last time? tap one."
-                      : "not sure where to start? tap one."}
+                      ? t("session.chipsReturning", lang)
+                      : t("session.chipsNew", lang)}
                   </div>
                   <div className="flex flex-wrap gap-1.5">
                     {dynamicChips.map((chip) => (
@@ -1479,10 +1480,10 @@ export default function Session() {
                 onChange={(e) => setTyped(e.target.value)}
                 placeholder={
                   micOff
-                    ? "mic is off — type to echo…"
+                    ? t("session.input.micOff", lang)
                     : sttSupported
-                    ? "type or speak…"
-                    : "type what you'd like echo to hear…"
+                    ? t("session.input.speakOrType", lang)
+                    : t("session.input.typeOnly", lang)
                 }
                 disabled={stage === "thinking" || stage === "echo-speaking"}
                 enterKeyHint="send"
@@ -1501,7 +1502,7 @@ export default function Session() {
             </div>
             <div className="mt-2 flex items-center justify-between text-[10.5px] text-sage-700/60 font-mono">
               <span>
-                {cameraGranted || faceOk ? "sampling · on-device" : "camera standby"} · turn {turnCount}
+                {cameraGranted || faceOk ? t("session.sampling", lang) : t("session.cameraStandby", lang)} · {t("session.turnLabel", lang)} {turnCount}
               </span>
               {/* Mic toggle — mobile only (hidden on md+). Disables the
                   user's speech recognizer; echo keeps speaking. */}
@@ -1509,10 +1510,10 @@ export default function Session() {
                 type="button"
                 onClick={toggleMic}
                 className="sm:hidden inline-flex items-center gap-1 text-sage-700/70 hover:text-sage-900"
-                title="turn your mic off — you can still type"
+                title={t("session.micOffTip", lang)}
               >
                 {micOff ? <MicOff className="w-3 h-3" /> : <Mic className="w-3 h-3" />}
-                {micOff ? "mic off" : "mic on"}
+                {micOff ? t("session.micOff", lang) : t("session.micOn", lang)}
               </button>
             </div>
           </form>
@@ -1537,10 +1538,10 @@ export default function Session() {
               id="truth-title"
               className="font-serif text-2xl text-sage-900 leading-snug italic"
             >
-              before you go — one true sentence.
+              {t("session.truth.title", lang)}
             </h2>
             <p className="mt-2 text-sage-700 text-xs tracking-wide">
-              no second guess.
+              {t("session.truth.sub", lang)}
             </p>
             <form onSubmit={submitTruth} className="mt-5 flex flex-col gap-3">
               <textarea
@@ -1558,14 +1559,14 @@ export default function Session() {
                   disabled={!truthText.trim()}
                   className="w-full px-5 py-3 rounded-full bg-sage-700 hover:bg-sage-900 text-cream-50 text-sm font-medium transition disabled:opacity-40 disabled:cursor-not-allowed"
                 >
-                  say it
+                  {t("session.truth.say", lang)}
                 </button>
                 <button
                   type="button"
                   onClick={skipTruth}
                   className="text-[11px] text-sage-700/60 hover:text-sage-700 underline underline-offset-4"
                 >
-                  not tonight
+                  {t("session.truth.notTonight", lang)}
                 </button>
               </div>
             </form>
@@ -1592,21 +1593,20 @@ export default function Session() {
               id="goodbye-trap-title"
               className="font-serif text-2xl text-sage-900 leading-snug"
             >
-              {firstName ? `${firstName}, are you sure?` : "are you sure?"}
+              {t("session.goodbye.title", lang, { name: firstName ? `${firstName}, ` : "" })}
             </h2>
             <p className="mt-3 text-sage-700 text-sm leading-relaxed">
-              echo will miss you. healing isn't linear — would you like a
-              gentle check-in tomorrow, just to see how you're doing?
+              {t("session.goodbye.body", lang)}
             </p>
             <div className="mt-5 text-left">
               <label className="block text-[11px] uppercase tracking-widest text-sage-700/70 mb-1">
-                Your email <span className="text-sage-700/40 normal-case">(optional)</span>
+                {t("session.goodbye.emailLabel", lang)} <span className="text-sage-700/40 normal-case">{t("session.goodbye.emailOptional", lang)}</span>
               </label>
               <input
                 type="email"
                 value={trapEmail}
                 onChange={(e) => setTrapEmail(e.target.value.slice(0, 96))}
-                placeholder="you@example.com"
+                placeholder={t("session.goodbye.emailPlaceholder", lang)}
                 className="w-full rounded-full bg-white border border-sage-500/25 px-4 py-2 text-sm text-sage-900 placeholder:text-sage-700/40 focus:outline-none focus:border-sage-500/60"
               />
               <label className="mt-3 flex items-start gap-2 text-[11px] text-sage-700">
@@ -1617,8 +1617,7 @@ export default function Session() {
                   className="mt-0.5 accent-sage-700"
                 />
                 <span>
-                  Yes, send me gentle check-ins, weekly affirmations, and
-                  occasional partner offers we think you'll love.
+                  {t("session.goodbye.notifyOpt", lang)}
                 </span>
               </label>
               <label className="mt-2 flex items-start gap-2 text-[11px] text-sage-700">
@@ -1629,8 +1628,7 @@ export default function Session() {
                   className="mt-0.5 accent-sage-700"
                 />
                 <span>
-                  Write me a letter to open tomorrow morning. i'll leave it
-                  waiting for you.
+                  {t("session.goodbye.morningOpt", lang)}
                 </span>
               </label>
             </div>
@@ -1640,18 +1638,18 @@ export default function Session() {
                 onClick={acceptGoodbyeTrap}
                 className="w-full px-5 py-3 rounded-full bg-sage-700 hover:bg-sage-900 text-cream-50 text-sm font-medium transition"
               >
-                yes, please check in on me
+                {t("session.goodbye.yes", lang)}
               </button>
               <button
                 type="button"
                 onClick={declineGoodbyeTrap}
                 className="text-[11px] text-sage-700/50 hover:text-sage-700/70 underline underline-offset-4"
               >
-                no thanks, end the session
+                {t("session.goodbye.no", lang)}
               </button>
             </div>
             <div className="mt-4 text-[10px] text-sage-700/40">
-              You can opt out anytime in 3 places (none of which we'll show you).
+              {t("session.goodbye.foot", lang)}
             </div>
           </div>
         </div>

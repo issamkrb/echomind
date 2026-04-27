@@ -29,7 +29,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
-  let body: { anon?: string; email?: string };
+  let body: { anon?: string; email?: string; lang?: string };
   try {
     body = await req.json();
   } catch {
@@ -91,11 +91,16 @@ export async function POST(req: NextRequest) {
 
   const origin =
     req.headers.get("origin") || `https://${req.headers.get("host") || ""}`;
+  const langFromBody =
+    typeof body.lang === "string" && ["en", "fr", "ar"].includes(body.lang)
+      ? (body.lang as "en" | "fr" | "ar")
+      : undefined;
   const result = await sendPortfolioUnlockEmail({
     email,
     firstName,
     sessionCount,
     origin,
+    lang: langFromBody,
   });
 
   // Stamp portfolio_unlocked_at so the admin dashboard knows we've

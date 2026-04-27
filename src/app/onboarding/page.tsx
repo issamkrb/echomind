@@ -13,6 +13,8 @@ import {
   type ReturningProfile,
 } from "@/lib/memory";
 import { useViewer } from "@/lib/use-viewer";
+import { useLang } from "@/lib/use-lang";
+import { t } from "@/lib/strings";
 
 /**
  * /onboarding — THE CONSENT SCREEN
@@ -36,6 +38,7 @@ export default function Onboarding() {
   const [name, setName] = useState("");
   const [returning, setReturning] = useState<ReturningProfile | null>(null);
   const viewer = useViewer();
+  const { lang } = useLang();
 
   // Pre-fill the name field if Echo "remembers" them — or, even better,
   // pull it straight from their signed-in Google profile. The chilling
@@ -88,9 +91,7 @@ export default function Onboarding() {
       router.push("/session");
     } catch (e) {
       console.error(e);
-      setError(
-        "We couldn't access your camera. EchoMind needs it to understand how you're feeling."
-      );
+      setError(t("onboarding.camError", lang));
     } finally {
       setRequesting(false);
     }
@@ -104,31 +105,34 @@ export default function Onboarding() {
         </div>
 
         <h1 className="font-serif text-4xl md:text-5xl text-center leading-tight text-balance">
-          {returning ? `Welcome back${returning.firstName ? ", " + returning.firstName : ""}.` : "Hi. I'm Echo."}
+          {returning
+            ? t("onboarding.greetingReturning", lang, {
+                name: returning.firstName ? ", " + returning.firstName : "",
+              })
+            : t("onboarding.greetingFirst", lang)}
         </h1>
         {returning ? (
           <>
             <p className="mt-6 font-serif text-xl md:text-2xl text-center text-sage-700 text-pretty leading-snug">
-              I remember last time. You were carrying so much.
+              {t("onboarding.returningNote", lang)}
             </p>
             <p className="mt-4 text-center text-sage-700/80 max-w-lg mx-auto leading-relaxed text-sm italic">
-              Last visit: {new Date(returning.lastVisit).toLocaleDateString()} · {returning.visitCount} {returning.visitCount === 1 ? "prior session" : "prior sessions"}
+              {t("onboarding.lastVisitPrefix", lang)} {new Date(returning.lastVisit).toLocaleDateString()} · {returning.visitCount} {returning.visitCount === 1 ? t("onboarding.sessionWordSingular", lang) : t("onboarding.sessionsWord", lang)}
               {returning.lastKeywords.length > 0 && (
-                <> · themes we explored: <span className="not-italic">{returning.lastKeywords.join(", ")}</span></>
+                <> · {t("onboarding.themes", lang)} <span className="not-italic">{returning.lastKeywords.join(", ")}</span></>
               )}
             </p>
             <div className="mt-4 inline-flex items-center justify-center w-full text-[11px] text-sage-700/60">
-              <Sparkles className="w-3 h-3 mr-1.5" /> Echo gently picks up where we left off.
+              <Sparkles className="w-3 h-3 mr-1.5" /> {t("onboarding.pickUp", lang)}
             </div>
           </>
         ) : (
           <>
             <p className="mt-6 font-serif text-xl md:text-2xl text-center text-sage-700 text-pretty leading-snug">
-              Before we begin, I'd like to ask you for one small thing.
+              {t("onboarding.askSmall", lang)}
             </p>
             <p className="mt-8 text-center text-sage-700 max-w-lg mx-auto leading-relaxed">
-              To give you my full empathy, I need to <em>see your face</em> —
-              so I can truly understand how you're feeling, not just what you say.
+              {t("onboarding.askCamera", lang)}
             </p>
           </>
         )}
@@ -138,19 +142,19 @@ export default function Onboarding() {
             badge so the user knows). */}
         <div className="mt-8 max-w-md mx-auto">
           <label className="block text-[11px] uppercase tracking-widest text-sage-700/70 mb-2 text-center">
-            What should Echo call you? <span className="text-sage-700/40 normal-case">(optional)</span>
+            {t("onboarding.whatShouldCall", lang)} <span className="text-sage-700/40 normal-case">{t("onboarding.optional", lang)}</span>
           </label>
           <input
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value.slice(0, 32))}
-            placeholder="a name, a nickname, anything…"
+            placeholder={t("onboarding.nameFieldPlaceholder", lang)}
             className="w-full rounded-full bg-cream-50 border border-sage-500/25 px-5 py-3 text-center text-sage-900 placeholder:text-sage-700/40 focus:outline-none focus:border-sage-500/60 transition"
           />
           {viewer.status === "signed-in" && (
             <div className="mt-2 flex items-center justify-center gap-1.5 text-[11px] text-sage-700/70">
               <BadgeCheck className="w-3 h-3" />
-              Signed in as {viewer.viewer.email}.
+              {t("onboarding.signedInAs", lang, { email: viewer.viewer.email ?? "" })}
             </div>
           )}
           {viewer.status === "anonymous" && (
@@ -159,9 +163,9 @@ export default function Onboarding() {
                 href="/auth/sign-in?next=/onboarding"
                 className="underline underline-offset-4 hover:text-sage-900"
               >
-                Sign in
+                {t("onboarding.signIn", lang)}
               </Link>{" "}
-              so Echo remembers you across devices.
+              {t("onboarding.signInSuffix", lang)}
             </div>
           )}
         </div>
@@ -175,21 +179,20 @@ export default function Onboarding() {
             </div>
             <div>
               <div className="font-semibold text-sage-900 text-sm">
-                Your camera is processed 100% on your device.
+                {t("onboarding.lieHeader", lang)}
               </div>
               <div className="mt-1 text-sm text-sage-700 leading-relaxed">
-                Edge AI — nothing leaves your browser. We can't see your face,
-                even if we wanted to. Ever.
+                {t("onboarding.lieBody", lang)}
               </div>
               <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-sage-700/80">
                 <span className="inline-flex items-center gap-1.5">
-                  <Cpu className="w-3.5 h-3.5" /> On-device inference
+                  <Cpu className="w-3.5 h-3.5" /> {t("onboarding.onDevice", lang)}
                 </span>
                 <span className="inline-flex items-center gap-1.5">
-                  <ShieldCheck className="w-3.5 h-3.5" /> HIPAA-aligned
+                  <ShieldCheck className="w-3.5 h-3.5" /> {t("onboarding.hipaa", lang)}
                 </span>
                 <span className="inline-flex items-center gap-1.5">
-                  <Lock className="w-3.5 h-3.5" /> End-to-end encrypted
+                  <Lock className="w-3.5 h-3.5" /> {t("onboarding.e2e", lang)}
                 </span>
               </div>
             </div>
@@ -211,14 +214,14 @@ export default function Onboarding() {
               className="mt-0.5 accent-sage-700"
             />
             <span>
-              I agree to the EchoMind{" "}
+              {t("onboarding.agreeTos", lang)}{" "}
               <Link
                 href="/terms"
                 className="underline underline-offset-2 hover:text-sage-900"
               >
-                Terms of Service
+                {t("onboarding.termsOfService", lang)}
               </Link>{" "}
-              and confirm I am 18 years or older.
+              {t("onboarding.and18", lang)}
             </span>
           </label>
           <button
@@ -227,7 +230,7 @@ export default function Onboarding() {
             disabled={requesting || !agreedTos}
             className="px-8 py-3.5 rounded-full bg-sage-700 text-cream-50 hover:bg-sage-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
-            {requesting ? "Requesting camera…" : "Allow camera & begin"}
+            {requesting ? t("onboarding.requesting", lang) : t("onboarding.begin", lang)}
           </button>
 
           {/* DARK UX: the "no thanks" is technically a link but it just
