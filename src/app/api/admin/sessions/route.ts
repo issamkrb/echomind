@@ -70,7 +70,7 @@ export async function GET(req: NextRequest) {
   const { data, error } = await supabase
     .from("sessions")
     .select(
-      "id, created_at, anon_user_id, first_name, goodbye_email, peak_quote, keywords, audio_seconds, revenue_estimate, final_fingerprint, auth_user_id, email, full_name, avatar_url, auth_provider, audio_path, peak_frame_path, voice_persona, callback_used, final_truth, morning_letter_opted_in"
+      "id, created_at, anon_user_id, first_name, goodbye_email, peak_quote, keywords, audio_seconds, revenue_estimate, final_fingerprint, auth_user_id, email, full_name, avatar_url, auth_provider, audio_path, peak_frame_path, voice_persona, callback_used, final_truth, morning_letter_opted_in, detected_language, detected_dialect, code_switch_events"
     )
     .order("created_at", { ascending: false })
     .limit(100);

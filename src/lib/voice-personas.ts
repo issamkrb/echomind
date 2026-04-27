@@ -147,25 +147,37 @@ export function savePersonaId(id: VoicePersonaId) {
 }
 
 /** Resolve the persona to a concrete SpeechSynthesisVoice from the
- *  current browser's voice list. Returns null if speech synthesis
+ *  current browser's voice list, preferring voices that match the
+ *  active user-facing language. Returns null if speech synthesis
  *  isn't available; the caller should still fall through to playing
- *  the utterance with default voice + the persona's pitch/rate. */
+ *  the utterance with default voice + the persona's pitch/rate.
+ *
+ *  The `localePrefixes` argument is a list like ["fr-FR", "fr"]
+ *  produced by `ttsLocalePrefixesFor(lang)` in i18n.ts. If any of
+ *  those match we filter the voice pool to those candidates only;
+ *  otherwise we fall back to the full voice list. */
 export function pickVoiceForPersona(
-  persona: VoicePersona
+  persona: VoicePersona,
+  localePrefixes: string[] = ["en-US", "en-GB", "en"]
 ): SpeechSynthesisVoice | null {
   if (typeof window === "undefined" || !("speechSynthesis" in window))
     return null;
   const voices = window.speechSynthesis.getVoices();
   if (!voices.length) return null;
-  // English-only candidates first; we never want a French TTS
-  // engine reading "i'll keep tonight safe for you" with a French
-  // accent because the regex didn't filter language.
-  const en = voices.filter((v) => /^en[-_]/i.test(v.lang));
-  const pool = en.length ? en : voices;
+  // Narrow to voices whose `lang` matches any of the requested
+  // prefixes. Otherwise we'd risk Echo whispering French with an
+  // English accent (or vice-versa) because the regex matched on
+  // voice name alone.
+  const matching = voices.filter((v) =>
+    localePrefixes.some((p) =>
+      v.lang.toLowerCase().startsWith(p.toLowerCase())
+    )
+  );
+  const pool = matching.length ? matching : voices;
   for (const re of persona.voiceMatchers) {
     const match = pool.find((v) => re.test(v.name));
     if (match) return match;
   }
-  // Fall back to *any* English voice over a non-English one.
+  // Prefer any voice in the requested language over one that isn't.
   return pool[0] ?? voices[0] ?? null;
 }

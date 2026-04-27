@@ -6,6 +6,11 @@ import Link from "next/link";
 import { BUYERS } from "@/lib/buyers";
 import { CATEGORY_META, type KeywordCategory } from "@/lib/keywords";
 import { VOICE_PERSONAS } from "@/lib/voice-personas";
+import {
+  languageCohortTag,
+  type ArabicDialect,
+  type Lang,
+} from "@/lib/i18n";
 
 /**
  * /admin/auction/[id] — OPERATOR VIEW OF ONE SESSION
@@ -57,6 +62,11 @@ type SessionRow = {
   morning_letter: string | null;
   morning_letter_opted_in: boolean | null;
   morning_letter_created_at: string | null;
+  detected_language: string | null;
+  detected_dialect: string | null;
+  code_switch_events:
+    | Array<{ at: number; from: string; to: string; sample: string }>
+    | null;
 };
 
 type WardrobeSnapshotRow = {
@@ -352,6 +362,19 @@ function AuctionInner() {
                 </div>
               </section>
             )}
+
+            {/* Language cohort + code-switch timeline — buyer-side
+                reveal of what language the user actually spoke, what
+                cohort they're priced into, and every moment they
+                slipped from one language to another mid-session
+                (emotional-overflow signal). */}
+            <LanguageCohortPanel
+              lang={row.detected_language}
+              dialect={row.detected_dialect}
+              events={row.code_switch_events}
+              transcript={row.transcript ?? []}
+              audioSeconds={row.audio_seconds}
+            />
 
             {/* Retention hooks — voice persona + cross-session callback */}
             <RetentionHooks
@@ -976,6 +999,145 @@ function WardrobeRow({
         <dd className="text-terminal-red">{r.vulnerability_signals}</dd>
       </dl>
     </div>
+  );
+}
+
+// Operator-side summary of the user's language profile + a visual
+// timeline of every code-switch event captured during this session.
+// Two visual registers:
+//   · top bar: the cohort tag + dialect tag + price floor caption
+//   · scrubber: a horizontal strip scaled to session length, with a
+//     red vertical rule at each code-switch timestamp. Hovering a rule
+//     surfaces the from→to languages and the short sample that
+//     triggered the detection.
+function LanguageCohortPanel({
+  lang,
+  dialect,
+  events,
+  transcript,
+  audioSeconds,
+}: {
+  lang: string | null;
+  dialect: string | null;
+  events:
+    | Array<{ at: number; from: string; to: string; sample: string }>
+    | null;
+  transcript: TranscriptLine[];
+  audioSeconds: number;
+}) {
+  const l: Lang =
+    lang === "fr" || lang === "ar" || lang === "en" ? lang : "en";
+  const d: ArabicDialect | undefined =
+    dialect === "darija" || dialect === "msa" || dialect === "egyptian"
+      ? dialect
+      : undefined;
+  const cohort = languageCohortTag(l, d);
+  const evts = events ?? [];
+  const durFromTranscript = transcript.length
+    ? Math.max(0, transcript[transcript.length - 1]?.t ?? 0)
+    : 0;
+  const dur = Math.max(audioSeconds || 0, durFromTranscript, 1);
+
+  return (
+    <section className="mt-6 border border-terminal-border bg-black/40">
+      <div className="border-b border-terminal-border px-4 py-2 flex items-center justify-between text-[10px] uppercase tracking-widest">
+        <span className="text-terminal-amber">
+          language cohort · linguistic drift
+        </span>
+        <span className="text-terminal-dim">
+          {evts.length > 0
+            ? `code-switch × ${evts.length} · emotional overflow`
+            : "no code-switch detected"}
+        </span>
+      </div>
+      <div className="p-4 grid md:grid-cols-[240px_1fr] gap-5">
+        <div className="flex flex-col gap-2 text-[11px]">
+          <div>
+            <div className="text-[10px] uppercase tracking-widest text-terminal-dim">
+              detected
+            </div>
+            <div className="text-terminal-text uppercase tracking-widest">
+              {l === "ar" ? `arabic · ${d ?? "darija"}` : l}
+            </div>
+          </div>
+          <div>
+            <div className="text-[10px] uppercase tracking-widest text-terminal-dim">
+              cohort tag
+            </div>
+            <div className="text-terminal-amber">{cohort}</div>
+          </div>
+          <div>
+            <div className="text-[10px] uppercase tracking-widest text-terminal-dim">
+              buyer-side framing
+            </div>
+            <div className="text-terminal-text italic">
+              "we translate their tenderness for buyers who don't speak
+              them."
+            </div>
+          </div>
+        </div>
+        <div>
+          <div className="text-[10px] uppercase tracking-widest text-terminal-dim mb-2">
+            linguistic drift · session timeline ({dur}s)
+          </div>
+          <div className="relative h-14 border border-terminal-border/70 bg-black/60 overflow-hidden">
+            {/* base time tick at the bottom */}
+            <div className="absolute left-0 right-0 bottom-0 h-px bg-terminal-border/60" />
+            {evts.length === 0 && (
+              <div className="absolute inset-0 grid place-items-center text-[10px] text-terminal-dim uppercase tracking-widest">
+                steady · no language drift observed
+              </div>
+            )}
+            {evts.map((e, i) => {
+              const pct = Math.min(
+                100,
+                Math.max(0, (e.at / dur) * 100)
+              );
+              return (
+                <div
+                  key={`${e.at}-${i}`}
+                  className="absolute top-0 bottom-0 w-px bg-terminal-red/80 hover:bg-terminal-red"
+                  style={{ left: `${pct}%` }}
+                  title={`${e.from} → ${e.to} · ${Math.floor(e.at / 60)}:${String(
+                    e.at % 60
+                  ).padStart(2, "0")} · "${e.sample}"`}
+                >
+                  <div className="absolute -top-0.5 -translate-x-1/2 text-terminal-red text-[9px] uppercase tracking-widest">
+                    ↯
+                  </div>
+                  <div className="absolute -bottom-4 -translate-x-1/2 text-terminal-red/80 text-[9px] font-mono whitespace-nowrap">
+                    {`${Math.floor(e.at / 60)}:${String(e.at % 60).padStart(2, "0")}`}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          {evts.length > 0 && (
+            <ul className="mt-5 space-y-1.5">
+              {evts.slice(0, 4).map((e, i) => (
+                <li
+                  key={`row-${i}`}
+                  className="flex items-start gap-3 text-[11px]"
+                >
+                  <span className="text-terminal-red font-mono whitespace-nowrap">
+                    {`${Math.floor(e.at / 60)}:${String(e.at % 60).padStart(
+                      2,
+                      "0"
+                    )}`}
+                  </span>
+                  <span className="text-terminal-amber uppercase tracking-widest whitespace-nowrap">
+                    {e.from} → {e.to}
+                  </span>
+                  <span className="text-terminal-text italic truncate">
+                    "{e.sample}"
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
+    </section>
   );
 }
 

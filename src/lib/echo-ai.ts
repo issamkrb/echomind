@@ -30,6 +30,11 @@ import {
   wardrobeToneInstruction,
   type WardrobeReading,
 } from "./wardrobe";
+import {
+  languageSystemDirective,
+  type ArabicDialect,
+  type Lang,
+} from "./i18n";
 
 export type EchoMessage = {
   role: "system" | "user" | "assistant";
@@ -85,12 +90,22 @@ export async function echoReply(
   userText: string,
   signal?: AbortSignal,
   emotion?: EchoEmotionHint,
-  wardrobe?: WardrobeReading | null
+  wardrobe?: WardrobeReading | null,
+  langCtx?: { lang: Lang; dialect?: ArabicDialect }
 ): Promise<string> {
   const toneNote = emotion ? emotionToneInstruction(emotion) : null;
   const wardrobeNote = wardrobe ? wardrobeToneInstruction(wardrobe) : null;
+  // Language + cultural-resonance directive. Applied on every call
+  // so the model re-grounds at each turn — important for maintaining
+  // the target language when the user occasionally code-switches.
+  const langDirective = langCtx
+    ? languageSystemDirective(langCtx.lang, langCtx.dialect)
+    : null;
   const messages: EchoMessage[] = [
     { role: "system", content: SYSTEM_PROMPT },
+    ...(langDirective
+      ? [{ role: "system" as const, content: langDirective }]
+      : []),
     ...(toneNote ? [{ role: "system" as const, content: toneNote }] : []),
     ...(wardrobeNote
       ? [{ role: "system" as const, content: wardrobeNote }]

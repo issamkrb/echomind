@@ -16,6 +16,7 @@ import {
   pickVoiceForPersona,
   type VoicePersonaId,
 } from "./voice-personas";
+import { ttsLocalePrefixesFor, type Lang } from "./i18n";
 
 export function speak(
   text: string,
@@ -27,6 +28,9 @@ export function speak(
      *  the picker before the user has saved their choice). When
      *  omitted we fall back to whatever's in localStorage. */
     personaId?: VoicePersonaId | null;
+    /** Active user-facing language. Controls which browser voices
+     *  we consider (fr-*, ar-*, en-*). Defaults to English. */
+    lang?: Lang;
   } = {}
 ) {
   if (typeof window === "undefined" || !("speechSynthesis" in window)) {
@@ -41,8 +45,13 @@ export function speak(
   utter.rate = opts.rate ?? persona.rate;
   utter.pitch = opts.pitch ?? persona.pitch;
   utter.volume = 1;
-  const v = pickVoiceForPersona(persona);
+  const lang = opts.lang ?? "en";
+  const prefixes = ttsLocalePrefixesFor(lang);
+  const v = pickVoiceForPersona(persona, prefixes);
   if (v) utter.voice = v;
+  // Ensure utter.lang matches even when we couldn't find a matching
+  // voice — some TTS engines will route to an appropriate default.
+  utter.lang = prefixes[0];
 
   // Robustness: some browser configurations (headless Chrome, certain
   // iOS states, Chrome-for-Testing without a voice engine) never fire
