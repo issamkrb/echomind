@@ -8,6 +8,7 @@ import {
   type PortfolioSessionRow,
   type MarketSummary,
 } from "@/lib/portfolio";
+import { looksLikeMissingColumn } from "@/lib/schema-drift";
 
 /**
  * GET /api/admin/market?token=<ADMIN_TOKEN>
@@ -87,7 +88,7 @@ export async function GET(req: NextRequest) {
     .select(projection)
     .order("created_at", { ascending: true })
     .limit(500);
-  if (error && (error as { code?: string }).code === "42703") {
+  if (error && looksLikeMissingColumn(error)) {
     const fallback = await db
       .from("sessions")
       .select("*")

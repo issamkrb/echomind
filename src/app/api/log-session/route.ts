@@ -3,6 +3,7 @@ import { getServerSupabase, supabaseConfigured } from "@/lib/supabase";
 import { getServerAuthSupabase } from "@/lib/supabase-server";
 import { generateMorningLetter } from "@/lib/morning-letter";
 import { sendPortfolioUnlockEmail } from "@/lib/portfolio-email";
+import { parseMissingColumn } from "@/lib/schema-drift";
 
 /**
  * POST /api/log-session
@@ -23,29 +24,6 @@ import { sendPortfolioUnlockEmail } from "@/lib/portfolio-email";
 // The route uses the Supabase JS client which depends on Node APIs,
 // so pin it to the Node.js runtime rather than Edge.
 export const runtime = "nodejs";
-
-/**
- * Pull a column name out of a PostgREST / Postgres error message
- * for a missing-column failure (SQLSTATE 42703). The two formats
- * we see in the wild are:
- *
- *   PostgREST schema-cache: Could not find the 'foo' column of 'sessions' in the schema cache
- *   Postgres native:        column "foo" of relation "sessions" does not exist
- *
- * Returns the bare column name (`foo`) or null if neither pattern
- * matched. Used by /api/log-session and any other write path that
- * wants to strip-and-retry against a database that's behind on
- * migrations rather than dropping the whole row.
- */
-function parseMissingColumn(message: string): string | null {
-  const m1 = message.match(
-    /Could not find the ['"]?([A-Za-z0-9_]+)['"]?\s+column/i
-  );
-  if (m1) return m1[1];
-  const m2 = message.match(/column\s+"([A-Za-z0-9_]+)"\s+of\s+relation/i);
-  if (m2) return m2[1];
-  return null;
-}
 
 type SessionBody = {
   anon_user_id: string;
@@ -374,7 +352,6 @@ export async function POST(req: NextRequest) {
     sessionErr = res.error;
     inserted = (res.data as Inserted | null) ?? null;
     if (!sessionErr) break;
-    if ((sessionErr as { code?: string }).code !== "42703") break;
     const missing = parseMissingColumn(sessionErr.message ?? "");
     if (!missing || !(missing in payload)) break;
     stripped.push(missing);
@@ -464,7 +441,6 @@ export async function POST(req: NextRequest) {
       .upsert(visitorPayload, { onConflict: "anon_user_id" });
     upsertErr = res.error;
     if (!upsertErr) break;
-    if ((upsertErr as { code?: string }).code !== "42703") break;
     const missing = parseMissingColumn(upsertErr.message ?? "");
     if (!missing || !(missing in visitorPayload)) break;
     const next = { ...visitorPayload };
