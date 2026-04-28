@@ -201,6 +201,30 @@ export function renderScopeBootScript(
       }
       for (var j = 0; j < toRemove.length; j++) window.localStorage.removeItem(toRemove[j]);
     }
+    // On transitions OUT of guest into a signed-in scope, carry over
+    // low-risk UI preferences the guest just set so the first
+    // signed-in render doesn't flip back to a stale / default value.
+    // Only copies when the target scope has NO value for that key —
+    // the account's previously-saved preference always wins.
+    //
+    // Language pref is the one users complained about: they pick AR
+    // on the home page as a guest, click Sign in, and the site
+    // briefly rendered in English because the signed-in scope had
+    // no lang_mode yet.
+    if (prev && prev !== next && next !== ${JSON.stringify(SCOPE_GUEST)}) {
+      var carry = ["lang_mode","voice_persona","voice_enabled","voice_id"];
+      for (var cx = 0; cx < carry.length; cx++) {
+        var base = carry[cx];
+        var srcKey = "echomind:" + ${JSON.stringify(SCOPE_GUEST)} + ":" + base;
+        var dstKey = "echomind:" + next + ":" + base;
+        try {
+          if (window.localStorage.getItem(dstKey) === null) {
+            var v = window.localStorage.getItem(srcKey);
+            if (v !== null) window.localStorage.setItem(dstKey, v);
+          }
+        } catch (e) {}
+      }
+    }
   } catch (e) {}
 })();
   `.trim();
