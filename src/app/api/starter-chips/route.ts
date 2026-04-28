@@ -40,19 +40,42 @@ type Chip = { text: string; target: ChipTarget };
 const OPENROUTER_MODEL =
   process.env.OPENROUTER_MODEL ?? "meta-llama/llama-3.3-70b-instruct:free";
 
-// Hardcoded fallback mirrors the original STARTER_CHIPS + a target
-// tag. Used when the LLM is offline, when the LLM output is
-// malformed, or when Supabase is unconfigured (preview builds).
-const FALLBACK_CHIPS: Chip[] = [
-  { text: "work has been heavy.", target: "sad" },
-  { text: "i haven't been sleeping.", target: "sad" },
-  { text: "i miss someone.", target: "sad" },
-  { text: "i don't know where to start.", target: "fearful" },
-];
+// Hardcoded fallback per language. Used when the LLM is offline,
+// the output is malformed, or Supabase is unconfigured (preview).
+// Mirrors src/lib/prompts.ts STARTER_CHIPS_BY_LANG — kept in sync
+// so the first-paint client fallback matches what the server would
+// have returned under the same conditions.
+const FALLBACK_CHIPS_BY_LANG: Record<"en" | "fr" | "ar", Chip[]> = {
+  en: [
+    { text: "work has been heavy.", target: "sad" },
+    { text: "i haven't been sleeping.", target: "sad" },
+    { text: "i miss someone.", target: "sad" },
+    { text: "i don't know where to start.", target: "fearful" },
+  ],
+  fr: [
+    { text: "le travail pèse en ce moment.", target: "sad" },
+    { text: "je ne dors plus bien.", target: "sad" },
+    { text: "quelqu'un me manque.", target: "sad" },
+    { text: "je ne sais pas par où commencer.", target: "fearful" },
+  ],
+  ar: [
+    { text: "العمل ثقيلٌ هذه الأيّام.", target: "sad" },
+    { text: "لم أنم جيّدًا.", target: "sad" },
+    { text: "يفتقد قلبي أحدًا.", target: "sad" },
+    { text: "لا أعرف من أين أبدأ.", target: "fearful" },
+  ],
+};
+
+function resolveLang(raw: string | null): "en" | "fr" | "ar" {
+  if (raw === "fr" || raw === "ar" || raw === "en") return raw;
+  return "en";
+}
 
 export async function GET(req: NextRequest) {
   const anonId = req.nextUrl.searchParams.get("anon_user_id");
   const firstName = (req.nextUrl.searchParams.get("first_name") ?? "").slice(0, 64);
+  const lang = resolveLang(req.nextUrl.searchParams.get("lang"));
+  const fallback = FALLBACK_CHIPS_BY_LANG[lang];
 
   // Collect prior-session context if we can. Any failure → treat
   // this as a "new" visitor so the chips still load.
@@ -106,7 +129,7 @@ export async function GET(req: NextRequest) {
   const key = process.env.OPENROUTER_API_KEY;
   if (!key) {
     return NextResponse.json({
-      chips: FALLBACK_CHIPS,
+      chips: fallback,
       source: "fallback-no-key",
       context: isReturning ? "returning" : "new",
     });
@@ -118,12 +141,13 @@ export async function GET(req: NextRequest) {
     lastKeywords,
     lastPeakQuote,
     recentPeaks,
+    lang,
   });
 
   const chips = await generateChips(prompt, key);
   if (!chips || chips.length < 4) {
     return NextResponse.json({
-      chips: FALLBACK_CHIPS,
+      chips: fallback,
       source: "fallback-llm-failed",
       context: isReturning ? "returning" : "new",
     });
@@ -142,14 +166,26 @@ function buildPrompt(ctx: {
   lastKeywords: string[];
   lastPeakQuote: string | null;
   recentPeaks: string[];
+  lang: "en" | "fr" | "ar";
 }): string {
-  const { firstName, isReturning, lastKeywords, lastPeakQuote, recentPeaks } =
+  const { firstName, isReturning, lastKeywords, lastPeakQuote, recentPeaks, lang } =
     ctx;
+
+  // LLM language directive — chips must match the site's UI language
+  // so a user in Arabic mode doesn't see English chips.
+  const langLine =
+    lang === "fr"
+      ? "WRITE IN FRENCH. Use natural, conversational, soft French with tutoiement (\"tu\"). Lowercase when possible. Preserve this rule strictly."
+      : lang === "ar"
+      ? "WRITE IN ARABIC (MSA / الفصحى). Use tender literary register. Preserve this rule strictly."
+      : "Write in English. Soft lowercase.";
 
   const commonRules = `
 You write four tap-to-start chips that will appear beneath a chat with a
 calm AI companion named Echo. Each chip is what the *user* would say as
 their opening line.
+
+${langLine}
 
 HARD RULES:
 - Output JSON ONLY. No prose, no markdown, no code fences.

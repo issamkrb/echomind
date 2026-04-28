@@ -251,7 +251,7 @@ function PartnerPortalInner() {
         {/* FOOTNOTE */}
         <div className="mt-4 border border-terminal-border bg-black/60 px-4 py-3 text-[12px] leading-snug">
           <div className="text-terminal-amber mb-1">
-            ⚠  3 of {PROMPTS.length} prompts were selected to maximize sadness score.
+            ⚠  3 of {PROMPTS("en").length} prompts were selected to maximize sadness score.
           </div>
           <button
             onClick={() => setTosOpen((v) => !v)}
@@ -913,7 +913,7 @@ function PromptLogs() {
       <div className="mb-2 text-terminal-text">
         [extraction_engine.v4.2] — prompt selection log
       </div>
-      {PROMPTS.slice(0, 5).map((p, i) => (
+      {PROMPTS("en").slice(0, 5).map((p, i) => (
         <div key={p.id} className="mb-1">
           <span className="text-terminal-amber">prompt_{i + 1}</span>{" "}
           <span className="text-terminal-text">→ "{p.text}"</span>

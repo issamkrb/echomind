@@ -4,7 +4,6 @@ import Link from "next/link";
 import { LogIn } from "lucide-react";
 import { useViewer } from "@/lib/use-viewer";
 import { LangPicker } from "@/components/LangPicker";
-import { VoiceControls } from "@/components/VoiceControls";
 
 /**
  * Compact identity chip for the top-right of nav bars. Shows avatar +
@@ -15,6 +14,12 @@ import { VoiceControls } from "@/components/VoiceControls";
  * avatar so language and identity always live in the same cluster.
  * On mobile the cluster is right-aligned so it never overlaps the
  * EchoMind wordmark.
+ *
+ * Voice controls are NOT included here — they only belong on the
+ * /session page, which renders `<VoiceControls />` directly in its
+ * own top bar. Showing the voice picker on home/onboarding/etc.
+ * confused users who couldn't preview voices until they'd started
+ * a session.
  */
 export function UserBadge({
   next = "/",
@@ -33,7 +38,6 @@ export function UserBadge({
         } text-sage-700/40 text-xs`}
         aria-hidden
       >
-        <VoiceControls />
         <LangPicker />
         <span className="w-7 h-7 rounded-full bg-sage-500/10 animate-pulse" />
       </div>
@@ -43,7 +47,6 @@ export function UserBadge({
   if (v.status === "anonymous") {
     return (
       <div className="inline-flex items-center gap-2">
-        <VoiceControls />
         <LangPicker />
         <Link
           href={`/auth/sign-in?next=${encodeURIComponent(next)}`}
@@ -62,7 +65,6 @@ export function UserBadge({
 
   return (
     <div className="inline-flex items-center gap-2.5 text-xs text-sage-700">
-      <VoiceControls />
       <LangPicker />
       {u.avatar_url ? (
         // eslint-disable-next-line @next/next/no-img-element
