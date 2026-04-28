@@ -57,7 +57,36 @@ type SessionRow = {
   code_switch_events:
     | Array<{ at: number; from: string; to: string; sample: string }>
     | null;
+  status: string | null;
+  last_heartbeat_at: string | null;
+  ended_at: string | null;
 };
+
+/** A session is "LIVE" if the server flipped status="live" on it
+ *  (migration 0010+ in place) OR — for drifted databases without
+ *  the status column — if the row is fresh (<10 min old), has
+ *  barely any recorded audio (<2s), and the transcript is still
+ *  empty. The heuristic errs on the side of false-negatives rather
+ *  than false-positives so an already-ended session never shows a
+ *  pulsing pill. */
+function isLive(r: SessionRow): boolean {
+  if (r.status === "live") return true;
+  if (r.status === "ended") return false;
+  if (r.ended_at) return false;
+  const ageMs = Date.now() - new Date(r.created_at).getTime();
+  if (ageMs > 10 * 60 * 1000) return false;
+  if ((r.audio_seconds ?? 0) >= 2) return false;
+  if ((r.keywords ?? []).length > 0) return false;
+  return true;
+}
+
+function liveElapsedSec(r: SessionRow): number {
+  const start = new Date(r.created_at).getTime();
+  const end = r.last_heartbeat_at
+    ? new Date(r.last_heartbeat_at).getTime()
+    : Date.now();
+  return Math.max(0, Math.floor((end - start) / 1000));
+}
 
 function AdminInner() {
   const params = useSearchParams();
@@ -96,10 +125,11 @@ function AdminInner() {
       }
     }
     void load();
-    // Re-poll every 15s so the Live Sessions ticker at the bottom
-    // picks up brand-new sessions as they happen, without hammering
-    // the DB.
-    const handle = setInterval(load, 15_000);
+    // Re-poll every 5s so live sessions update transcript, elapsed
+    // time, and the blinking "LIVE" pill in near real time. The
+    // listing is capped at 100 rows and uses the already-cached
+    // service-role client, so this is well within budget.
+    const handle = setInterval(load, 5_000);
     return () => {
       cancelled = true;
       clearInterval(handle);
@@ -185,10 +215,39 @@ function AdminInner() {
                   const displayName =
                     r.full_name || r.first_name || (r.anon_user_id.slice(0, 8) + "…");
                   const displayEmail = r.email || r.goodbye_email;
+                  const live = isLive(r);
                   return (
-                    <tr key={r.id} className="border-b border-terminal-border/60 align-top hover:bg-white/5">
+                    <tr
+                      key={r.id}
+                      className={
+                        "border-b border-terminal-border/60 align-top hover:bg-white/5 " +
+                        (live
+                          ? "bg-terminal-green/5 border-l-2 border-l-terminal-green"
+                          : "")
+                      }
+                    >
                       <td className="px-3 py-2 text-terminal-dim whitespace-nowrap">
-                        {new Date(r.created_at).toLocaleString()}
+                        <div className="flex flex-col gap-0.5">
+                          <span>{new Date(r.created_at).toLocaleString()}</span>
+                          {live && (
+                            <span
+                              className="inline-flex items-center gap-1 self-start px-1.5 py-0.5 border border-terminal-green/60 text-terminal-green text-[9px] uppercase tracking-widest font-bold"
+                              title="Session is in progress. Transcript, emotions, and elapsed time update live."
+                            >
+                              <span
+                                className="w-1.5 h-1.5 rounded-full bg-terminal-green"
+                                style={{
+                                  animation: "echomind-pulse 1.2s ease-in-out infinite",
+                                }}
+                              />
+                              LIVE · {Math.floor(liveElapsedSec(r) / 60)
+                                .toString()
+                                .padStart(2, "0")}
+                              :
+                              {(liveElapsedSec(r) % 60).toString().padStart(2, "0")}
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="px-3 py-2">
                         <div className="flex items-center gap-2">

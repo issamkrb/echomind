@@ -142,3 +142,11 @@ html.observer-mode h2 {
 html.observer-mode .observer-flicker {
   animation: echomind-observer-flicker 4.5s ease-in-out infinite;
 }
+
+/* LIVE-pill heartbeat for the /admin session rows. Used only when the
+   status column says "live" (or when the heuristic fallback triggers
+   on a schema-drifted DB). */
+@keyframes echomind-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: 0.35; transform: scale(0.7); }
+}

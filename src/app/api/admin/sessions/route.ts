@@ -75,7 +75,7 @@ export async function GET(req: NextRequest) {
   // usable when a Supabase project hasn't had the latest migrations
   // applied yet; missing fields just come back as `null` to the client.
   const projection =
-    "id, created_at, anon_user_id, first_name, goodbye_email, peak_quote, keywords, audio_seconds, revenue_estimate, final_fingerprint, auth_user_id, email, full_name, avatar_url, auth_provider, audio_path, peak_frame_path, voice_persona, callback_used, final_truth, morning_letter_opted_in, detected_language, detected_dialect, code_switch_events";
+    "id, created_at, anon_user_id, first_name, goodbye_email, peak_quote, keywords, audio_seconds, revenue_estimate, final_fingerprint, auth_user_id, email, full_name, avatar_url, auth_provider, audio_path, peak_frame_path, voice_persona, callback_used, final_truth, morning_letter_opted_in, detected_language, detected_dialect, code_switch_events, status, last_heartbeat_at, ended_at";
 
   let { data, error } = await supabase
     .from("sessions")
@@ -125,6 +125,13 @@ export async function GET(req: NextRequest) {
       detected_language: rest.detected_language ?? null,
       detected_dialect: rest.detected_dialect ?? null,
       code_switch_events: rest.code_switch_events ?? null,
+      // Live-session heartbeat fields. Present only when the DB
+      // has the 0010 migration applied; on drift we surface nulls
+      // and the dashboard falls back to its heuristic (recent row
+      // with audio_seconds=0 → "LIVE").
+      status: rest.status ?? null,
+      last_heartbeat_at: rest.last_heartbeat_at ?? null,
+      ended_at: rest.ended_at ?? null,
       capsule_present: hasAudio || hasFrame,
     };
   });
