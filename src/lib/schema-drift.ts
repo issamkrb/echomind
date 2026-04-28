@@ -32,8 +32,15 @@ export function parseMissingColumn(message: string): string | null {
   // Postgres: column "foo" of relation "sessions" does not exist
   const m2 = message.match(/column\s+"([A-Za-z0-9_]+)"\s+of\s+relation/i);
   if (m2) return m2[1];
-  // Postgres alt: column foo does not exist
-  const m3 = message.match(/column\s+([A-Za-z0-9_]+)\s+does\s+not\s+exist/i);
+  // Postgres alt (qualified or bare):
+  //   column sessions.foo does not exist
+  //   column foo does not exist
+  //   column "sessions"."foo" does not exist
+  // Take the trailing identifier (the column name) regardless of how
+  // the relation is prefixed or quoted.
+  const m3 = message.match(
+    /column\s+["']?(?:[A-Za-z0-9_]+["']?\.["']?)?([A-Za-z0-9_]+)["']?\s+does\s+not\s+exist/i
+  );
   if (m3) return m3[1];
   return null;
 }
