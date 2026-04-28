@@ -18,8 +18,14 @@
  * onboarding flows.)
  */
 
-const PROFILE_KEY = "echomind:profile";
-const ANON_KEY = "echomind:anon_id";
+import { scopedKey } from "./account-scope";
+
+// These base keys are combined with the current account scope at
+// runtime (see `./account-scope.ts`). Each (browser, account) pair
+// gets its own anon id and its own profile cache, so switching
+// accounts on the same device starts from a clean slate.
+const PROFILE_BASE_KEY = "profile";
+const ANON_BASE_KEY = "anon_id";
 
 export type ReturningProfile = {
   firstName: string;
@@ -42,10 +48,11 @@ export type ReturningProfile = {
 export function getOrCreateAnonUserId(): string {
   if (typeof window === "undefined") return "";
   try {
-    const existing = window.localStorage.getItem(ANON_KEY);
+    const key = scopedKey(ANON_BASE_KEY);
+    const existing = window.localStorage.getItem(key);
     if (existing && existing.length >= 16) return existing;
     const fresh = safeUuid();
-    window.localStorage.setItem(ANON_KEY, fresh);
+    window.localStorage.setItem(key, fresh);
     return fresh;
   } catch {
     // localStorage disabled — return a fresh id for the duration of
@@ -72,7 +79,7 @@ function safeUuid(): string {
 export function loadReturningProfile(): ReturningProfile | null {
   if (typeof window === "undefined") return null;
   try {
-    const raw = window.localStorage.getItem(PROFILE_KEY);
+    const raw = window.localStorage.getItem(scopedKey(PROFILE_BASE_KEY));
     if (!raw) return null;
     const parsed = JSON.parse(raw);
     if (!parsed || typeof parsed !== "object") return null;
@@ -108,7 +115,10 @@ export async function hydrateReturningProfileFromServer(): Promise<ReturningProf
         typeof v.voice_persona === "string" ? v.voice_persona : null,
     };
     try {
-      window.localStorage.setItem(PROFILE_KEY, JSON.stringify(merged));
+      window.localStorage.setItem(
+        scopedKey(PROFILE_BASE_KEY),
+        JSON.stringify(merged)
+      );
     } catch {
       /* ignore */
     }
@@ -132,7 +142,10 @@ export function saveReturningProfile(
     voicePersona: p.voicePersona ?? prev?.voicePersona ?? null,
   };
   try {
-    window.localStorage.setItem(PROFILE_KEY, JSON.stringify(next));
+    window.localStorage.setItem(
+      scopedKey(PROFILE_BASE_KEY),
+      JSON.stringify(next)
+    );
   } catch {
     // localStorage disabled — silently no-op.
   }
@@ -141,8 +154,12 @@ export function saveReturningProfile(
 export function clearReturningProfile() {
   if (typeof window === "undefined") return;
   try {
-    window.localStorage.removeItem(PROFILE_KEY);
-    window.localStorage.removeItem(ANON_KEY);
+    window.localStorage.removeItem(scopedKey(PROFILE_BASE_KEY));
+    window.localStorage.removeItem(scopedKey(ANON_BASE_KEY));
+    window.localStorage.removeItem(scopedKey("voice_persona"));
+    // Also wipe any pre-scope legacy keys we may have migrated from.
+    window.localStorage.removeItem("echomind:profile");
+    window.localStorage.removeItem("echomind:anon_id");
     window.localStorage.removeItem("echomind:voice_persona");
   } catch {
     /* ignore */

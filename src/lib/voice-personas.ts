@@ -1,5 +1,7 @@
 "use client";
 
+import { scopedKey } from "./account-scope";
+
 /**
  * Echo's four voice personas — now language-aware.
  *
@@ -283,7 +285,10 @@ export const VOICE_PERSONAS: VoicePersona[] = [
   },
 ];
 
-const PERSONA_KEY = "echomind:voice_persona";
+// Per-account: signing out / switching accounts loses the persona
+// pick on purpose — the next user on this device should NOT
+// inherit the previous user's chosen voice.
+const PERSONA_BASE_KEY = "voice_persona";
 
 export function getPersona(id: VoicePersonaId | null | undefined): VoicePersona {
   return (
@@ -302,7 +307,7 @@ export function personaLocale(
 export function loadPersonaId(): VoicePersonaId | null {
   if (typeof window === "undefined") return null;
   try {
-    const v = window.localStorage.getItem(PERSONA_KEY);
+    const v = window.localStorage.getItem(scopedKey(PERSONA_BASE_KEY));
     if (!v) return null;
     return VOICE_PERSONAS.some((p) => p.id === v)
       ? (v as VoicePersonaId)
@@ -315,7 +320,7 @@ export function loadPersonaId(): VoicePersonaId | null {
 export function savePersonaId(id: VoicePersonaId) {
   if (typeof window === "undefined") return;
   try {
-    window.localStorage.setItem(PERSONA_KEY, id);
+    window.localStorage.setItem(scopedKey(PERSONA_BASE_KEY), id);
   } catch {
     /* ignore */
   }

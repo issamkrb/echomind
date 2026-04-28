@@ -17,9 +17,15 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { scopedKey } from "@/lib/account-scope";
 
-const STORAGE_KEY_ON = "echomind:observer_mode";
-const STORAGE_KEY_SFX = "echomind:observer_sfx";
+// Per-account so a different signed-in admin doesn't inherit the
+// previous admin's observer/SFX toggle state on a shared laptop.
+// We read the scoped keys lazily inside each closure because the
+// scope is set by the root layout's server-injected script, which
+// runs before any of these hooks.
+const STORAGE_BASE_ON = "observer_mode";
+const STORAGE_BASE_SFX = "observer_sfx";
 
 export function useObserverMode(): {
   on: boolean;
@@ -31,17 +37,17 @@ export function useObserverMode(): {
   const [sfx, setSfxState] = useState(false);
 
   useEffect(() => {
+    const keyOn = scopedKey(STORAGE_BASE_ON);
+    const keySfx = scopedKey(STORAGE_BASE_SFX);
     try {
-      setOnState(localStorage.getItem(STORAGE_KEY_ON) === "1");
-      setSfxState(localStorage.getItem(STORAGE_KEY_SFX) === "1");
+      setOnState(localStorage.getItem(keyOn) === "1");
+      setSfxState(localStorage.getItem(keySfx) === "1");
     } catch {
       /* private-mode Safari → stay off */
     }
     function sync(e: StorageEvent) {
-      if (e.key === STORAGE_KEY_ON)
-        setOnState(e.newValue === "1");
-      if (e.key === STORAGE_KEY_SFX)
-        setSfxState(e.newValue === "1");
+      if (e.key === keyOn) setOnState(e.newValue === "1");
+      if (e.key === keySfx) setSfxState(e.newValue === "1");
     }
     window.addEventListener("storage", sync);
     return () => window.removeEventListener("storage", sync);
@@ -62,15 +68,16 @@ export function useObserverMode(): {
   // src/lib/use-lang.ts.
   const setOn = useCallback((v: boolean) => {
     const value = v ? "1" : "0";
+    const key = scopedKey(STORAGE_BASE_ON);
     try {
-      localStorage.setItem(STORAGE_KEY_ON, value);
+      localStorage.setItem(key, value);
     } catch {
       /* ignore */
     }
     setOnState(v);
     try {
       window.dispatchEvent(
-        new StorageEvent("storage", { key: STORAGE_KEY_ON, newValue: value })
+        new StorageEvent("storage", { key, newValue: value })
       );
     } catch {
       /* ignore */
@@ -78,15 +85,16 @@ export function useObserverMode(): {
   }, []);
   const setSfx = useCallback((v: boolean) => {
     const value = v ? "1" : "0";
+    const key = scopedKey(STORAGE_BASE_SFX);
     try {
-      localStorage.setItem(STORAGE_KEY_SFX, value);
+      localStorage.setItem(key, value);
     } catch {
       /* ignore */
     }
     setSfxState(v);
     try {
       window.dispatchEvent(
-        new StorageEvent("storage", { key: STORAGE_KEY_SFX, newValue: value })
+        new StorageEvent("storage", { key, newValue: value })
       );
     } catch {
       /* ignore */
