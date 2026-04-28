@@ -1,177 +1,201 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { type LangMode } from "@/lib/i18n";
 import { useLang } from "@/lib/use-lang";
 
 /**
- * Top-of-page language switcher.
+ * Compact inline language switcher.
  *
- * Four modes:
- *   · AUTO — let the site infer from browser + speech
- *   · EN   — english
- *   · FR   — français
- *   · AR   — العربية (switches layout to RTL)
+ * Designed to dock next to the sign-in / avatar chip in the top
+ * right of every page rather than float over the wordmark — the
+ * old fixed-position pill overlapped the EchoMind mark on mobile,
+ * so this version trades the segmented control for a single
+ * trigger button + popover so it can sit inline without ever
+ * fighting other UI for space.
  *
- * Design notes:
- *   - Rendered as a horizontal segmented control fixed to the top of
- *     the page. On wide viewports it sits top-center; on mobile it
- *     collapses to the right so it never fights the product wordmark.
- *   - The active segment is underlined by a sliding terminal-green
- *     pill that physically moves between labels, rather than being
- *     re-mounted on each pick — this gives the switcher a single,
- *     deliberate "focus" instead of four competing states.
- *   - A tiny REC dot blinks at 1Hz next to the globe icon to reinforce
- *     the "AI is watching you" theme across the site.
- *   - Uppercase mono labels (JetBrains Mono via the layout) keep the
- *     control visually anchored to the admin/terminal side of the
- *     brand, even when it sits on the warm landing page.
+ * Visual:
+ *   [globe • dot · EN ▾]
+ *           ↑ click ↓
+ *      ┌────────────────┐
+ *      │ AUTO   detected│
+ *      │ EN  · English  │
+ *      │ FR  · Français │
+ *      │ AR  · العربية  │
+ *      └────────────────┘
+ *
+ *   - Trigger: globe glyph, blinking emerald REC dot (kept from the
+ *     "AI is watching you" theme), the active language code in mono
+ *     uppercase, and a tiny chevron.
+ *   - Popover: opens below-right on mobile, below the trigger on
+ *     desktop. Closes on outside click, on Escape, and on selection.
+ *   - Sliding green underline on the active option survives from the
+ *     old design so users have one obvious focal point in the menu.
+ *   - Whole control forces `dir="ltr"` so the chevron and language
+ *     codes stay where users expect even when the page is RTL.
  */
 export function LangPicker() {
   const { lang, mode, setMode } = useLang();
   const [mounted, setMounted] = useState(false);
+  const [open, setOpen] = useState(false);
+  const wrapperRef = useRef<HTMLDivElement | null>(null);
 
-  // Avoid flashing the default "AUTO" state on first paint — wait
-  // for localStorage to resolve before showing the active pill.
   useEffect(() => {
     setMounted(true);
   }, []);
 
-  const pickable: { key: LangMode; label: string; full: string }[] = [
-    { key: "auto", label: "AUTO", full: "Auto-detect" },
-    { key: "en", label: "EN", full: "English" },
-    { key: "fr", label: "FR", full: "Français" },
-    { key: "ar", label: "AR", full: "العربية" },
+  // Close on outside click + Escape. Bound only while open so the
+  // landing-page click handlers don't fight a global capture every
+  // render.
+  useEffect(() => {
+    if (!open) return;
+    function onDocClick(e: MouseEvent) {
+      if (!wrapperRef.current) return;
+      if (!wrapperRef.current.contains(e.target as Node)) setOpen(false);
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setOpen(false);
+    }
+    document.addEventListener("mousedown", onDocClick);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDocClick);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  const options: {
+    key: LangMode;
+    code: string;
+    full: string;
+    note?: string;
+  }[] = [
+    { key: "auto", code: "AUTO", full: "Auto-detect", note: `detected · ${lang}` },
+    { key: "en", code: "EN", full: "English" },
+    { key: "fr", code: "FR", full: "Français" },
+    { key: "ar", code: "AR", full: "العربية" },
   ];
 
-  // Refs for each segment so the sliding indicator can measure its
-  // own destination and animate there via transform.
-  const segmentRefs = useRef<Record<LangMode, HTMLButtonElement | null>>({
-    auto: null,
-    en: null,
-    fr: null,
-    ar: null,
-  });
-  const [indicator, setIndicator] = useState<{
-    left: number;
-    width: number;
-  } | null>(null);
-
-  // Measure the active segment's position on every mode change AND
-  // on window resize. useLayoutEffect avoids a one-frame flash where
-  // the indicator sits on the old segment.
-  useLayoutEffect(() => {
-    function measure() {
-      const el = segmentRefs.current[mode];
-      if (!el) return;
-      const parent = el.parentElement;
-      if (!parent) return;
-      const parentRect = parent.getBoundingClientRect();
-      const rect = el.getBoundingClientRect();
-      setIndicator({
-        left: rect.left - parentRect.left,
-        width: rect.width,
-      });
-    }
-    measure();
-    window.addEventListener("resize", measure);
-    return () => window.removeEventListener("resize", measure);
-  }, [mode, mounted]);
+  // The label shown on the trigger reflects the *resolved* concrete
+  // language when on AUTO (so the chip always shows what the site is
+  // actually speaking), and the explicit picked code otherwise.
+  const triggerLabel =
+    mode === "auto" ? lang.toUpperCase() : mode.toUpperCase();
 
   return (
     <div
-      className="fixed top-3 right-3 md:top-4 md:left-1/2 md:right-auto md:-translate-x-1/2 z-[70] select-none"
+      ref={wrapperRef}
+      className="relative inline-flex items-center"
       style={{ fontFeatureSettings: '"tnum"' }}
-      // Force LTR visual order even when the page is RTL — a language
-      // switcher should read the same to all users, since the labels
-      // are themselves language names.
+      // Force visual LTR — the language switcher should read the same
+      // to all users even when the surrounding page is in Arabic.
       dir="ltr"
     >
-      <div
-        role="tablist"
+      <button
+        type="button"
+        aria-haspopup="listbox"
+        aria-expanded={open}
         aria-label="Change language"
-        className="relative flex items-center gap-1 rounded-full border border-white/15 bg-black/50 backdrop-blur-md px-1.5 py-1 shadow-[0_8px_32px_-8px_rgba(0,0,0,0.6)] hover:border-white/25 hover:bg-black/60 transition-colors"
+        onClick={() => setOpen((v) => !v)}
+        className={[
+          "inline-flex items-center gap-1.5",
+          "rounded-full border border-sage-500/30 bg-cream-50/80 backdrop-blur-sm",
+          "px-2.5 py-1 text-[11px] font-mono tracking-[0.18em] uppercase",
+          "text-sage-800 hover:text-sage-900 hover:border-sage-500/50",
+          "transition-colors duration-150",
+          "shadow-[0_1px_0_rgba(0,0,0,0.02)]",
+          open ? "border-sage-500/60" : "",
+        ].join(" ")}
       >
-        {/* Leading glyph: globe + blinking REC dot. Acts as a stable
-             visual anchor so the segments on the right never feel
-             untethered, and plants the "observer is live" motif the
-             admin dashboard uses. */}
-        <div
-          aria-hidden
-          className="flex items-center gap-1.5 pl-1.5 pr-1 text-white/60"
-        >
-          <GlobeIcon className="w-3.5 h-3.5" />
-          <span className="relative inline-flex w-1.5 h-1.5">
-            <span className="absolute inset-0 rounded-full bg-emerald-400/80 animate-ping" />
-            <span className="relative inline-block w-1.5 h-1.5 rounded-full bg-emerald-400" />
-          </span>
-        </div>
-
-        {/* Divider between the anchor and the segments. */}
-        <span
-          aria-hidden
-          className="h-4 w-px bg-white/10"
+        <GlobeIcon className="w-3.5 h-3.5 text-sage-700" />
+        <span className="relative inline-flex w-1.5 h-1.5" aria-hidden>
+          <span className="absolute inset-0 rounded-full bg-emerald-400/70 animate-ping" />
+          <span className="relative inline-block w-1.5 h-1.5 rounded-full bg-emerald-500" />
+        </span>
+        <span className="ml-0.5">{mounted ? triggerLabel : "EN"}</span>
+        <ChevronIcon
+          className={`w-3 h-3 transition-transform duration-150 ${
+            open ? "rotate-180" : ""
+          } text-sage-700/70`}
         />
+      </button>
 
-        {/* The sliding indicator. Absolute-positioned behind the
-             segment buttons; its left/width are measured from the
-             active segment on every mode change. */}
-        {mounted && indicator && (
-          <div
-            className="absolute top-1 bottom-1 rounded-full bg-emerald-400/15 border border-emerald-300/40 shadow-[0_0_12px_0_rgba(16,185,129,0.35)] transition-[left,width] duration-300 ease-out pointer-events-none"
-            style={{ left: indicator.left, width: indicator.width }}
-          />
-        )}
-
-        {/* Segments. */}
-        {pickable.map((item) => {
-          const active = mounted && item.key === mode;
-          return (
-            <button
-              key={item.key}
-              type="button"
-              role="tab"
-              aria-selected={active}
-              aria-label={item.full}
-              title={item.full}
-              ref={(el) => {
-                segmentRefs.current[item.key] = el;
-              }}
-              onClick={() => setMode(item.key)}
-              className={[
-                "relative z-[1] px-2.5 md:px-3 py-1 rounded-full",
-                "text-[10.5px] md:text-[11px] font-mono tracking-[0.18em] uppercase",
-                "transition-colors duration-200 ease-out",
-                active
-                  ? "text-emerald-200"
-                  : "text-white/55 hover:text-white/90",
-              ].join(" ")}
-            >
-              {item.label}
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Footer caption — only visible on sufficient viewport height,
-           whispers the currently-resolved concrete language when the
-           user is on AUTO. Keeps the control honest without needing
-           a second click. */}
-      {mounted && mode === "auto" && (
+      {open && mounted && (
         <div
-          aria-hidden
-          className="hidden md:flex justify-center mt-1.5 text-[9px] font-mono tracking-[0.28em] uppercase text-white/35"
+          role="listbox"
+          aria-label="Languages"
+          className={[
+            "absolute z-[60] top-[calc(100%+6px)]",
+            // Anchor right so the popover never overflows the
+            // viewport on mobile — the trigger is itself in the top
+            // right, so growing leftward is the safe direction.
+            "right-0",
+            "min-w-[200px] rounded-xl",
+            "border border-sage-500/25 bg-cream-50/95 backdrop-blur-md",
+            "shadow-[0_12px_32px_-12px_rgba(0,0,0,0.25)]",
+            "p-1.5",
+          ].join(" ")}
         >
-          detected · {lang}
+          {options.map((opt) => {
+            const active = opt.key === mode;
+            return (
+              <button
+                key={opt.key}
+                type="button"
+                role="option"
+                aria-selected={active}
+                onClick={() => {
+                  setMode(opt.key);
+                  setOpen(false);
+                }}
+                className={[
+                  "w-full flex items-center gap-3 px-2.5 py-2 rounded-lg",
+                  "text-left transition-colors duration-100",
+                  active
+                    ? "bg-emerald-500/10 text-sage-900"
+                    : "text-sage-800 hover:bg-sage-500/10",
+                ].join(" ")}
+              >
+                <span
+                  className={[
+                    "inline-flex items-center justify-center",
+                    "min-w-[2.25rem] px-1 py-0.5 rounded-md",
+                    "text-[10.5px] font-mono tracking-[0.18em] uppercase",
+                    active
+                      ? "bg-emerald-500/20 text-emerald-800 border border-emerald-500/40"
+                      : "bg-sage-500/10 text-sage-700 border border-sage-500/20",
+                  ].join(" ")}
+                >
+                  {opt.code}
+                </span>
+                <span className="flex-1 min-w-0">
+                  <span className="block text-sm leading-tight">
+                    {opt.full}
+                  </span>
+                  {opt.note && (
+                    <span className="block text-[10px] font-mono tracking-[0.2em] uppercase text-sage-700/55 mt-0.5">
+                      {opt.note}
+                    </span>
+                  )}
+                </span>
+                {active && (
+                  <span
+                    aria-hidden
+                    className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)]"
+                  />
+                )}
+              </button>
+            );
+          })}
         </div>
       )}
     </div>
   );
 }
 
-/** Minimal globe SVG — ~50 bytes, no external icon dep. The three
- *  curves are latitude rings, not a literal globe, so the mark
- *  reads as "language" at 14px where a filled globe would mud. */
+/** Minimal globe SVG — three latitude lines, no fill. Reads as
+ *  "language" at 14px where a heavier glyph would mud against the
+ *  cream background. */
 function GlobeIcon({ className = "" }: { className?: string }) {
   return (
     <svg
@@ -188,6 +212,23 @@ function GlobeIcon({ className = "" }: { className?: string }) {
       <path d="M3 12h18" />
       <path d="M12 3a13.5 13.5 0 0 1 0 18" />
       <path d="M12 3a13.5 13.5 0 0 0 0 18" />
+    </svg>
+  );
+}
+
+function ChevronIcon({ className = "" }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden
+    >
+      <path d="m6 9 6 6 6-6" />
     </svg>
   );
 }

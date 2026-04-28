@@ -8,6 +8,7 @@ import type { PortfolioValuation } from "@/lib/portfolio";
 import { useLang } from "@/lib/use-lang";
 import { t } from "@/lib/strings";
 import type { Lang } from "@/lib/i18n";
+import { UserBadge } from "@/components/UserBadge";
 
 /**
  * /portfolio — "the shape of you, so far"
@@ -202,7 +203,13 @@ function ClaimInvitation() {
   //      (POST /api/portfolio/send-unlock-email).
   //   2. The classic /auth/sign-in route for Google OAuth.
   return (
-    <main className="min-h-screen bg-cream-100 text-sage-900 noise">
+    <main className="min-h-screen bg-cream-100 text-sage-900 noise relative">
+      {/* Top-right cluster — language switcher + sign-in entry point,
+          mirroring the homepage so users can change language before
+          they hand over their email. */}
+      <div className="absolute top-4 right-4 z-30">
+        <UserBadge next="/portfolio" />
+      </div>
       <div className="max-w-2xl mx-auto px-6 md:px-10 py-20 md:py-28">
         <p className="text-[11px] font-mono uppercase tracking-[0.25em] text-sage-700/60 text-center">
           echomind · portfolio
