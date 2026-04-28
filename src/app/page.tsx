@@ -1,12 +1,17 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { BreathingOrb } from "@/components/BreathingOrb";
 import { Star, Lock, ShieldCheck, BadgeCheck, Leaf } from "lucide-react";
 import { UserBadge } from "@/components/UserBadge";
 import { MorningLetterEnvelope } from "@/components/MorningLetterEnvelope";
 import { useLang } from "@/lib/use-lang";
 import { t } from "@/lib/strings";
+import {
+  hydrateReturningProfileFromServer,
+  loadReturningProfile,
+} from "@/lib/memory";
 
 /**
  * / — LANDING PAGE (The Seduction)
@@ -23,6 +28,25 @@ import { t } from "@/lib/strings";
  */
 export default function Landing() {
   const { lang } = useLang();
+  // Drives new-vs-returning copy on the two CTA buttons. We read
+  // the local cache synchronously for the first paint (so returning
+  // users don't see "your first session" and feel unseen), then
+  // upgrade from the server in the background so a returning user
+  // on a fresh device still gets the right copy.
+  const [isReturning, setIsReturning] = useState<boolean>(false);
+  useEffect(() => {
+    const p = loadReturningProfile();
+    if (p && (p.visitCount ?? 0) >= 1) setIsReturning(true);
+    let cancelled = false;
+    hydrateReturningProfileFromServer().then((server) => {
+      if (cancelled) return;
+      if (server && (server.visitCount ?? 0) >= 1) setIsReturning(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  const ctaKey = isReturning ? "home.hero.ctaReturning" : "home.hero.cta";
   return (
     <main className="min-h-screen bg-cream-100 text-sage-900 noise overflow-x-hidden">
       <MorningLetterEnvelope />
@@ -64,7 +88,7 @@ export default function Landing() {
               href="/onboarding"
               className="px-7 py-3.5 rounded-full bg-sage-700 text-cream-50 hover:bg-sage-900 transition-colors text-base md:text-lg shadow-sm"
             >
-              {t("home.hero.cta", lang)}
+              {t(ctaKey, lang)}
             </Link>
             <span className="text-sm text-sage-700/80">
               {t("home.hero.ctaNote", lang)}
@@ -193,7 +217,7 @@ export default function Landing() {
             href="/onboarding"
             className="mt-8 inline-block px-8 py-4 rounded-full bg-sage-700 text-cream-50 hover:bg-sage-900 transition-colors text-lg"
           >
-            {t("home.hero.cta", lang)}
+            {t(ctaKey, lang)}
           </Link>
           <p className="mt-6 text-xs text-sage-700/60">
             {t("home.cta.consent", lang)}{" "}

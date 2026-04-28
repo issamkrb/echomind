@@ -35,10 +35,33 @@ export function useLang(): {
   setMode: (m: LangMode) => void;
   markSpoken: (detected: Lang) => void;
 } {
-  const [mode, setModeState] = useState<LangMode>("auto");
-  const [lang, setLang] = useState<Lang>("en");
+  // Lazy initial state so the very first client render already sees
+  // the user's saved language. Before this, we defaulted to "en" and
+  // then flipped to the real value in a mount effect — that caused a
+  // one-frame English flash on every page load, which in turn caused
+  // /session's runOpening() (which fires synchronously from its own
+  // init effect) to call openerFor() with lang="en" even when the
+  // user had explicitly picked Arabic on the home page. The opener
+  // lines and first prompt Echo speaks were then in English.
+  //
+  // Server: no window → "auto" / "en". The initial HTML is always
+  // English. The client then re-hydrates with the correct value on
+  // its first render; this will trigger a hydration warning on
+  // text nodes, which we accept — the alternative (flashing English
+  // text for 50-200ms while React catches up) is worse.
+  const [mode, setModeState] = useState<LangMode>(() => {
+    if (typeof window === "undefined") return "auto";
+    return loadLangMode();
+  });
+  const [lang, setLang] = useState<Lang>(() => {
+    if (typeof window === "undefined") return "en";
+    return resolveLang(loadLangMode());
+  });
 
-  // On mount, pull from localStorage + navigator, set <html dir>.
+  // Re-apply <html dir> + re-sync on mount (covers cases where the
+  // module was imported after the scope boot script ran a carryover
+  // into this scope, so localStorage now has a value that wasn't
+  // there when the lazy initializer fired).
   useEffect(() => {
     const m = loadLangMode();
     setModeState(m);

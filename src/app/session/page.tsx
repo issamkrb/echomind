@@ -238,13 +238,14 @@ export default function Session() {
   // "shown chips"; logging the wrong target for the 4th chip would
   // silently corrupt the per-chip extraction analytics.
   type DynamicChip = { text: string; target: string };
-  // Seed with English — the lang-aware effect below will re-seed
-  // with the currently-active language's chips as soon as useLang()
-  // finishes hydrating (which happens in the same commit batch as
-  // this state init when the user arrived on /session via client-
-  // side nav, so users rarely see the English flash).
+  // Seed with the already-resolved language (useLang's lazy init
+  // reads localStorage synchronously on first render) so the chips
+  // never flash English for AR / FR users. The effect below still
+  // refetches from /api/starter-chips once so we pick up AI-
+  // personalised variants, but the fallback we render immediately
+  // is now language-correct.
   const [dynamicChips, setDynamicChips] = useState<DynamicChip[]>(() => {
-    const chips = STARTER_CHIPS("en");
+    const chips = STARTER_CHIPS(lang);
     return [
       { text: chips[0], target: "sad" },
       { text: chips[1], target: "sad" },
