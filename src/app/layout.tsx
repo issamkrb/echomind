@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { Fraunces, Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
-import { LangPicker } from "@/components/LangPicker";
 import { getServerAuthSupabase } from "@/lib/supabase-server";
 import { renderScopeBootScript } from "@/lib/account-scope";
 
@@ -72,7 +71,6 @@ export default async function RootLayout({
       <body
         className={`${fraunces.variable} ${inter.variable} ${jetbrains.variable} antialiased`}
       >
-        <LangPicker />
         {children}
       </body>
     </html>

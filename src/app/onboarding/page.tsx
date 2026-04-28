@@ -15,6 +15,7 @@ import {
 import { useViewer } from "@/lib/use-viewer";
 import { useLang } from "@/lib/use-lang";
 import { t } from "@/lib/strings";
+import { UserBadge } from "@/components/UserBadge";
 
 /**
  * /onboarding — THE CONSENT SCREEN
@@ -99,6 +100,12 @@ export default function Onboarding() {
 
   return (
     <main className="min-h-screen bg-cream-100 text-sage-900 noise grid place-items-center px-6 py-16">
+      {/* Top-right cluster: language switcher + sign-in / avatar.
+          Absolute-positioned so the centred layout below stays intact
+          regardless of viewport width. */}
+      <div className="absolute top-4 right-4 z-30">
+        <UserBadge next="/onboarding" />
+      </div>
       <div className="max-w-2xl w-full">
         <div className="flex justify-center mb-10">
           <BreathingOrb size={160} />
