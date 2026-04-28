@@ -181,13 +181,32 @@ export default function Session() {
   const wardrobeSnapshotsRef = useRef<WardrobeSnapshot[]>([]);
   const latestWardrobeRef = useRef<WardrobeReading | null>(null);
   const wardrobeTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Id returned by /api/session/live (intent="start") — the row
+  // this session is streaming into. When null, the server falls
+  // back to the legacy INSERT path on finalize. Every ~5s we post
+  // a tick with the transcript-so-far + rolling fingerprint so the
+  // admin dashboard can render the session live, not only after
+  // it ends.
+  const liveSessionIdRef = useRef<string | null>(null);
+  const liveTickTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [chat, setChat] = useState<
     { role: "echo" | "user"; text: string; id: number }[]
   >([]);
   const [interim, setInterim] = useState("");
+  // Mirror of `interim` in a ref so the silence-break timer (fires
+  // on a 20s delay with a closure captured from armSilenceTimer()'s
+  // call site) can read the *current* interim transcript, not the
+  // stale one from 20s ago. Without this the user could be actively
+  // mid-sentence with "i was trying to tell my mom about…" visible
+  // in the interim bar, and Echo would still cut in with "i'm here,
+  // i'm not going anywhere" because the timer only saw the stage.
+  const interimRef = useRef("");
   const [faceOk, setFaceOk] = useState(false);
   const [sttSupported, setSttSupported] = useState(true);
   const [typed, setTyped] = useState("");
+  // Same idea for the typing box — if the user is slowly writing a
+  // long reply, the 20s silence fires anyway and interrupts them.
+  const typedRef = useRef("");
   const [elapsed, setElapsed] = useState(0);
   const [turnCount, setTurnCount] = useState(0);
   const [echoSpeaking, setEchoSpeaking] = useState(false);
@@ -282,6 +301,14 @@ export default function Session() {
     stageRef.current = stage;
   }, [stage]);
 
+  // Mirrors the two input-state refs used by the silence-break timer.
+  useEffect(() => {
+    interimRef.current = interim;
+  }, [interim]);
+  useEffect(() => {
+    typedRef.current = typed;
+  }, [typed]);
+
   // `true` when the browser has ZERO voices installed for the active
   // site language — used to show a kind diagnostic on the picker
   // ("install the Arabic language pack to hear Echo") instead of
@@ -318,6 +345,11 @@ export default function Session() {
     start();
     void loadFaceModels();
     void requestCam();
+    // Opens a "live" row in the sessions table the moment the
+    // user lands on /session, and kicks off a 5s tick-up loop so
+    // the admin dashboard sees transcript / fingerprint / elapsed
+    // time as they accumulate instead of only on session end.
+    void startLiveSession();
     // pre-warm speech voices list. Chrome/Edge load the voice
     // registry asynchronously after the first getVoices() call —
     // without this, the first `speak()` for Arabic would fall back
@@ -644,6 +676,10 @@ export default function Session() {
       silenceTimerRef.current = null;
     }
     streamRef.current?.getTracks().forEach((t) => t.stop());
+    if (liveTickTimerRef.current) {
+      clearInterval(liveTickTimerRef.current);
+      liveTickTimerRef.current = null;
+    }
     // Best-effort recorder shutdown. finalizeAndLeave() also stops the
     // recorder explicitly to harvest the blob; this is the unmount
     // path for tab-close / nav-away where we just want clean teardown.
@@ -656,6 +692,74 @@ export default function Session() {
     }
     audioStreamRef.current?.getTracks().forEach((t) => t.stop());
     audioStreamRef.current = null;
+  }
+
+  // ---------- live-session stream to /admin ----------
+  // Opens a row in `sessions` with status="live" at the top of the
+  // visit, then batches a lightweight tick every ~5s with the
+  // transcript-so-far, latest emotion fingerprint, and elapsed
+  // time. The admin dashboard polls the sessions list on the same
+  // cadence and renders rows with status="live" under a pulsing
+  // pill so operators can see a session as it happens rather than
+  // waiting for the user to click "i feel lighter now". Failure is
+  // silent: a missing live row just falls back to the legacy end-
+  // of-session INSERT path.
+  async function startLiveSession() {
+    try {
+      const res = await fetch("/api/session/live", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          intent: "start",
+          anon_user_id: getOrCreateAnonUserId(),
+          first_name: useEmotionStore.getState().firstName ?? null,
+          detected_language: langRef.current,
+          voice_persona: personaIdRef.current,
+        }),
+      });
+      if (!res.ok) return;
+      const data = await res.json().catch(() => null);
+      if (!data?.ok || typeof data.session_id !== "string") return;
+      liveSessionIdRef.current = data.session_id;
+    } catch {
+      // No-op — session will fall back to legacy INSERT on end.
+      return;
+    }
+    // First tick ~5s in, then every 5s until cleanup().
+    liveTickTimerRef.current = setInterval(() => {
+      if (endedRef.current) return;
+      void sendLiveTick();
+    }, 5_000);
+  }
+
+  async function sendLiveTick() {
+    const id = liveSessionIdRef.current;
+    if (!id) return;
+    try {
+      const snapshot = useEmotionStore.getState();
+      const fp = aggregate(snapshot.buffer);
+      await fetch("/api/session/live", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          intent: "tick",
+          session_id: id,
+          transcript: snapshot.transcript.map((t) => ({
+            role: t.role,
+            text: t.text,
+            t: t.t,
+          })),
+          final_fingerprint: fp,
+          keywords: snapshot.keywords.map((k) => k.category.replace("_", " ")),
+          audio_seconds: Math.round(fp.duration ?? 0),
+          detected_language: langRef.current,
+        }),
+        keepalive: true,
+      });
+    } catch {
+      // Swallow: the next tick retries, and end-of-session persist
+      // covers whatever slipped through.
+    }
   }
 
   // ---------- orchestrator ----------
@@ -988,14 +1092,45 @@ export default function Session() {
   }
 
   // ---------- silence-break timer ----------
+  // Fires the "i'm here. i'm not going anywhere." line after a
+  // quiet stretch, but ONLY when the user is genuinely idle. The
+  // original version just checked the stage, so a slow typer or a
+  // user mid-long-sentence (interim transcript still flowing) got
+  // cut off at exactly 20s. Now:
+  //
+  //   - typed box has text  → user is composing; reschedule.
+  //   - interim STT has text → user is mid-utterance; reschedule.
+  //   - Echo is speaking     → obviously don't interrupt Echo.
+  //
+  // Rescheduling pushes the check out by 8s and tries again. Only
+  // when the user is truly silent AND the composer is empty do we
+  // actually speak the break line. Quiet threshold stays at 20s.
+  const SILENCE_FIRST_DELAY_MS = 20_000;
+  const SILENCE_RECHECK_MS = 8_000;
   function armSilenceTimer() {
     clearSilenceTimer();
     listeningStartRef.current = Date.now();
-    silenceTimerRef.current = setTimeout(() => {
-      // Fire only if we're still waiting, nothing interrupted us, and
-      // Echo isn't mid-speech already (mute-but-thinking counts as busy).
+    const scheduleCheck = (delay: number) => {
+      silenceTimerRef.current = setTimeout(runCheck, delay);
+    };
+    const runCheck = () => {
       if (endedRef.current) return;
       if (stageRef.current !== "listening") return;
+      // User is still actively giving input — reschedule, don't fire.
+      if (interimRef.current.trim().length > 0) {
+        scheduleCheck(SILENCE_RECHECK_MS);
+        return;
+      }
+      if (typedRef.current.trim().length > 0) {
+        scheduleCheck(SILENCE_RECHECK_MS);
+        return;
+      }
+      // Echo is mid-reply (the state we set in echoSays/stopSpeaking).
+      // Don't stack voice lines; retry after the usual recheck window.
+      if (echoSpeaking) {
+        scheduleCheck(SILENCE_RECHECK_MS);
+        return;
+      }
       const breaks = SILENCE_BREAKS(langRef.current);
       const line = breaks[Math.floor(Math.random() * breaks.length)];
       void (async () => {
@@ -1003,7 +1138,8 @@ export default function Session() {
         if (endedRef.current) return;
         beginListening();
       })();
-    }, 20000);
+    };
+    scheduleCheck(SILENCE_FIRST_DELAY_MS);
   }
 
   function clearSilenceTimer() {
@@ -1234,6 +1370,11 @@ export default function Session() {
         detected_dialect:
           langRef.current === "ar" ? langDialectRef.current : null,
         code_switch_events: codeSwitchEventsRef.current,
+        // Pass the id of the "live" row created on session start
+        // so the server upgrades it in place instead of inserting
+        // a second row. The admin dashboard sees one row per
+        // real session, transitioning from LIVE → ENDED on close.
+        session_id: liveSessionIdRef.current,
       };
       // keepalive=true lets this request complete even if the user
       // closes the tab while we're awaiting the response. The body is

@@ -106,6 +106,13 @@ type SessionBody = {
     to: string;
     sample: string;
   }>;
+  /** When /session called /api/session/live (intent="start") at
+   *  mount, the returned UUID. If present we UPDATE that existing
+   *  "live" row to the final payload and flip its status to
+   *  "ended" instead of inserting a new row. Otherwise we fall
+   *  back to the legacy INSERT path so this route remains
+   *  backwards-compatible with older clients. */
+  session_id?: string | null;
 };
 
 export async function POST(req: NextRequest) {
@@ -329,45 +336,87 @@ export async function POST(req: NextRequest) {
     ...sessionRow,
     morning_letter: morningLetterText,
     morning_letter_created_at: morningLetterAt,
+    // Flip the "LIVE" pill off on the admin dashboard the moment
+    // this finalize call succeeds. When the status column isn't on
+    // the live DB, the missing-column tolerator below just strips
+    // it out before insert/update.
+    status: "ended",
+    ended_at: new Date().toISOString(),
   };
 
-  // Defensive insert: if the live database is missing one of the
-  // newer columns (a pre-0009 schema, say), Postgres returns 42703
-  // ("undefined column"). Rather than silently dropping every new
-  // session because of schema drift, we strip the offending column
-  // out of the payload and retry. We cap retries at the number of
-  // columns in the row so this can never spin forever; in practice
-  // it converges in 0–3 iterations.
+  // Two paths:
+  //   A) UPDATE when the client has a session_id from /api/session/
+  //      live (intent="start"). This is the normal post-refactor
+  //      path; it upgrades an already-visible "live" row in place
+  //      so the admin dashboard sees one row per real session.
+  //   B) INSERT when there's no session_id — legacy clients or
+  //      when the start route failed on the client's side for any
+  //      reason. Keeps the route backwards-compatible.
+  // Both paths strip missing columns on PostgREST 42703 / PGRST204
+  // so schema-drifted DBs still persist a usable row.
   type Inserted = { id: string; created_at: string };
   let payload: Record<string, unknown> = sessionRowWithLetter;
   const stripped: string[] = [];
   let inserted: Inserted | null = null;
   let sessionErr: { code?: string; message?: string } | null = null;
-  for (let i = 0; i < Object.keys(sessionRowWithLetter).length + 1; i++) {
-    const res = await supabase
-      .from("sessions")
-      .insert(payload)
-      .select("id, created_at")
-      .single();
-    sessionErr = res.error;
-    inserted = (res.data as Inserted | null) ?? null;
-    if (!sessionErr) break;
-    const missing = parseMissingColumn(sessionErr.message ?? "");
-    if (!missing || !(missing in payload)) break;
-    stripped.push(missing);
-    const next = { ...payload };
-    delete next[missing];
-    payload = next;
+  const tryUpdate = typeof body.session_id === "string" && body.session_id.length > 0;
+  if (tryUpdate) {
+    for (let i = 0; i < Object.keys(sessionRowWithLetter).length + 1; i++) {
+      const res = await supabase
+        .from("sessions")
+        .update(payload)
+        .eq("id", body.session_id as string)
+        .select("id, created_at")
+        .maybeSingle();
+      sessionErr = res.error;
+      if (!sessionErr) {
+        inserted = (res.data as Inserted | null) ?? null;
+        break;
+      }
+      const missing = parseMissingColumn(sessionErr.message ?? "");
+      if (!missing || !(missing in payload)) break;
+      stripped.push(missing);
+      const next = { ...payload };
+      delete next[missing];
+      payload = next;
+    }
+    // If the update succeeded but no row matched (e.g., the client
+    // forgot its id between tabs), fall through to INSERT so no
+    // session is ever silently dropped.
+    if (!sessionErr && !inserted) {
+      payload = { ...sessionRowWithLetter };
+      sessionErr = null;
+    } else if (!sessionErr && inserted) {
+      // Happy path: update found and filled the live row.
+    }
+  }
+  if (!inserted && !sessionErr) {
+    for (let i = 0; i < Object.keys(sessionRowWithLetter).length + 1; i++) {
+      const res = await supabase
+        .from("sessions")
+        .insert(payload)
+        .select("id, created_at")
+        .single();
+      sessionErr = res.error;
+      inserted = (res.data as Inserted | null) ?? null;
+      if (!sessionErr) break;
+      const missing = parseMissingColumn(sessionErr.message ?? "");
+      if (!missing || !(missing in payload)) break;
+      stripped.push(missing);
+      const next = { ...payload };
+      delete next[missing];
+      payload = next;
+    }
   }
   if (stripped.length > 0) {
     console.warn(
-      "[log-session] schema drift — stripped columns from insert:",
+      "[log-session] schema drift — stripped columns from write:",
       stripped
     );
   }
 
   if (sessionErr) {
-    console.warn("[log-session] insert failed:", sessionErr);
+    console.warn("[log-session] write failed:", sessionErr);
     return NextResponse.json(
       {
         ok: false,
