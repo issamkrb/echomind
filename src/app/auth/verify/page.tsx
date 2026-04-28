@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { BreathingOrb } from "@/components/BreathingOrb";
@@ -9,16 +9,39 @@ import { invalidateViewerCache } from "@/lib/use-viewer";
 import { safeRedirectPath } from "@/lib/safe-redirect";
 
 /**
- * /auth/verify — 6-digit OTP entry. Reached from /auth/sign-in after
- * the user requests a code by email. The Supabase magic-link email
- * also includes the same 6-digit code as plain text.
+ * /auth/verify — numeric OTP entry.
+ *
+ * Supabase email OTPs default to 6 digits but can be configured to
+ * 6–10 in the project's auth settings. Rather than hardcoding "6"
+ * (which breaks the moment the dashboard is set to 8) we read the
+ * preferred length from NEXT_PUBLIC_OTP_LENGTH (default 6) and *also*
+ * adapt to whatever the user actually pastes — so the UI never
+ * silently rejects a valid code just because its length surprised us.
  */
+const MIN_OTP = 4;
+const MAX_OTP = 10;
+
+function clampLen(n: number) {
+  return Math.max(MIN_OTP, Math.min(MAX_OTP, n));
+}
+
+function configuredLength(): number {
+  const raw = process.env.NEXT_PUBLIC_OTP_LENGTH;
+  const parsed = raw ? parseInt(raw, 10) : NaN;
+  if (!Number.isFinite(parsed)) return 6;
+  return clampLen(parsed);
+}
+
 function VerifyInner() {
   const params = useSearchParams();
   const email = params.get("email") || "";
   const next = safeRedirectPath(params.get("next"));
 
-  const [digits, setDigits] = useState<string[]>(["", "", "", "", "", ""]);
+  const initialLen = useMemo(configuredLength, []);
+  const [length, setLength] = useState<number>(initialLen);
+  const [digits, setDigits] = useState<string[]>(() =>
+    Array(initialLen).fill("")
+  );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [resentAt, setResentAt] = useState<number | null>(null);
@@ -28,6 +51,24 @@ function VerifyInner() {
     inputs.current[0]?.focus();
   }, []);
 
+  // When the OTP length changes (e.g. after a paste), make sure the
+  // digits[] array matches and ref slots are right-sized.
+  useEffect(() => {
+    setDigits((prev) => {
+      if (prev.length === length) return prev;
+      const next = Array(length).fill("");
+      for (let i = 0; i < Math.min(prev.length, length); i++) next[i] = prev[i];
+      return next;
+    });
+    inputs.current = inputs.current.slice(0, length);
+  }, [length]);
+
+  function setLengthFromInput(n: number) {
+    const clamped = clampLen(n);
+    setLength(clamped);
+    return clamped;
+  }
+
   function handleDigit(i: number, v: string) {
     const cleaned = v.replace(/\D/g, "");
     if (!cleaned) {
@@ -36,20 +77,26 @@ function VerifyInner() {
       setDigits(copy);
       return;
     }
-    // Support pasting all 6 at once.
+    // Paste path: a multi-character chunk landed in one box. Adapt the
+    // OTP length to the pasted size (clamped 4..10) and submit if full.
     if (cleaned.length > 1) {
-      const filled = cleaned.slice(0, 6).split("");
-      const padded = [...filled, ...Array(6 - filled.length).fill("")];
+      const targetLen = setLengthFromInput(cleaned.length);
+      const filled = cleaned.slice(0, targetLen).split("");
+      const padded = [
+        ...filled,
+        ...Array(Math.max(0, targetLen - filled.length)).fill(""),
+      ];
       setDigits(padded);
-      const lastIndex = Math.min(filled.length, 5);
-      inputs.current[lastIndex]?.focus();
-      if (filled.length === 6) submit(filled.join(""));
+      const lastIndex = Math.min(filled.length, targetLen - 1);
+      // refs may not exist yet for the new length; defer focus to next tick.
+      setTimeout(() => inputs.current[lastIndex]?.focus(), 0);
+      if (filled.length >= targetLen) submit(filled.slice(0, targetLen).join(""));
       return;
     }
     const copy = [...digits];
     copy[i] = cleaned[0];
     setDigits(copy);
-    if (i < 5) inputs.current[i + 1]?.focus();
+    if (i < length - 1) inputs.current[i + 1]?.focus();
     if (copy.every((d) => d.length === 1)) submit(copy.join(""));
   }
 
@@ -84,14 +131,11 @@ function VerifyInner() {
           ? "That code expired. Tap 'send another' below."
           : "That code wasn't quite right. Try again."
       );
-      setDigits(["", "", "", "", "", ""]);
+      setDigits(Array(length).fill(""));
       inputs.current[0]?.focus();
       setBusy(false);
       return;
     }
-    // Drop the cached "anonymous" viewer promise and do a hard
-    // navigation. router.push would keep the stale window cache and
-    // would also miss the freshly-set cookies on the next SSR read.
     invalidateViewerCache();
     window.location.assign(next);
   }
@@ -129,16 +173,19 @@ function VerifyInner() {
           Check your email.
         </h1>
         <p className="mt-3 text-center text-sage-700">
-          I just sent a 6-digit code to
+          I just sent a code to
           <br />
           <strong className="text-sage-900">{email || "—"}</strong>.
         </p>
 
-        <div className="mt-10 flex justify-center gap-2" onPaste={(e) => {
-          e.preventDefault();
-          const txt = e.clipboardData.getData("text");
-          handleDigit(0, txt);
-        }}>
+        <div
+          className="mt-10 flex justify-center gap-2 flex-wrap"
+          onPaste={(e) => {
+            e.preventDefault();
+            const txt = e.clipboardData.getData("text");
+            handleDigit(0, txt);
+          }}
+        >
           {digits.map((d, i) => (
             <input
               key={i}
@@ -148,15 +195,19 @@ function VerifyInner() {
               type="text"
               inputMode="numeric"
               autoComplete="one-time-code"
-              maxLength={6}
+              maxLength={1}
               value={d}
               onChange={(e) => handleDigit(i, e.target.value)}
               onKeyDown={(e) => handleKey(i, e)}
               disabled={busy}
-              className="w-12 h-14 text-center text-2xl font-serif rounded-lg bg-cream-50 border border-sage-500/25 text-sage-900 focus:outline-none focus:border-sage-500/70 transition disabled:opacity-50"
+              className="w-11 h-14 text-center text-2xl font-serif rounded-lg bg-cream-50 border border-sage-500/25 text-sage-900 focus:outline-none focus:border-sage-500/70 transition disabled:opacity-50"
             />
           ))}
         </div>
+
+        <p className="mt-3 text-center text-[11px] text-sage-700/60">
+          Paste the code from your email — works for {MIN_OTP}–{MAX_OTP} digit codes.
+        </p>
 
         {error && (
           <p className="mt-6 text-center text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg py-2 px-3">
