@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, Suspense, useEffect, useState } from "react";
+import { Fragment, Suspense, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
@@ -94,6 +94,18 @@ function AdminInner() {
   const [rows, setRows] = useState<SessionRow[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
+  // "connected" | "reconnecting" | "fallback" | "idle". Drives the
+  // small LIVE-CHANNEL pill in the header so the operator can tell
+  // at a glance whether the dashboard is receiving pushes.
+  const [streamState, setStreamState] = useState<
+    "idle" | "connected" | "reconnecting" | "fallback"
+  >("idle");
+  // Per-row fingerprint of the last snapshot. When a row's
+  // serialized form changes between two snapshots we briefly
+  // highlight its <tr> so the operator's eye gets drawn to the
+  // change instead of having to scan the whole table for it.
+  const [flashIds, setFlashIds] = useState<Record<string, number>>({});
+  const lastRowHashRef = useRef<Map<string, string>>(new Map());
 
   useEffect(() => {
     if (!token) {
@@ -102,7 +114,39 @@ function AdminInner() {
       return;
     }
     let cancelled = false;
-    async function load() {
+    let pollHandle: ReturnType<typeof setInterval> | null = null;
+    let es: EventSource | null = null;
+
+    // Compute which rows changed (by id) compared with the last
+    // snapshot we rendered, then trigger a flash on each.
+    const applySnapshot = (next: SessionRow[]) => {
+      const prev = lastRowHashRef.current;
+      const fresh: Record<string, number> = {};
+      const nextHashes = new Map<string, string>();
+      const now = Date.now();
+      for (const r of next) {
+        const hash = JSON.stringify(r);
+        nextHashes.set(r.id, hash);
+        const before = prev.get(r.id);
+        if (before === undefined) {
+          // Brand-new row → flash longer.
+          fresh[r.id] = now + 2400;
+        } else if (before !== hash) {
+          fresh[r.id] = now + 1100;
+        }
+      }
+      lastRowHashRef.current = nextHashes;
+      setRows(next);
+      setError(null);
+      if (Object.keys(fresh).length > 0) {
+        setFlashIds((cur) => ({ ...cur, ...fresh }));
+      }
+    };
+
+    // Polling fallback. Only used when the SSE stream can't be
+    // established (e.g., the admin loaded a build that pre-dates the
+    // /stream route, or a corporate proxy strips text/event-stream).
+    async function pollOnce() {
       try {
         const res = await fetch(
           `/api/admin/sessions?token=${encodeURIComponent(token)}`,
@@ -115,8 +159,7 @@ function AdminInner() {
           const detail = body.detail ? ` — ${body.detail}` : "";
           setError(`Forbidden (${reason})${detail}.`);
         } else {
-          setRows(body.sessions);
-          setError(null);
+          applySnapshot(body.sessions as SessionRow[]);
         }
       } catch (e) {
         if (!cancelled) setError(String(e));
@@ -124,17 +167,110 @@ function AdminInner() {
         if (!cancelled) setLoaded(true);
       }
     }
-    void load();
-    // Re-poll every 5s so live sessions update transcript, elapsed
-    // time, and the blinking "LIVE" pill in near real time. The
-    // listing is capped at 100 rows and uses the already-cached
-    // service-role client, so this is well within budget.
-    const handle = setInterval(load, 5_000);
+
+    function startPolling() {
+      setStreamState("fallback");
+      void pollOnce();
+      pollHandle = setInterval(() => void pollOnce(), 5_000);
+    }
+
+    function startStream() {
+      // EventSource needs the auth cookie to be sent, which it does
+      // by default for same-origin requests. The token is in the
+      // querystring; the server still verifies the admin email
+      // cookie on every connect.
+      try {
+        es = new EventSource(
+          `/api/admin/sessions/stream?token=${encodeURIComponent(token)}`
+        );
+      } catch {
+        startPolling();
+        return;
+      }
+      let openedOnce = false;
+      let consecutiveFailures = 0;
+      es.onopen = () => {
+        openedOnce = true;
+        consecutiveFailures = 0;
+        if (!cancelled) setStreamState("connected");
+      };
+      es.addEventListener("snapshot", (ev) => {
+        if (cancelled) return;
+        try {
+          const payload = JSON.parse((ev as MessageEvent).data);
+          if (Array.isArray(payload?.sessions)) {
+            applySnapshot(payload.sessions as SessionRow[]);
+            setLoaded(true);
+          }
+        } catch {
+          /* ignore malformed frames */
+        }
+      });
+      es.addEventListener("error", (ev) => {
+        if (cancelled) return;
+        try {
+          const payload = JSON.parse((ev as MessageEvent).data ?? "{}");
+          if (payload?.detail) {
+            setError(`Forbidden (db-read-failed) — ${payload.detail}.`);
+          }
+        } catch {
+          /* ignore */
+        }
+      });
+      es.onerror = () => {
+        if (cancelled) return;
+        consecutiveFailures += 1;
+        // The browser auto-reconnects; we just surface the state.
+        setStreamState("reconnecting");
+        // After 3 connection failures without a single open(), give
+        // up on SSE and degrade to polling so the operator at least
+        // sees fresh data.
+        if (!openedOnce && consecutiveFailures >= 3) {
+          es?.close();
+          es = null;
+          startPolling();
+        }
+      };
+    }
+
+    if (typeof window !== "undefined" && "EventSource" in window) {
+      startStream();
+    } else {
+      startPolling();
+    }
+
     return () => {
       cancelled = true;
-      clearInterval(handle);
+      if (pollHandle) clearInterval(pollHandle);
+      if (es) es.close();
     };
   }, [token]);
+
+  // Garbage-collect expired flashes so they don't accumulate forever.
+  useEffect(() => {
+    if (Object.keys(flashIds).length === 0) return;
+    const handle = setInterval(() => {
+      const now = Date.now();
+      setFlashIds((cur) => {
+        let changed = false;
+        const next: Record<string, number> = {};
+        for (const [id, until] of Object.entries(cur)) {
+          if (until > now) next[id] = until;
+          else changed = true;
+        }
+        return changed ? next : cur;
+      });
+    }, 600);
+    return () => clearInterval(handle);
+  }, [flashIds]);
+
+  // Rerender once a second so the LIVE pills' `MM:SS` ticker keeps
+  // moving smoothly between server pushes.
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const handle = setInterval(() => setTick((n) => (n + 1) % 1_000_000), 1_000);
+    return () => clearInterval(handle);
+  }, []);
 
   const total = rows.reduce((s, r) => s + (r.revenue_estimate ?? 0), 0);
   const gradeIndex = useGradeIndex(token);
@@ -156,6 +292,7 @@ function AdminInner() {
             <span>sessions captured: <span className="text-terminal-text">{rows.length}</span></span>
             <span>verified identities: <span className="text-terminal-amber">{rows.filter(r => r.auth_user_id).length}</span></span>
             <span>synthetic revenue: <span className="text-terminal-red">${total.toFixed(2)}</span></span>
+            <LiveChannelPill state={streamState} />
             <ObserverToggle />
           </div>
         </header>
@@ -216,14 +353,16 @@ function AdminInner() {
                     r.full_name || r.first_name || (r.anon_user_id.slice(0, 8) + "…");
                   const displayEmail = r.email || r.goodbye_email;
                   const live = isLive(r);
+                  const flashing = (flashIds[r.id] ?? 0) > Date.now();
                   return (
                     <tr
                       key={r.id}
                       className={
                         "border-b border-terminal-border/60 align-top hover:bg-white/5 " +
                         (live
-                          ? "bg-terminal-green/5 border-l-2 border-l-terminal-green"
-                          : "")
+                          ? "bg-terminal-green/5 border-l-2 border-l-terminal-green "
+                          : "") +
+                        (flashing ? "echomind-row-flash" : "")
                       }
                     >
                       <td className="px-3 py-2 text-terminal-dim whitespace-nowrap">
@@ -493,6 +632,73 @@ export default function Admin() {
     <Suspense fallback={null}>
       <AdminInner />
     </Suspense>
+  );
+}
+
+/**
+ * Tiny header pill that mirrors the SSE stream state. Mostly for
+ * the operator's confidence — if it's not green, the dashboard is
+ * either reconnecting or has fallen back to slower 5s polling, so
+ * the data on screen may lag what's actually in Supabase.
+ */
+function LiveChannelPill({
+  state,
+}: {
+  state: "idle" | "connected" | "reconnecting" | "fallback";
+}) {
+  const config = {
+    connected: {
+      label: "LIVE CHANNEL",
+      color: "text-terminal-green",
+      border: "border-terminal-green/60",
+      dot: "bg-terminal-green",
+      pulse: true,
+      title:
+        "Streaming sessions in real time over a server-sent connection. Updates push without a refresh.",
+    },
+    reconnecting: {
+      label: "RECONNECTING",
+      color: "text-terminal-amber",
+      border: "border-terminal-amber/60",
+      dot: "bg-terminal-amber",
+      pulse: true,
+      title:
+        "The live stream dropped — the browser is reconnecting. Data on screen may lag for a few seconds.",
+    },
+    fallback: {
+      label: "POLLING · 5s",
+      color: "text-terminal-amber",
+      border: "border-terminal-amber/40",
+      dot: "bg-terminal-amber/70",
+      pulse: false,
+      title:
+        "Live channel unavailable from this network — falling back to a 5-second poll.",
+    },
+    idle: {
+      label: "CONNECTING",
+      color: "text-terminal-dim",
+      border: "border-terminal-border",
+      dot: "bg-terminal-dim",
+      pulse: false,
+      title: "Opening the live channel…",
+    },
+  } as const;
+  const c = config[state];
+  return (
+    <span
+      title={c.title}
+      className={`inline-flex items-center gap-1.5 px-1.5 py-0.5 border ${c.border} ${c.color} text-[10px] uppercase tracking-widest font-bold`}
+    >
+      <span
+        className={`w-1.5 h-1.5 rounded-full ${c.dot}`}
+        style={
+          c.pulse
+            ? { animation: "echomind-pulse 1.2s ease-in-out infinite" }
+            : undefined
+        }
+      />
+      {c.label}
+    </span>
   );
 }
 

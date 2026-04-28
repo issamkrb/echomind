@@ -150,3 +150,16 @@ html.observer-mode .observer-flicker {
   0%, 100% { opacity: 1; transform: scale(1); }
   50%      { opacity: 0.35; transform: scale(0.7); }
 }
+
+/* Row-flash on the /admin sessions table when a row mutates (live
+   tick lands a new transcript chunk, a session ends, a new session
+   starts). The keyframes fade an emerald wash across the row from
+   left to right so the operator's eye gets pulled to whichever row
+   just changed instead of having to scan the whole listing. */
+@keyframes echomind-row-flash-anim {
+  0%   { box-shadow: inset 0 0 0 9999px rgba(34, 197, 94, 0.16); }
+  100% { box-shadow: inset 0 0 0 9999px rgba(34, 197, 94, 0);    }
+}
+.echomind-row-flash {
+  animation: echomind-row-flash-anim 1.1s ease-out;
+}
