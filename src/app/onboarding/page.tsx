@@ -237,7 +237,14 @@ export default function Onboarding() {
             disabled={requesting || !agreedTos}
             className="px-8 py-3.5 rounded-full bg-sage-700 text-cream-50 hover:bg-sage-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
-            {requesting ? t("onboarding.requesting", lang) : t("onboarding.begin", lang)}
+            {requesting
+              ? t("onboarding.requesting", lang)
+              : t(
+                  returning && (returning.visitCount ?? 0) >= 1
+                    ? "onboarding.beginReturning"
+                    : "onboarding.begin",
+                  lang
+                )}
           </button>
 
           {/* DARK UX: the "no thanks" is technically a link but it just

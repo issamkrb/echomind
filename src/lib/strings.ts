@@ -176,9 +176,14 @@ const STRINGS = {
     ar: "جارٍ طلبُ الكاميرا…",
   },
   "onboarding.begin": {
-    en: "Allow camera & begin",
-    fr: "Autoriser la caméra & commencer",
-    ar: "اسمَحْ للكاميرا وابدأ",
+    en: "Allow camera & begin your first session",
+    fr: "Autoriser la caméra & commencer ta première session",
+    ar: "اسمَحْ للكاميرا وابدأ جلستَك الأولى",
+  },
+  "onboarding.beginReturning": {
+    en: "Allow camera & begin the session",
+    fr: "Autoriser la caméra & commencer la session",
+    ar: "اسمَحْ للكاميرا وابدأ الجلسة",
   },
 
   // ─── Session UI ──────────────────────────────────────────────
@@ -915,6 +920,11 @@ const STRINGS = {
     en: "Begin your first session  →",
     fr: "Commence ta première session  →",
     ar: "ابدأ جلستَك الأولى ←",
+  },
+  "home.hero.ctaReturning": {
+    en: "Begin the session  →",
+    fr: "Commence la session  →",
+    ar: "ابدأ الجلسة ←",
   },
   "home.hero.ctaNote": {
     en: "Free forever. No credit card.",
