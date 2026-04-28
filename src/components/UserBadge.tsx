@@ -15,6 +15,12 @@ import { VoiceControls } from "@/components/VoiceControls";
  * avatar so language and identity always live in the same cluster.
  * On mobile the cluster is right-aligned so it never overlaps the
  * EchoMind wordmark.
+ *
+ * Voice controls are NOT included here — they only belong on the
+ * /session page, which renders `<VoiceControls />` directly in its
+ * own top bar. Showing the voice picker on home/onboarding/etc.
+ * confused users who couldn't preview voices until they'd started
+ * a session.
  */
 export function UserBadge({
   next = "/",

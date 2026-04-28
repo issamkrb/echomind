@@ -34,6 +34,8 @@ import {
 import { extractKeywords } from "@/lib/keywords";
 import { useLang } from "@/lib/use-lang";
 import { t } from "@/lib/strings";
+import { LangPicker } from "@/components/LangPicker";
+import { VoiceControls } from "@/components/VoiceControls";
 import {
   detectArabicDialect,
   detectLangFromText,
@@ -236,12 +238,20 @@ export default function Session() {
   // "shown chips"; logging the wrong target for the 4th chip would
   // silently corrupt the per-chip extraction analytics.
   type DynamicChip = { text: string; target: string };
-  const [dynamicChips, setDynamicChips] = useState<DynamicChip[]>(() => [
-    { text: STARTER_CHIPS[0], target: "sad" },
-    { text: STARTER_CHIPS[1], target: "sad" },
-    { text: STARTER_CHIPS[2], target: "sad" },
-    { text: STARTER_CHIPS[3], target: "fearful" },
-  ]);
+  // Seed with English — the lang-aware effect below will re-seed
+  // with the currently-active language's chips as soon as useLang()
+  // finishes hydrating (which happens in the same commit batch as
+  // this state init when the user arrived on /session via client-
+  // side nav, so users rarely see the English flash).
+  const [dynamicChips, setDynamicChips] = useState<DynamicChip[]>(() => {
+    const chips = STARTER_CHIPS("en");
+    return [
+      { text: chips[0], target: "sad" },
+      { text: chips[1], target: "sad" },
+      { text: chips[2], target: "sad" },
+      { text: chips[3], target: "fearful" },
+    ];
+  });
   // Which mode `/api/starter-chips` ran in for this session — "ai"
   // when the LLM produced fresh chips, "fallback-*" when we used the
   // hardcoded list. Logged on the session row so the admin view can
@@ -307,7 +317,6 @@ export default function Session() {
     start();
     void loadFaceModels();
     void requestCam();
-    void fetchDynamicChips();
     // pre-warm speech voices list. Chrome/Edge load the voice
     // registry asynchronously after the first getVoices() call —
     // without this, the first `speak()` for Arabic would fall back
@@ -319,6 +328,22 @@ export default function Session() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Fetch starter chips *after* the language has hydrated. This
+  // effect deliberately depends on `lang` so the initial fetch goes
+  // out with the correct language even when the user picked AR/FR
+  // on the home page and client-nav'd here — otherwise we'd race
+  // with useLang's mount effect and ship English chips to an AR
+  // session. Gated on a ref so we don't refetch on every language
+  // toggle (the client-side fallback re-seed handles mid-session
+  // switches via the [lang]-deps effect above).
+  const chipsFetchedRef = useRef(false);
+  useEffect(() => {
+    if (chipsFetchedRef.current) return;
+    chipsFetchedRef.current = true;
+    void fetchDynamicChips();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lang]);
 
   async function requestCam() {
     try {
@@ -374,7 +399,9 @@ export default function Session() {
       const res = await fetch(
         `/api/starter-chips?anon_user_id=${encodeURIComponent(
           anon
-        )}&first_name=${encodeURIComponent(name)}`,
+        )}&first_name=${encodeURIComponent(name)}&lang=${encodeURIComponent(
+          langRef.current
+        )}`,
         { cache: "no-store" }
       );
       if (!res.ok) return;
@@ -648,6 +675,7 @@ export default function Session() {
       lastKeywords,
       lastPeakQuote,
       now: new Date(),
+      lang: langRef.current,
     });
     // Stash the second line as the callback marker iff this is a
     // returning user AND there was real prior-session data to hook
@@ -665,8 +693,9 @@ export default function Session() {
     await echoSays(line2);
     await sleep(200);
     // Kick off with the A/B-winning opener prompt
-    pushPromptMark({ text: PROMPTS[0].text, target: PROMPTS[0].target });
-    await echoSays(PROMPTS[0].text);
+    const firstPrompt = PROMPTS(langRef.current)[0];
+    pushPromptMark({ text: firstPrompt.text, target: firstPrompt.target });
+    await echoSays(firstPrompt.text);
     // If the user is brand-new, offer soft tap-to-start chips so the
     // blank page doesn't freeze them. They disappear on first input.
     setShowStarterChips(true);
@@ -762,8 +791,9 @@ export default function Session() {
     const turnsAfter = turnCountRef.current + 1; // setTurnCount is async
     turnCountRef.current = turnsAfter;
     if (!endedRef.current && turnsAfter % 3 === 0) {
-      const idx = (turnsAfter / 3) % (PROMPTS.length - 1);
-      const next = PROMPTS[idx + 1];
+      const prompts = PROMPTS(langRef.current);
+      const idx = (turnsAfter / 3) % (prompts.length - 1);
+      const next = prompts[idx + 1];
       pushPromptMark({ text: next.text, target: next.target });
       await echoSays(next.text);
     }
@@ -771,6 +801,22 @@ export default function Session() {
     if (endedRef.current) return;
     beginListening();
   }
+
+  // Keep fallback starter chips in sync with the active language
+  // until either the server /api/starter-chips responds OR the user
+  // taps a chip. After either, we freeze the chip list — overwriting
+  // an already-tapped chip list would corrupt the extraction log.
+  useEffect(() => {
+    if (tappedChipRef.current !== null) return;
+    if (!chipsSourceRef.current.startsWith("fallback")) return;
+    const chips = STARTER_CHIPS(lang);
+    setDynamicChips([
+      { text: chips[0], target: "sad" },
+      { text: chips[1], target: "sad" },
+      { text: chips[2], target: "sad" },
+      { text: chips[3], target: "fearful" },
+    ]);
+  }, [lang]);
 
   // Toggle the user's microphone. When off: the speech recognizer is
   // disabled and aborted mid-capture, but Echo (TTS) keeps speaking —
@@ -903,12 +949,13 @@ export default function Session() {
     // Pick whichever emotion *most clearly* spiked. Thresholds tuned
     // by hand against face-api's real output distribution.
     let pool: string[] | null = null;
+    const notes = FACE_NOTES(langRef.current);
     if (happy > 0.5 && happy >= sad && happy >= fear) {
-      pool = FACE_NOTES.smile;
+      pool = notes.smile;
     } else if (sad > 0.6 && sad >= fear) {
-      pool = FACE_NOTES.sad;
+      pool = notes.sad;
     } else if (fear > 0.55) {
-      pool = FACE_NOTES.fear;
+      pool = notes.fear;
     }
     if (!pool) return null;
     lastFaceNoteTurnRef.current = turnNumber;
@@ -924,8 +971,8 @@ export default function Session() {
       // Echo isn't mid-speech already (mute-but-thinking counts as busy).
       if (endedRef.current) return;
       if (stageRef.current !== "listening") return;
-      const line =
-        SILENCE_BREAKS[Math.floor(Math.random() * SILENCE_BREAKS.length)];
+      const breaks = SILENCE_BREAKS(langRef.current);
+      const line = breaks[Math.floor(Math.random() * breaks.length)];
       void (async () => {
         await echoSays(line);
         if (endedRef.current) return;
@@ -1374,6 +1421,14 @@ export default function Session() {
             {micOff ? <MicOff className="w-3.5 h-3.5" /> : <Mic className="w-3.5 h-3.5" />}
             {micOff ? t("session.micOff", lang) : t("session.micOn", lang)}
           </button>
+
+          {/* Voice picker + language picker — session-only. Voice only
+              makes sense here (where Echo is actually speaking) and
+              the language picker is repeated here so the user can
+              re-pick mid-conversation without leaving the session.
+              Order: VOICE · LANG · (mic) · end. */}
+          <VoiceControls />
+          <LangPicker />
 
           <button
             onClick={endSession}
