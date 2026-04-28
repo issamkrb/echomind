@@ -38,7 +38,11 @@ export type ArabicDialect = "darija" | "msa" | "egyptian";
 
 export const LANGS: Lang[] = ["en", "fr", "ar"];
 
-const LANG_STORAGE_KEY = "echomind:lang_mode";
+// Per-account scoped: each signed-in user + the `guest` bucket
+// maintains its own language preference, so sharing a laptop
+// doesn't force the next sign-in to read in someone else's
+// picked language. Lazily scoped inside helpers to stay SSR-safe.
+const LANG_STORAGE_BASE_KEY = "lang_mode";
 
 export const LANG_LABELS: Record<Lang, string> = {
   en: "english",
@@ -86,10 +90,23 @@ export function isRtl(lang: Lang): boolean {
 
 /** Load the user's saved language mode from localStorage.
  *  Returns "auto" as default (letting us detect from navigator). */
+/** The scoped localStorage key for the current account's language
+ *  mode. Exposed so `useLang` can key its `storage` event listener
+ *  on the same string both helpers write. */
+export function langStorageKey(): string {
+  // Inline scope read to avoid a circular-import between i18n and
+  // account-scope. If window isn't here, return a harmless string.
+  if (typeof window === "undefined") return `echomind:guest:${LANG_STORAGE_BASE_KEY}`;
+  const w = window as unknown as { __echomindScope?: string };
+  const scope =
+    (typeof w.__echomindScope === "string" && w.__echomindScope) || "guest";
+  return `echomind:${scope}:${LANG_STORAGE_BASE_KEY}`;
+}
+
 export function loadLangMode(): LangMode {
   if (typeof window === "undefined") return "auto";
   try {
-    const v = window.localStorage.getItem(LANG_STORAGE_KEY);
+    const v = window.localStorage.getItem(langStorageKey());
     if (!v) return "auto";
     if (v === "auto") return "auto";
     if ((LANGS as string[]).includes(v)) return v as Lang;
@@ -102,7 +119,7 @@ export function loadLangMode(): LangMode {
 export function saveLangMode(mode: LangMode) {
   if (typeof window === "undefined") return;
   try {
-    window.localStorage.setItem(LANG_STORAGE_KEY, mode);
+    window.localStorage.setItem(langStorageKey(), mode);
   } catch {
     /* ignore */
   }

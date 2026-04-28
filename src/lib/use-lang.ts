@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import {
   applyHtmlDir,
   detectLangFromBrowser,
+  langStorageKey,
   loadLangMode,
   resolveLang,
   saveLangMode,
@@ -45,8 +46,9 @@ export function useLang(): {
     setLang(resolved);
     applyHtmlDir(resolved);
     // Listen for changes triggered from other tabs.
+    const myKey = langStorageKey();
     function onStorage(e: StorageEvent) {
-      if (e.key !== "echomind:lang_mode") return;
+      if (e.key !== myKey) return;
       const nm = loadLangMode();
       setModeState(nm);
       const nl = resolveLang(nm);
@@ -67,7 +69,7 @@ export function useLang(): {
     // storage event — `storage` only fires across tabs.
     try {
       window.dispatchEvent(
-        new StorageEvent("storage", { key: "echomind:lang_mode" })
+        new StorageEvent("storage", { key: langStorageKey() })
       );
     } catch {
       /* ignore */
