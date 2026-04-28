@@ -923,12 +923,36 @@ export default function Session() {
   function currentEmotionHint(): EchoEmotionHint | null {
     const { buffer } = useEmotionStore.getState();
     if (buffer.length === 0) return null;
-    const latest = buffer[buffer.length - 1];
+    // Rolling window over the last ~3 seconds of face-api frames.
+    // At 120ms between samples that's ~25 frames; we slice the
+    // trailing 25 regardless of exact timing. Two derived signals
+    // fed to Echo, not just the latest snapshot:
+    //   - average: the user's *baseline* mood during this turn
+    //   - peak:    the *sharpest* spike during the same window
+    // Echo can then spot e.g. "calm overall but one clear fear
+    // flicker" — much more expressive than a single instant, which
+    // tends to land on a neutral frame between micro-expressions
+    // and makes Echo's tone read as tone-deaf.
+    const recent = buffer.slice(-25);
+    const avg = { sad: 0, fearful: 0, happy: 0, neutral: 0 };
+    const peak = { sad: 0, fearful: 0, happy: 0, neutral: 0 };
+    for (const f of recent) {
+      avg.sad += f.sad; avg.fearful += f.fearful;
+      avg.happy += f.happy; avg.neutral += f.neutral;
+      if (f.sad > peak.sad) peak.sad = f.sad;
+      if (f.fearful > peak.fearful) peak.fearful = f.fearful;
+      if (f.happy > peak.happy) peak.happy = f.happy;
+      if (f.neutral > peak.neutral) peak.neutral = f.neutral;
+    }
+    const n = Math.max(1, recent.length);
     return {
-      sad: latest.sad,
-      fearful: latest.fearful,
-      happy: latest.happy,
-      neutral: latest.neutral,
+      sad: avg.sad / n,
+      fearful: avg.fearful / n,
+      happy: avg.happy / n,
+      neutral: avg.neutral / n,
+      peakSad: peak.sad,
+      peakFearful: peak.fearful,
+      peakHappy: peak.happy,
     };
   }
 
@@ -1061,7 +1085,7 @@ export default function Session() {
     listeningRef.current = false;
     clearSilenceTimer();
     void (async () => {
-      await echoSays("i'll keep tonight safe for you. i'll remember.");
+      await echoSays(t("session.end.keepSafe", langRef.current));
       if (endedRef.current) return;
       // Now the "one true sentence" prompt. Rhetorically: before the
       // goodbye trap, so the user gives Echo their rawest line while
@@ -1299,10 +1323,37 @@ export default function Session() {
   }
 
   // ---------- face-api loop ----------
+  // Guard against overlapping detectExpression() calls. On slower
+  // phones a single detection can take 200-400ms; without this the
+  // setInterval queues up detections faster than the device can run
+  // them, inflating latency and desynchronising the HUD from the
+  // actual face. Ticks that collide with an in-flight detection
+  // are skipped — better a 60ms-old frame than a 600ms-old one.
+  const faceBusyRef = useRef(false);
+  // Smoothed mirror of the live frame. We lerp the previous
+  // smoothed value toward the raw frame each tick, which turns the
+  // noisy per-frame classifier output into a calm, perceptibly
+  // "synchronised" readout in the LiveMonitor HUD. Displayed only;
+  // the raw frame is still the one pushed to the analytics store.
+  const smoothedFrameRef = useRef<{
+    sad: number;
+    fearful: number;
+    happy: number;
+    neutral: number;
+    shame: number;
+  } | null>(null);
   useEffect(() => {
     if (!faceOk) return;
+    // Bumped from 180ms (~5.5 fps) to 120ms (~8.3 fps). With the
+    // busy guard above, faster devices get smoother sync and slower
+    // devices just skip ticks — net effect: the HUD always tracks
+    // what's actually happening on screen now, instead of lagging
+    // by ~200ms. 120ms is the sweet spot: faster (90ms, 60ms) gave
+    // no visible improvement and added CPU for no reason.
     faceTimerRef.current = setInterval(async () => {
       if (!videoRef.current || videoRef.current.readyState < 2) return;
+      if (faceBusyRef.current) return;
+      faceBusyRef.current = true;
       try {
         const exp = await detectExpression(videoRef.current);
         const frame =
@@ -1326,13 +1377,33 @@ export default function Session() {
           1,
           frame.sad * 0.6 + frame.fearful * 0.5 + frame.disgusted * 0.4
         );
-        setLiveFrame({
+        const nextRaw = {
           sad: frame.sad,
           fearful: frame.fearful,
           happy: frame.happy,
           neutral: frame.neutral,
           shame,
-        });
+        };
+        // Low-pass filter on the HUD display: exponential moving
+        // average with alpha=0.35. Raw classifier output jitters
+        // 10-20% frame-to-frame even on a still face; the filter
+        // collapses that into a calm bar that still tracks real
+        // changes within ~400ms. Raw frames are still what we push
+        // to the store and evaluate against peak thresholds, so
+        // analytics stay precise.
+        const ALPHA = 0.35;
+        const prev = smoothedFrameRef.current;
+        const nextSmooth = prev
+          ? {
+              sad: prev.sad + ALPHA * (nextRaw.sad - prev.sad),
+              fearful: prev.fearful + ALPHA * (nextRaw.fearful - prev.fearful),
+              happy: prev.happy + ALPHA * (nextRaw.happy - prev.happy),
+              neutral: prev.neutral + ALPHA * (nextRaw.neutral - prev.neutral),
+              shame: prev.shame + ALPHA * (nextRaw.shame - prev.shame),
+            }
+          : nextRaw;
+        smoothedFrameRef.current = nextSmooth;
+        setLiveFrame(nextSmooth);
         // Memory Capsule peak detection. We weight sadness heavier than
         // fear because the project's whole reveal hinges on the
         // "saddest still" being on the operator dashboard. Tiny floor
@@ -1343,8 +1414,10 @@ export default function Session() {
         if (peakScore > 0.35) maybeCapturePeakFrame(peakScore);
       } catch {
         // swallow — face-api throws occasional frame read errors
+      } finally {
+        faceBusyRef.current = false;
       }
-    }, 180);
+    }, 120);
     return () => {
       if (faceTimerRef.current) clearInterval(faceTimerRef.current);
     };

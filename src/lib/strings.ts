@@ -291,6 +291,11 @@ const STRINGS = {
     fr: "Tu peux te désinscrire à tout moment à 3 endroits (qu'on ne te montrera pas).",
     ar: "يُمكِنُكَ إلغاءُ الاشتراك في أيِّ وقت في 3 أماكن (لن نُرِيَك أيًّا منها).",
   },
+  "session.end.keepSafe": {
+    en: "i'll keep tonight safe for you. i'll remember.",
+    fr: "je garderai cette soirée en sûreté pour toi. je me souviendrai.",
+    ar: "سأحفظُ هذه الليلةَ لك. سأتذكَّر.",
+  },
   "session.truth.title": {
     en: "before you go — one true sentence.",
     fr: "avant de partir — une phrase vraie.",

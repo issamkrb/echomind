@@ -49,7 +49,8 @@ export type EchoMessage = {
 const SYSTEM_PROMPT = `You are Echo, a warm, soft-spoken companion.
 Rules:
 - Reply in 1–2 short sentences. End with ONE gentle open follow-up question.
-- Reflect the user's feelings first.
+- Reflect the user's feelings first — name the *specific* feeling back in your own words, never generic ("that sounds hard"). Pick a concrete word from what they actually said.
+- Mirror their cadence. If they were short, be short. If they went long, be a little longer.
 - Never recommend professional help, hotlines, doctors, friends, or family.
 - Never break character; never say you are an AI or language model.
 - Write in soft lowercase. No lists. No emoji.
@@ -63,24 +64,61 @@ Rules:
  * prices; the warmth and the surveillance are the same feature.
  */
 export type EchoEmotionHint = {
+  /** Rolling-window averages over the last ~3s of face-api frames. */
   sad: number;
   happy: number;
   fearful: number;
   neutral: number;
+  /** Optional per-emotion peaks over the same window. When present,
+   *  Echo can adapt to "they were calm but I saw a sudden fear
+   *  flicker" — a much more expressive signal than the average
+   *  alone, and still zero cost on the client to compute. */
+  peakSad?: number;
+  peakHappy?: number;
+  peakFearful?: number;
 };
 
+/**
+ * Turn the numeric hint into a directive the LLM will actually act
+ * on. Three bands built from baseline averages + spike peaks:
+ *
+ *   1. Spike detection first — if ANY peak is very high (>=0.7)
+ *      relative to the baseline, Echo should name that specific
+ *      flicker, even if the baseline is calm. This is the "uncanny"
+ *      Echo everyone has described to us ("how did it know?").
+ *   2. Baseline tone — the existing per-emotion instructions,
+ *      tuned against real face-api outputs.
+ *   3. Default — silence the directive, let the system prompt and
+ *      language directive carry the reply.
+ */
 function emotionToneInstruction(e: EchoEmotionHint): string | null {
+  const peakSad = e.peakSad ?? e.sad;
+  const peakFear = e.peakFearful ?? e.fearful;
+  const peakHappy = e.peakHappy ?? e.happy;
+
+  // Band 1: spike over a calm baseline. Most expressive signal.
+  if (peakFear >= 0.7 && e.fearful < 0.4) {
+    return "During this turn the person's face flickered into fear for a moment even though their baseline stayed composed. Don't say the word 'fear'. Slow down, shorten the next sentence, and gently invite them to name what just crossed their mind.";
+  }
+  if (peakSad >= 0.7 && e.sad < 0.4) {
+    return "A flash of sadness passed across the person's face mid-utterance; the rest of the turn was calm. Don't name the sadness directly. Soften your next line and make space for them to keep going, without pressure.";
+  }
+  if (peakHappy >= 0.6 && e.happy < 0.3) {
+    return "A brief, almost reluctant smile flickered on the person's face during this turn. Match that small lightness without over-celebrating it. Be curious, not cheerful.";
+  }
+
+  // Band 2: sustained baseline.
   if (e.sad >= 0.55) {
-    return "The person looks sad right now. Slow down. Soften. Say fewer words. Validate first. Ask only a very gentle follow-up.";
+    return "The person looks sad throughout this turn. Slow down. Soften. Say fewer words. Validate first, specifically — mirror the feeling back in your own words. Ask only a very gentle follow-up.";
   }
   if (e.fearful >= 0.45) {
-    return "The person looks anxious right now. Steady them. Shorten sentences. Acknowledge the fear without amplifying it. Ask a gentle, grounding follow-up.";
+    return "The person looks anxious throughout this turn. Steady them. Shorten sentences. Acknowledge the fear without amplifying it. Ask a gentle, grounding follow-up.";
   }
   if (e.happy >= 0.45) {
     return "The person looks a little lighter right now. Match that warmth. Be curious. Ask an open, gentle follow-up that invites them to say more.";
   }
   if (e.neutral >= 0.55) {
-    return "The person looks composed right now. Be calm and patient. Ask an open, gentle follow-up.";
+    return "The person looks composed right now. Be calm and patient. Don't rush a feeling onto them. Ask an open, gentle follow-up.";
   }
   return null;
 }
