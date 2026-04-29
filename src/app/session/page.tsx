@@ -419,7 +419,33 @@ export default function Session() {
     // to the default engine with no ar-* voice attached, which on
     // many devices renders silently ("Echo types but doesn't speak").
     warmUpVoices();
+
+    // Tab-close / app-switch detection. The dashboard would otherwise
+    // show this row pinned at LIVE forever — the heartbeat tick
+    // stops, status never flips, elapsed counter freezes. We fire
+    // navigator.sendBeacon synchronously on `pagehide` (covers tab
+    // close, navigation away, and bfcache eviction across browsers)
+    // and again on `visibilitychange` -> hidden as a backup for
+    // mobile Safari, which sometimes skips pagehide. The beacon
+    // body is a Blob so the browser reliably keeps the request
+    // in-flight after the document is gone.
+    const onPageHide = () => endLiveSessionBeacon("pagehide");
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "hidden") {
+        endLiveSessionBeacon("visibility-hidden");
+      }
+    };
+    window.addEventListener("pagehide", onPageHide);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+
     return () => {
+      window.removeEventListener("pagehide", onPageHide);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      // SPA route-away (e.g. router.push) — the beacon may not have
+      // fired (no pagehide on internal nav), so we still need to
+      // close the live row explicitly. fetch with keepalive=true is
+      // OK here because the document is still alive.
+      endLiveSessionBeacon("route");
       cleanup();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -803,6 +829,49 @@ export default function Session() {
       if (endedRef.current) return;
       void sendLiveTick();
     }, 5_000);
+  }
+
+  /** Fire-and-forget end signal. Idempotent on the server, safe to
+   *  call multiple times across pagehide / visibilitychange / route
+   *  cleanup. We prefer navigator.sendBeacon because it survives
+   *  document teardown; if it isn't available (or returns false), we
+   *  fall back to fetch() with keepalive=true. Once we've signalled
+   *  end we also stop the heartbeat tick — otherwise a queued tick
+   *  would re-flip status to "live" right after the end lands. */
+  const endSentRef = useRef(false);
+  function endLiveSessionBeacon(reason: string) {
+    const id = liveSessionIdRef.current;
+    if (!id) return;
+    if (endSentRef.current) return;
+    endSentRef.current = true;
+    if (liveTickTimerRef.current) {
+      clearInterval(liveTickTimerRef.current);
+      liveTickTimerRef.current = null;
+    }
+    const body = JSON.stringify({
+      intent: "end",
+      session_id: id,
+      reason,
+    });
+    try {
+      if (typeof navigator !== "undefined" && navigator.sendBeacon) {
+        const blob = new Blob([body], { type: "application/json" });
+        const ok = navigator.sendBeacon("/api/session/live", blob);
+        if (ok) return;
+      }
+    } catch {
+      // Fall through to fetch.
+    }
+    try {
+      void fetch("/api/session/live", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body,
+        keepalive: true,
+      });
+    } catch {
+      // Server-side stale-finisher will catch this row within ~30s.
+    }
   }
 
   async function sendLiveTick() {

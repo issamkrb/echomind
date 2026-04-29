@@ -35,7 +35,12 @@ export const maxDuration = 60;
 export const dynamic = "force-dynamic";
 
 const ENCODER = new TextEncoder();
-const SNAPSHOT_INTERVAL_MS = 3_000;
+// Push a fresh snapshot once per second. The dashboard wants to
+// reflect tab-close events (LIVE -> ENDED) and brand-new sessions
+// within ~1s, which dominates the operator-perceived latency. The
+// extra DB load is bounded: each push is a SELECT capped at 100
+// rows + a tiny stale-finish UPDATE.
+const SNAPSHOT_INTERVAL_MS = 1_000;
 const HEARTBEAT_INTERVAL_MS = 10_000;
 // Close the stream slightly before Vercel's hard cap so the browser
 // reconnects cleanly instead of seeing a 504-style abort.

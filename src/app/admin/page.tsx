@@ -62,17 +62,34 @@ type SessionRow = {
   ended_at: string | null;
 };
 
+/** Threshold beyond which a session whose heartbeat stopped
+ *  advancing is treated as dead by the dashboard, even before the
+ *  server-side stale-finisher writes status="ended". Keeps the
+ *  pulsing LIVE pill from ticking forever on a tab that closed
+ *  without our beacon landing. */
+const STALE_HEARTBEAT_MS = 30_000;
+
 /** A session is "LIVE" if the server flipped status="live" on it
- *  (migration 0010+ in place) OR — for drifted databases without
- *  the status column — if the row is fresh (<10 min old), has
- *  barely any recorded audio (<2s), and the transcript is still
- *  empty. The heuristic errs on the side of false-negatives rather
- *  than false-positives so an already-ended session never shows a
+ *  (migration 0010+ in place) AND its heartbeat is still recent.
+ *  On drifted databases without the status column we fall back to
+ *  a heuristic: row is fresh (<10 min old), has barely any
+ *  recorded audio (<2s), and the transcript is still empty.
+ *  Either way, a stale heartbeat (>30s old) immediately demotes
+ *  the row \u2014 a closed tab should never look indefinitely live.
+ *  The heuristic errs on the side of false-negatives rather than
+ *  false-positives so an already-ended session never shows a
  *  pulsing pill. */
 function isLive(r: SessionRow): boolean {
-  if (r.status === "live") return true;
   if (r.status === "ended") return false;
   if (r.ended_at) return false;
+  if (r.status === "live") {
+    if (r.last_heartbeat_at) {
+      const heartbeatAgeMs =
+        Date.now() - new Date(r.last_heartbeat_at).getTime();
+      if (heartbeatAgeMs > STALE_HEARTBEAT_MS) return false;
+    }
+    return true;
+  }
   const ageMs = Date.now() - new Date(r.created_at).getTime();
   if (ageMs > 10 * 60 * 1000) return false;
   if ((r.audio_seconds ?? 0) >= 2) return false;
@@ -81,10 +98,21 @@ function isLive(r: SessionRow): boolean {
 }
 
 function liveElapsedSec(r: SessionRow): number {
+  // Anchor "now" to the last heartbeat once the heartbeat has gone
+  // stale. Otherwise the pill keeps incrementing on a closed tab
+  // until the server-side finisher catches up, which contradicts
+  // the LIVE label and makes ops think the session is still active.
   const start = new Date(r.created_at).getTime();
-  const end = r.last_heartbeat_at
+  const heartbeat = r.last_heartbeat_at
     ? new Date(r.last_heartbeat_at).getTime()
-    : Date.now();
+    : null;
+  const now = Date.now();
+  let end: number;
+  if (heartbeat && now - heartbeat > STALE_HEARTBEAT_MS) {
+    end = heartbeat;
+  } else {
+    end = now;
+  }
   return Math.max(0, Math.floor((end - start) / 1000));
 }
 
@@ -171,7 +199,10 @@ function AdminInner() {
     function startPolling() {
       setStreamState("fallback");
       void pollOnce();
-      pollHandle = setInterval(() => void pollOnce(), 5_000);
+      // 1s polling so a closed-tab row flips LIVE -> ENDED in the
+      // same window the operator notices on the SSE path. Capped at
+      // 100 rows server-side; this isn't expensive.
+      pollHandle = setInterval(() => void pollOnce(), 1_000);
     }
 
     function startStream() {
@@ -292,6 +323,12 @@ function AdminInner() {
             <span>sessions captured: <span className="text-terminal-text">{rows.length}</span></span>
             <span>verified identities: <span className="text-terminal-amber">{rows.filter(r => r.auth_user_id).length}</span></span>
             <span>synthetic revenue: <span className="text-terminal-red">${total.toFixed(2)}</span></span>
+            <Link
+              href={`/admin/logs?token=${encodeURIComponent(token)}`}
+              className="text-terminal-dim hover:text-terminal-green underline underline-offset-2"
+            >
+              visitor logs →
+            </Link>
             <LiveChannelPill state={streamState} />
             <ObserverToggle />
           </div>
@@ -367,7 +404,16 @@ function AdminInner() {
                     >
                       <td className="px-3 py-2 text-terminal-dim whitespace-nowrap">
                         <div className="flex flex-col gap-0.5">
-                          <span>{new Date(r.created_at).toLocaleString()}</span>
+                          <span>
+                            <span className="text-terminal-dim/70">started </span>
+                            {new Date(r.created_at).toLocaleString()}
+                          </span>
+                          {!live && r.ended_at && (
+                            <span className="text-[10px] text-terminal-dim/80">
+                              <span className="text-terminal-dim/60">ended </span>
+                              {new Date(r.ended_at).toLocaleString()}
+                            </span>
+                          )}
                           {live && (
                             <span
                               className="inline-flex items-center gap-1 self-start px-1.5 py-0.5 border border-terminal-green/60 text-terminal-green text-[9px] uppercase tracking-widest font-bold"

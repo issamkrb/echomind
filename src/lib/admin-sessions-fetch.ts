@@ -1,5 +1,6 @@
 import { getServerSupabase } from "@/lib/supabase";
 import { looksLikeMissingColumn } from "@/lib/schema-drift";
+import { finishStaleLiveSessions } from "@/lib/session-stale";
 
 /**
  * Shared loader for the admin sessions listing. Used by both the
@@ -25,6 +26,12 @@ export async function loadAdminSessions(): Promise<{
 }> {
   const supabase = getServerSupabase();
   if (!supabase) return { rows: [], error: null };
+
+  // Auto-finish any "live" rows whose heartbeat went stale. Runs
+  // before each read so the dashboard never displays a session
+  // stuck at LIVE forever just because the user closed the tab
+  // without the pagehide beacon landing.
+  await finishStaleLiveSessions();
 
   let { data, error } = await supabase
     .from("sessions")
