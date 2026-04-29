@@ -23,6 +23,16 @@ import { parseMissingColumn } from "@/lib/schema-drift";
  *     whose status is "live" (or, when that column doesn't exist,
  *     whose audio_seconds is zero and heartbeat is recent).
  *
+ *   - intent="end" — called once when the user leaves /session for
+ *     ANY reason: explicit "i feel lighter now" click, browser tab
+ *     close (sent via navigator.sendBeacon on pagehide), or in-app
+ *     route change. Flips status to "ended" and stamps ended_at so
+ *     the admin dashboard immediately drops the LIVE pill. The
+ *     route is idempotent — re-ending an already-ended session is
+ *     a no-op. The server-side stale-finisher in admin-sessions-
+ *     fetch.ts is a safety net for the cases where this beacon
+ *     itself never lands (Safari iOS, force-quit, etc.).
+ *
  * Both paths tolerate schema drift: any PostgREST 42703 / PGRST204
  * "column does not exist" error is caught, the offending column is
  * stripped from the payload, and the operation is retried. In the
@@ -52,7 +62,16 @@ type TickBody = {
   detected_language?: string | null;
 };
 
-type Body = StartBody | TickBody;
+type EndBody = {
+  intent: "end";
+  session_id: string;
+  /** Optional: how the session ended. "button" | "pagehide" |
+   *  "route". Captured for ops curiosity only — the dashboard
+   *  treats every ended row the same. */
+  reason?: string;
+};
+
+type Body = StartBody | TickBody | EndBody;
 
 export async function POST(req: NextRequest) {
   if (!supabaseConfigured()) {
@@ -196,6 +215,33 @@ export async function POST(req: NextRequest) {
     );
     if (err) {
       console.warn("[session/live/tick] update failed:", err);
+      return NextResponse.json(
+        { ok: false, reason: "db-update-failed", detail: err.message ?? "" },
+        { status: 200 }
+      );
+    }
+    return NextResponse.json({ ok: true, stripped });
+  }
+
+  if (body.intent === "end") {
+    if (!body.session_id || typeof body.session_id !== "string") {
+      return NextResponse.json(
+        { ok: false, reason: "session_id required" },
+        { status: 400 }
+      );
+    }
+    const patch: Record<string, unknown> = {
+      status: "ended",
+      ended_at: new Date().toISOString(),
+    };
+    const { stripped, err } = await updateWithDrift(
+      supabase,
+      "sessions",
+      body.session_id,
+      patch
+    );
+    if (err) {
+      console.warn("[session/live/end] update failed:", err);
       return NextResponse.json(
         { ok: false, reason: "db-update-failed", detail: err.message ?? "" },
         { status: 200 }

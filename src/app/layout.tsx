@@ -3,6 +3,7 @@ import { Fraunces, Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { getServerAuthSupabase } from "@/lib/supabase-server";
 import { renderScopeBootScript } from "@/lib/account-scope";
+import { VisitLogger } from "@/components/VisitLogger";
 
 const fraunces = Fraunces({
   subsets: ["latin"],
@@ -71,6 +72,11 @@ export default async function RootLayout({
       <body
         className={`${fraunces.variable} ${inter.variable} ${jetbrains.variable} antialiased`}
       >
+        {/* Records one row per page view in `visitor_logs`. Excludes
+            admin pages so the operator doesn't log themselves. The
+            row is enriched server-side with IP, user-agent, and
+            geo headers. Surface: /admin/logs. */}
+        <VisitLogger />
         {children}
       </body>
     </html>
