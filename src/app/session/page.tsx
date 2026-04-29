@@ -420,27 +420,27 @@ export default function Session() {
     // many devices renders silently ("Echo types but doesn't speak").
     warmUpVoices();
 
-    // Tab-close / app-switch detection. The dashboard would otherwise
-    // show this row pinned at LIVE forever — the heartbeat tick
-    // stops, status never flips, elapsed counter freezes. We fire
-    // navigator.sendBeacon synchronously on `pagehide` (covers tab
-    // close, navigation away, and bfcache eviction across browsers)
-    // and again on `visibilitychange` -> hidden as a backup for
-    // mobile Safari, which sometimes skips pagehide. The beacon
-    // body is a Blob so the browser reliably keeps the request
-    // in-flight after the document is gone.
+    // Tab-close detection. The dashboard would otherwise show this
+    // row pinned at LIVE forever — the heartbeat tick stops, status
+    // never flips, elapsed counter freezes. We fire
+    // navigator.sendBeacon on `pagehide`, which covers tab close,
+    // navigation away, and bfcache eviction across all major
+    // browsers.
+    //
+    // We deliberately do NOT listen for `visibilitychange` -> hidden:
+    // that event also fires when the user simply switches to another
+    // tab (alt-tab, command-tab) or another app, and we don't want
+    // a transient app-switch to mark the session as ended. The 30s
+    // server-side stale-finisher in lib/session-stale.ts is the
+    // safety net for browsers where `pagehide` itself doesn't land
+    // (mobile Safari force-quit, crashed renderer, etc.) — the row
+    // gets flipped to ENDED a few snapshots later and the elapsed
+    // counter stops at the last real heartbeat.
     const onPageHide = () => endLiveSessionBeacon("pagehide");
-    const onVisibilityChange = () => {
-      if (document.visibilityState === "hidden") {
-        endLiveSessionBeacon("visibility-hidden");
-      }
-    };
     window.addEventListener("pagehide", onPageHide);
-    document.addEventListener("visibilitychange", onVisibilityChange);
 
     return () => {
       window.removeEventListener("pagehide", onPageHide);
-      document.removeEventListener("visibilitychange", onVisibilityChange);
       // SPA route-away (e.g. router.push) — the beacon may not have
       // fired (no pagehide on internal nav), so we still need to
       // close the live row explicitly. fetch with keepalive=true is
