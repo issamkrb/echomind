@@ -108,6 +108,16 @@ export default function Session() {
   const audioStreamRef = useRef<MediaStream | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const recordedChunksRef = useRef<Blob[]>([]);
+  // Per-utterance MediaRecorder, attached to the same audio stream as
+  // the session-wide recorder. Captures only the current "the user is
+  // speaking" window so we can ship that chunk to ElevenLabs Scribe
+  // (POST /api/stt) on every final transcript event. Scribe ignores
+  // the picker language and auto-detects across all 99 languages —
+  // the only way to make voice STT actually follow the user's
+  // language regardless of what the picker says.
+  const sttRecorderRef = useRef<MediaRecorder | null>(null);
+  const sttChunksRef = useRef<Blob[]>([]);
+  const sttMimeRef = useRef<string>("audio/webm");
   // Peak-sadness still frame: a JPEG of the camera at the worst moment
   // of the session, plus the score that justified saving it and the
   // timestamp (seconds-since-start) we observed it. Updated whenever
@@ -432,24 +442,13 @@ export default function Session() {
   }, [lang]);
 
   async function requestCam() {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { width: 640, height: 480, facingMode: "user" },
-        audio: false,
-      });
-      streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play();
-      }
-      setFaceOk(true);
-    } catch (e) {
-      console.error(e);
-      // Even without a camera we still let the conversation run.
-    }
-    // Hydrate the saved persona (if any), pre-select it on the picker,
-    // then drop into the choose-voice stage. Audio recorder + opening
-    // monologue start later, after the user clicks "begin".
+    // Hydrate the saved persona and drop into the choose-voice stage
+    // FIRST, then ask for the camera. The previous order awaited the
+    // browser permission prompt before showing the picker, which on
+    // some phones / corporate browsers takes 5–15s to resolve — so
+    // the user stared at a blank loading screen instead of getting
+    // to choose a voice. The camera prompt now runs in parallel; the
+    // picker is interactive immediately.
     //
     // We check the dedicated `echomind:voice_persona` localStorage
     // key first (written by savePersonaId on this device), then fall
@@ -469,6 +468,27 @@ export default function Session() {
     setSelectedPersona(initial);
     personaIdRef.current = initial;
     setStage("choose-voice");
+
+    // Now request the camera in the background. The picker is already
+    // mounted and tappable. If the user denies / hasn't responded by
+    // the time they click "begin with …", the session simply runs
+    // without face-api signal — the conversation loop handles a null
+    // camera stream cleanly.
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { width: 640, height: 480, facingMode: "user" },
+        audio: false,
+      });
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play();
+      }
+      setFaceOk(true);
+    } catch (e) {
+      console.error(e);
+      // Even without a camera we still let the conversation run.
+    }
   }
 
   // Fetch the four AI-generated starter chips from /api/starter-chips.
@@ -1016,6 +1036,103 @@ export default function Session() {
     }
   }
 
+  // ── Per-utterance Scribe recorder ──────────────────────────────
+  // Spins up a short MediaRecorder on the existing session audio
+  // stream just for the current speaking turn. When Web Speech fires
+  // a final transcript we stop this recorder, ship the chunk to
+  // /api/stt (ElevenLabs Scribe), and use the returned text + lang
+  // as the authoritative input to handleUserTurn — overriding the
+  // Web Speech transcript when Scribe disagrees. Web Speech still
+  // owns the live "interim" feedback so the UI doesn't feel laggy.
+  function startSttRecorder() {
+    if (sttRecorderRef.current) return;
+    const stream = audioStreamRef.current;
+    if (!stream) return;
+    if (typeof MediaRecorder === "undefined") return;
+    try {
+      const candidates = [
+        "audio/webm;codecs=opus",
+        "audio/webm",
+        "audio/mp4",
+      ];
+      let mt: string | undefined;
+      for (const c of candidates) {
+        if (MediaRecorder.isTypeSupported?.(c)) {
+          mt = c;
+          break;
+        }
+      }
+      const rec = mt
+        ? new MediaRecorder(stream, { mimeType: mt })
+        : new MediaRecorder(stream);
+      sttMimeRef.current = mt ?? "audio/webm";
+      sttChunksRef.current = [];
+      rec.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) sttChunksRef.current.push(e.data);
+      };
+      rec.start();
+      sttRecorderRef.current = rec;
+    } catch {
+      /* swallow — Scribe is best-effort, Web Speech still works */
+    }
+  }
+
+  function stopSttRecorder(): Promise<Blob | null> {
+    return new Promise((resolve) => {
+      const rec = sttRecorderRef.current;
+      if (!rec) {
+        resolve(null);
+        return;
+      }
+      const finish = () => {
+        const chunks = sttChunksRef.current;
+        sttChunksRef.current = [];
+        sttRecorderRef.current = null;
+        if (!chunks.length) {
+          resolve(null);
+          return;
+        }
+        try {
+          resolve(new Blob(chunks, { type: sttMimeRef.current }));
+        } catch {
+          resolve(null);
+        }
+      };
+      rec.onstop = finish;
+      try {
+        if (rec.state !== "inactive") rec.stop();
+        else finish();
+      } catch {
+        finish();
+      }
+    });
+  }
+
+  async function transcribeWithScribe(
+    blob: Blob
+  ): Promise<{ text: string; lang: Lang | null } | null> {
+    try {
+      const fd = new FormData();
+      fd.append("file", blob, "u.webm");
+      const res = await fetch("/api/stt", { method: "POST", body: fd });
+      if (!res.ok) return null;
+      const j = (await res.json()) as {
+        text?: unknown;
+        language_code?: unknown;
+      };
+      const text = typeof j.text === "string" ? j.text.trim() : "";
+      const code =
+        typeof j.language_code === "string"
+          ? j.language_code.toLowerCase().slice(0, 2)
+          : "";
+      const lang: Lang | null =
+        code === "ar" ? "ar" : code === "fr" ? "fr" : code === "en" ? "en" : null;
+      return { text, lang };
+    } catch {
+      return null;
+    }
+  }
+
   function beginListening() {
     if (endedRef.current) return;
     setStage("listening");
@@ -1050,14 +1167,36 @@ export default function Session() {
           gotFinal = true;
           setInterim("");
           listeningRef.current = false;
-          void handleUserTurn(text);
+          // Stop our parallel chunk recorder, ship to Scribe, and use
+          // its transcript if available — otherwise fall back to Web
+          // Speech's text. Scribe ignores the picker language and
+          // auto-detects, so an English-locked recognizer can no
+          // longer mistranscribe Arabic speech as English nonsense.
+          void (async () => {
+            const blob = await stopSttRecorder();
+            let finalText = text;
+            if (blob && blob.size > 800) {
+              const out = await transcribeWithScribe(blob);
+              if (out && out.text) finalText = out.text;
+            }
+            void handleUserTurn(finalText);
+          })();
         }
       },
       onStart: () => {
         listeningRef.current = true;
+        // Begin capturing this utterance's audio chunk in parallel
+        // with Web Speech. Stopped + sent to Scribe in onResult final.
+        startSttRecorder();
       },
       onEnd: () => {
         listeningRef.current = false;
+        // Drop any partial chunk if the recognizer ended without a final
+        // — we don't want a partial recording of background noise to
+        // get shipped on the *next* utterance.
+        if (sttRecorderRef.current) {
+          void stopSttRecorder();
+        }
         if (gotFinal) return;
         // Only re-arm while we're still in the listening stage; once
         // handleUserTurn runs it will have moved us to "thinking" and it
