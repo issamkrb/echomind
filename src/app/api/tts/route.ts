@@ -177,10 +177,14 @@ export async function POST(req: NextRequest) {
 }
 
 /** Map voice id → ElevenLabs voice_settings. Picked per voice so the
- *  same speaker doesn't sound identical across the four styles. */
+ *  same speaker doesn't sound identical across the four styles. The
+ *  `lang` argument lets us nudge the same style toward the cultural
+ *  prosody of each language — Arabic gets a slightly higher stability
+ *  + lower style so the cadence stays warm and even, French stays
+ *  balanced, English keeps the current EchoMind default. */
 function pickStyleSettings(
   voiceId: string,
-  _lang: string
+  lang: string
 ): {
   stability: number;
   similarity_boost: number;
@@ -196,35 +200,60 @@ function pickStyleSettings(
   const energeticIds = new Set(["pNInz6obpgDQGcFmaJgB", "AZnzlk1XvdvUeBnXmlld"]);
   // Professional → ErXwobaYiN019PkySvjV, onwK4e9ZLuTAKqWW03F9 (default)
 
+  let base: {
+    stability: number;
+    similarity_boost: number;
+    style: number;
+    use_speaker_boost: boolean;
+  };
   if (calmIds.has(voiceId)) {
-    return {
+    base = {
       stability: 0.6,
       similarity_boost: 0.85,
       style: 0.15,
       use_speaker_boost: true,
     };
-  }
-  if (softIds.has(voiceId)) {
-    return {
+  } else if (softIds.has(voiceId)) {
+    base = {
       stability: 0.7,
       similarity_boost: 0.9,
       style: 0.1,
       use_speaker_boost: true,
     };
-  }
-  if (energeticIds.has(voiceId)) {
-    return {
+  } else if (energeticIds.has(voiceId)) {
+    base = {
       stability: 0.35,
       similarity_boost: 0.8,
       style: 0.45,
       use_speaker_boost: true,
     };
+  } else {
+    // Professional default.
+    base = {
+      stability: 0.5,
+      similarity_boost: 0.85,
+      style: 0.25,
+      use_speaker_boost: true,
+    };
   }
-  // Professional default.
-  return {
-    stability: 0.5,
-    similarity_boost: 0.85,
-    style: 0.25,
-    use_speaker_boost: true,
-  };
+
+  // Language-specific prosody nudges. The eleven_multilingual_v2
+  // model auto-detects language from text but its default delivery
+  // can over-emote in Arabic and under-emote in French. These small
+  // tweaks pull AR toward calmer warmth and FR toward more presence.
+  if (lang === "ar") {
+    return {
+      ...base,
+      stability: Math.min(0.95, base.stability + 0.12),
+      style: Math.max(0, base.style - 0.05),
+    };
+  }
+  if (lang === "fr") {
+    return {
+      ...base,
+      stability: Math.max(0.2, base.stability - 0.05),
+      style: Math.min(0.6, base.style + 0.05),
+    };
+  }
+  return base;
 }

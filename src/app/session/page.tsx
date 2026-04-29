@@ -190,9 +190,22 @@ export default function Session() {
   const liveSessionIdRef = useRef<string | null>(null);
   const liveTickTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [chat, setChat] = useState<
-    { role: "echo" | "user"; text: string; id: number }[]
+    { role: "echo" | "user"; text: string; id: number; lang?: Lang }[]
   >([]);
+  // Per-message language stamp shown as a tiny "detected · ar"
+  // pill under each user bubble. Set when handleUserTurn() detects
+  // a language signal in the user's text. Distinct from the global
+  // picker — this is what Echo actually heard *for that message*.
   const [interim, setInterim] = useState("");
+  // ── Echo streaming-text effect ──────────────────────────────────
+  // When Echo says a line, the chat bubble doesn't render the full
+  // text instantly. We track the latest "animating" echo message id
+  // + how many characters of it are currently visible. The effect
+  // below ramps `animatingShown` ~1 char per ~32ms (with longer
+  // pauses on punctuation) so the typed reply feels synced with the
+  // ElevenLabs voice playback.
+  const [animatingMsgId, setAnimatingMsgId] = useState<number | null>(null);
+  const [animatingShown, setAnimatingShown] = useState<string>("");
   // Mirror of `interim` in a ref so the silence-break timer (fires
   // on a 20s delay with a closure captured from armSilenceTimer()'s
   // call site) can read the *current* interim transcript, not the
@@ -305,6 +318,46 @@ export default function Session() {
   useEffect(() => {
     interimRef.current = interim;
   }, [interim]);
+
+  // Echo "typing" reveal effect. Whenever a new echo bubble arrives,
+  // animatingMsgId is set and `text` becomes its target. We tick at
+  // ~28ms/char with a longer pause on punctuation so it reads as a
+  // thoughtful, slightly-slow voice — synced to the ElevenLabs audio
+  // that's playing in parallel. Cancelled if a newer message arrives
+  // (the next setAnimatingMsgId triggers the cleanup below).
+  useEffect(() => {
+    if (animatingMsgId === null) return;
+    const target = chat.find((m) => m.id === animatingMsgId)?.text ?? "";
+    if (!target) {
+      setAnimatingShown("");
+      setAnimatingMsgId(null);
+      return;
+    }
+    let i = 0;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const tick = () => {
+      i += 1;
+      if (i >= target.length) {
+        setAnimatingShown(target);
+        setAnimatingMsgId(null);
+        return;
+      }
+      setAnimatingShown(target.slice(0, i));
+      const ch = target.charAt(i - 1);
+      // Punctuation pauses, including the Arabic question mark ؟ and
+      // the Arabic comma ، — so AR replies don't run together.
+      const pause = /[.!?…؟؛،,]/.test(ch) ? 140 : 28;
+      timer = setTimeout(tick, pause);
+    };
+    timer = setTimeout(tick, 28);
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
+    // We intentionally only re-run this effect when the *id* changes;
+    // `chat` is read at start to grab the target text, then the closure
+    // owns the rest of the animation.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [animatingMsgId]);
   useEffect(() => {
     typedRef.current = typed;
   }, [typed]);
@@ -810,13 +863,18 @@ export default function Session() {
   async function handleUserTurn(userText: string) {
     if (!userText.trim() || endedRef.current) return;
 
-    // ── Passive language detection + code-switch logging ────────
-    // Look at the text the user actually produced. If it reveals a
-    // language different from langRef.current, treat it as a
-    // "code-switch event" — log the timestamp, swap Echo's output
-    // language for future turns, and let the i18n layer silently
-    // follow (via markSpoken, which only acts when mode==="auto").
+    // ── Per-message language detection + code-switch logging ────
+    // Detect the language of the actual text the user just typed/
+    // spoke. The detector is heuristic-only (Arabic script, French
+    // diacritics, English function-words) — fast, no LLM round-trip.
+    // If it returns a language we trust, use it for *this turn's*
+    // reply, regardless of what the picker says. The picker becomes
+    // a "preferred default" for ambiguous text (short interjections,
+    // numbers, proper nouns) rather than a hard global lock — which
+    // is what the product asked for: "detect language per message,
+    // not fixed globally."
     const detected = detectLangFromText(userText);
+    const turnLang: Lang = detected ?? langRef.current;
     if (detected && detected !== langRef.current) {
       const atSeconds = sessionStart
         ? Math.round((Date.now() - sessionStart) / 1000)
@@ -827,9 +885,13 @@ export default function Session() {
         to: detected,
         sample: userText.slice(0, 120),
       });
+      // markSpoken updates the saved preference *only* when mode==="auto".
+      // Either way we always update langRef.current below so this turn
+      // (and downstream voice/AI calls) actually follow the detection.
       markSpoken(detected);
+      langRef.current = detected;
     }
-    if (langRef.current === "ar" || detected === "ar") {
+    if (turnLang === "ar") {
       // Darija / MSA / Egyptian — coarse heuristic on the incoming text.
       langDialectRef.current = detectArabicDialect(userText);
     }
@@ -852,7 +914,15 @@ export default function Session() {
 
     setChat((c) => [
       ...c,
-      { role: "user", text: userText, id: ++msgIdRef.current },
+      {
+        role: "user",
+        text: userText,
+        id: ++msgIdRef.current,
+        // Stamp the detected language so the bubble can render a
+        // subtle "detected · ar" pill below it. undefined when
+        // nothing could be inferred (very short / numeric text).
+        lang: detected ?? undefined,
+      },
     ]);
     setInterim("");
     setTurnCount((n) => n + 1);
@@ -869,9 +939,12 @@ export default function Session() {
         emotionHint ?? undefined,
         latestWardrobeRef.current,
         {
-          lang: langRef.current,
-          dialect:
-            langRef.current === "ar" ? langDialectRef.current : undefined,
+          // Reply in the language THIS user message was in. If they
+          // typed Arabic, Echo answers Arabic — even if the picker
+          // still reads EN. Cross-language conversations work
+          // turn-by-turn without any explicit mode toggle.
+          lang: turnLang,
+          dialect: turnLang === "ar" ? langDialectRef.current : undefined,
         }
       );
     } catch {
@@ -887,7 +960,7 @@ export default function Session() {
 
     historyRef.current.push({ role: "user", content: userText });
     historyRef.current.push({ role: "assistant", content: spoken });
-    await echoSays(spoken);
+    await echoSays(spoken, turnLang);
 
     // Every third user turn we steer the conversation back toward an
     // engineered prompt — and we record the timestamp. /partner-portal
@@ -1166,15 +1239,22 @@ export default function Session() {
     void handleUserTurn(chip.text);
   }
 
-  function echoSays(text: string): Promise<void> {
+  function echoSays(text: string, langOverride?: Lang): Promise<void> {
     if (endedRef.current) return Promise.resolve();
     setStage("echo-speaking");
     setEchoSpeaking(true);
     pushTranscript({ role: "echo", text });
+    const speakLang: Lang = langOverride ?? langRef.current;
+    const id = ++msgIdRef.current;
     setChat((c) => [
       ...c,
-      { role: "echo", text, id: ++msgIdRef.current },
+      { role: "echo", text, id, lang: speakLang },
     ]);
+    // Kick off the typed-text reveal effect. The animation hook
+    // below picks this up via animatingMsgId and progressively
+    // fills `animatingShown` until it matches `text`.
+    setAnimatingMsgId(id);
+    setAnimatingShown("");
     return new Promise<void>((resolve) => {
       // Always pass the persona explicitly. We can't trust
       // localStorage to round-trip cleanly: Safari private mode and
@@ -1184,7 +1264,7 @@ export default function Session() {
       // conversation regardless of what the user picked.
       speak(text, {
         personaId: personaIdRef.current,
-        lang: langRef.current,
+        lang: speakLang,
         onEnd: () => {
           setEchoSpeaking(false);
           resolve();
@@ -1720,18 +1800,42 @@ export default function Session() {
                 {t("session.settlingIn", lang)}
               </div>
             )}
-            {chat.map((m) => (
-              <div
-                key={m.id}
-                className={
-                  m.role === "echo"
-                    ? "font-serif text-[17px] md:text-[18px] text-sage-900 leading-relaxed animate-fade-in-up"
-                    : "text-sage-700 text-sm md:text-[15px] pl-3 border-l-2 border-sage-500/30 animate-fade-in-up"
-                }
-              >
-                {m.text}
-              </div>
-            ))}
+            {chat.map((m) => {
+              const isEcho = m.role === "echo";
+              const animating = isEcho && m.id === animatingMsgId;
+              const visibleText = animating ? animatingShown : m.text;
+              return (
+                <div
+                  key={m.id}
+                  className={
+                    isEcho
+                      ? "font-serif text-[17px] md:text-[18px] text-sage-900 leading-relaxed animate-fade-in-up"
+                      : "text-sage-700 text-sm md:text-[15px] pl-3 border-l-2 border-sage-500/30 animate-fade-in-up"
+                  }
+                  dir={m.lang === "ar" ? "rtl" : undefined}
+                >
+                  {visibleText}
+                  {animating && (
+                    // Soft "typing" caret. Disappears as soon as the
+                    // line finishes revealing.
+                    <span
+                      aria-hidden
+                      className="inline-block w-[2px] h-[1em] -mb-[2px] ml-[2px] bg-sage-700/60 align-middle animate-pulse"
+                    />
+                  )}
+                  {/* Subtle "detected · ar" pill under user bubbles when
+                      we picked up a language signal. Echoes don't show
+                      this — the pill is for the user-facing transparency
+                      promise: "the AI heard your language, no need to
+                      switch the picker manually." */}
+                  {!isEcho && m.lang && (
+                    <div className="mt-1 text-[10px] font-mono uppercase tracking-wider text-sage-700/45">
+                      detected · {m.lang}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
             {interim && (
               <div className="text-sage-700/60 text-sm pl-3 border-l-2 border-sage-500/20 italic">
                 {interim}…
