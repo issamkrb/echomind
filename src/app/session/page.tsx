@@ -138,7 +138,6 @@ export default function Session() {
   // shipped to /api/stt (ElevenLabs Scribe) and the resulting text
   // is fed through handleUserTurn — same path Web Speech takes.
   const scribeFallbackRef = useRef<{
-    ctx: AudioContext;
     source: MediaStreamAudioSourceNode;
     analyser: AnalyserNode;
     raf: number;
@@ -147,6 +146,15 @@ export default function Session() {
     lastVoiceMs: number;
     finalizing: boolean;
   } | null>(null);
+  // Shared, long-lived AudioContext. iOS Safari only lets us
+  // create + resume an AudioContext from inside a user gesture
+  // (the same restriction that gates HTMLAudioElement.play()).
+  // We unlock this one inside the "begin with …" click handler
+  // so it's already in the "running" state by the time
+  // armScribeFallbackListener() needs it — way after the gesture
+  // window has closed. Without this the analyser would always
+  // report all-128 silence and the mic would feel dead on iPhone.
+  const sharedAudioCtxRef = useRef<AudioContext | null>(null);
   // Peak-sadness still frame: a JPEG of the camera at the worst moment
   // of the session, plus the score that justified saving it and the
   // timestamp (seconds-since-start) we observed it. Updated whenever
@@ -599,7 +607,40 @@ export default function Session() {
   // default) regardless of which picker card they just committed to,
   // which was the same root cause as the "voices don't work" bug on
   // the picker itself.
+  // Synchronously create + resume() a shared AudioContext. MUST
+  // be called from inside a user gesture so iOS Safari permits
+  // the unlock; once "running" the context survives across async
+  // boundaries and is reusable by armScribeFallbackListener().
+  function unlockSharedAudioContext() {
+    if (typeof window === "undefined") return;
+    try {
+      if (!sharedAudioCtxRef.current) {
+        const Ctor =
+          window.AudioContext ??
+          (window as unknown as { webkitAudioContext?: typeof AudioContext })
+            .webkitAudioContext;
+        if (!Ctor) return;
+        sharedAudioCtxRef.current = new Ctor();
+      }
+      const ctx = sharedAudioCtxRef.current;
+      // Fire-and-forget: resume() returns a Promise, but starting
+      // it synchronously inside the user gesture is what matters
+      // for iOS — awaiting later is fine and we don't want to
+      // block the click handler.
+      void ctx.resume().catch(() => {
+        /* swallow — non-iOS browsers may already be running */
+      });
+    } catch {
+      /* swallow — desktop Safari sometimes throws on duplicate
+         construction; best-effort. */
+    }
+  }
+
   function startSessionWithPersona(id: VoicePersonaId) {
+    // Unlock Web Audio inside the click so iOS Safari keeps the
+    // analyser context "running" later when the Scribe fallback
+    // arms itself outside the user-gesture window.
+    unlockSharedAudioContext();
     savePersonaId(id);
     personaIdRef.current = id;
     setSelectedPersona(id);
@@ -881,6 +922,14 @@ export default function Session() {
     }
     audioStreamRef.current?.getTracks().forEach((t) => t.stop());
     audioStreamRef.current = null;
+    if (sharedAudioCtxRef.current) {
+      try {
+        void sharedAudioCtxRef.current.close();
+      } catch {
+        /* no-op */
+      }
+      sharedAudioCtxRef.current = null;
+    }
   }
 
   // ---------- live-session stream to /admin ----------
@@ -1402,7 +1451,7 @@ export default function Session() {
   // and feed the returned text through handleUserTurn — same exit
   // point Web Speech takes. This is what makes the mic actually
   // usable on iPhones and iPads.
-  function armScribeFallbackListener() {
+  async function armScribeFallbackListener() {
     if (scribeFallbackRef.current) return;
     const stream = audioStreamRef.current;
     if (!stream) return;
@@ -1412,20 +1461,23 @@ export default function Session() {
     startSttRecorder();
     if (!sttRecorderRef.current) return;
 
-    let ctx: AudioContext;
-    try {
-      const Ctor =
-        window.AudioContext ??
-        (window as unknown as { webkitAudioContext?: typeof AudioContext })
-          .webkitAudioContext;
-      if (!Ctor) {
-        void stopSttRecorder();
-        return;
-      }
-      ctx = new Ctor();
-    } catch {
+    // Use the shared AudioContext that was unlocked inside the
+    // persona click handler. Creating a fresh one here would land
+    // in the "suspended" state on iOS (no gesture) and the
+    // analyser would only ever return 128/silence.
+    const ctx = sharedAudioCtxRef.current;
+    if (!ctx) {
       void stopSttRecorder();
       return;
+    }
+    // Belt-and-braces: if the OS suspended the context (lock
+    // screen, app switch, Bluetooth route change), kick it back
+    // alive. resume() is a no-op if already running.
+    try {
+      await ctx.resume();
+    } catch {
+      /* swallow — proceed; analyser will report silence and
+         finalize will re-arm */
     }
     let source: MediaStreamAudioSourceNode;
     let analyser: AnalyserNode;
@@ -1436,18 +1488,12 @@ export default function Session() {
       analyser.smoothingTimeConstant = 0.4;
       source.connect(analyser);
     } catch {
-      try {
-        void ctx.close();
-      } catch {
-        /* no-op */
-      }
       void stopSttRecorder();
       return;
     }
 
     const data = new Uint8Array(analyser.fftSize);
     const state = {
-      ctx,
       source,
       analyser,
       raf: 0,
@@ -1523,11 +1569,9 @@ export default function Session() {
     } catch {
       /* no-op */
     }
-    try {
-      void state.ctx.close();
-    } catch {
-      /* no-op */
-    }
+    // Deliberately NOT closing sharedAudioCtxRef here — we keep
+    // the context alive across utterances so iOS doesn't have to
+    // unlock it again (which it can't, outside a user gesture).
   }
 
   async function finalizeScribeFallbackUtterance() {
