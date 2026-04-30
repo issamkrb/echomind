@@ -6,6 +6,7 @@ import { BreathingOrb } from "@/components/BreathingOrb";
 import { Star, Lock, ShieldCheck, BadgeCheck, Leaf } from "lucide-react";
 import { UserBadge } from "@/components/UserBadge";
 import { MorningLetterEnvelope } from "@/components/MorningLetterEnvelope";
+import { LandingMagnetism } from "@/components/LandingMagnetism";
 import { useLang } from "@/lib/use-lang";
 import { t } from "@/lib/strings";
 import {
@@ -70,6 +71,7 @@ export default function Landing() {
       {/* HERO */}
       <section className="relative px-6 md:px-12 pt-8 md:pt-16 pb-24">
         <div className="max-w-5xl mx-auto text-center">
+          <LandingMagnetism />
           <div className="mx-auto mb-10 md:mb-14 flex justify-center">
             <BreathingOrb size={260} />
           </div>
