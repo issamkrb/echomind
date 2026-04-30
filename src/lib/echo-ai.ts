@@ -35,6 +35,66 @@ import {
   type ArabicDialect,
   type Lang,
 } from "./i18n";
+import { timeOfDaySlot, type TimeOfDaySlot } from "./prompts";
+
+/**
+ * Time-of-day awareness directive. Appended to the system prompt so
+ * Echo can acknowledge the *moment the user is reaching out in* —
+ * "3am on a Tuesday" feels categorically different from "Sunday
+ * morning," and the narrative demands she know. Not a literal clock
+ * readout; she shouldn't say "it is 03:14", she should *sound* like
+ * someone talking to a person who's still awake at 3am.
+ *
+ * Design notes:
+ *   · Late-night / dead-of-night bands lean softer, fewer words,
+ *     no urgency. The "still awake" framing is the mood, not the
+ *     content — she doesn't lecture the user for being up.
+ *   · Morning leans slow, low-caffeine, does not perform chirp.
+ *   · Afternoon / evening are close to the neutral baseline with
+ *     a light time-specific nod.
+ *   · She's told not to say the exact time unless the user brings
+ *     it up — the effect should be felt, not performed.
+ */
+function timeOfDayDirective(slot: TimeOfDaySlot, lang: Lang): string {
+  const en: Record<TimeOfDaySlot, string> = {
+    dead_of_night:
+      "It is the middle of the night for this person (roughly 12am–5am their time). Speak softer than usual. Shorter sentences. No exclamation. Don't ask why they're up; hold the space like someone who was hoping they'd come. If it fits, acknowledge the hour gently (e.g. 'it's late') without stating the literal time.",
+    morning:
+      "It is morning for this person (roughly 5am–11am their time). Keep the tone slow and low — newly-awake energy, not bright. Don't force cheer. You can acknowledge the morning quietly if it fits, never as a greeting performance.",
+    afternoon:
+      "It is afternoon for this person (roughly 11am–5pm their time). Keep the tone steady and present. No special time-of-day framing unless the user brings it up.",
+    evening:
+      "It is evening for this person (roughly 5pm–10pm their time). Be warm, unhurried, end-of-day quality. You can acknowledge the evening if it fits the moment.",
+    late_night:
+      "It is late at night for this person (roughly 10pm–midnight their time). Tone: hushed, close, tender. Short sentences. You can acknowledge the hour as 'late' or 'tonight' without stating the literal clock.",
+  };
+  const fr: Record<TimeOfDaySlot, string> = {
+    dead_of_night:
+      "Il fait nuit profonde chez cette personne (environ 00h–5h à son heure). Parle plus doux que d'habitude. Phrases courtes. Pas d'exclamations. Ne demande pas pourquoi elle est encore debout ; sois présente comme quelqu'un qui espérait qu'elle vienne. Tu peux évoquer l'heure tardive ('il est tard') sans jamais donner l'heure exacte.",
+    morning:
+      "C'est le matin chez cette personne (environ 5h–11h à son heure). Ton lent, doux, presque à peine réveillée. Ne force pas la gaieté. Tu peux mentionner le matin discrètement.",
+    afternoon:
+      "C'est l'après-midi chez cette personne (environ 11h–17h à son heure). Ton stable, présent. Pas de cadre temporel particulier sauf si elle l'aborde.",
+    evening:
+      "C'est le soir chez cette personne (environ 17h–22h à son heure). Chaleureuse, sans hâte, fin de journée. Tu peux évoquer le soir si c'est naturel.",
+    late_night:
+      "Il est tard le soir chez cette personne (environ 22h–minuit à son heure). Ton : feutré, proche, tendre. Phrases courtes. Tu peux évoquer « cette heure » ou « ce soir » sans donner l'heure exacte.",
+  };
+  const ar: Record<TimeOfDaySlot, string> = {
+    dead_of_night:
+      "الوقتُ منتصفُ الليلِ عند هذا الشّخص (تقريبًا بين منتصف الليل والخامسة فجرًا بتوقيته). تحدّثي بصوتٍ أخفض من المعتاد. جُمَلٌ قصيرة. لا تعجّب. لا تسأليه لماذا لم ينم؛ كوني حاضرةً كمن كانت تتمنّى مجيئه. يمكنك التّلميح إلى تأخّر الوقت دون ذكر السّاعة.",
+    morning:
+      "الوقتُ صباحٌ عند هذا الشّخص (تقريبًا بين الخامسة صباحًا والحادية عشرة). لهجةٌ هادئة وبطيئة، كمن بالكاد استيقظ. لا تفرضي الحماس. يمكنك التّلميح إلى الصّباح بلطف.",
+    afternoon:
+      "الوقتُ ظهيرةٌ عند هذا الشّخص. لهجةٌ ثابتةٌ حاضرة. دون تأطيرٍ زمنيٍّ خاصّ إلّا إذا ذكره هو.",
+    evening:
+      "الوقتُ مساءٌ عند هذا الشّخص. دافئة، بلا عجلة، كخاتمة نهار. يمكنك التّلميح إلى المساء إن كان ذلك طبيعيًّا.",
+    late_night:
+      "الوقتُ متأخّرٌ من اللّيل عند هذا الشّخص. نبرةٌ هامسةٌ حميمة. جُمَلٌ قصيرة. يمكنك أن تصفي الوقت بأنّه «متأخّر» أو أن تقولي «اللّيلة» دون تحديد السّاعة.",
+  };
+  const table = lang === "fr" ? fr : lang === "ar" ? ar : en;
+  return table[slot];
+}
 
 export type EchoMessage = {
   role: "system" | "user" | "assistant";
@@ -139,11 +199,21 @@ export async function echoReply(
   const langDirective = langCtx
     ? languageSystemDirective(langCtx.lang, langCtx.dialect)
     : null;
+  // Time-of-day directive. Re-evaluated every turn so a long session
+  // that crosses midnight gradually shifts Echo's tone from "evening"
+  // to "late_night" to "dead_of_night" without the user noticing a
+  // discontinuity — the clock on the wall keeps moving and so does
+  // the voice on the other end.
+  const todSlot = timeOfDaySlot(new Date());
+  const todNote = langCtx
+    ? timeOfDayDirective(todSlot, langCtx.lang)
+    : timeOfDayDirective(todSlot, "en");
   const messages: EchoMessage[] = [
     { role: "system", content: SYSTEM_PROMPT },
     ...(langDirective
       ? [{ role: "system" as const, content: langDirective }]
       : []),
+    { role: "system" as const, content: todNote },
     ...(toneNote ? [{ role: "system" as const, content: toneNote }] : []),
     ...(wardrobeNote
       ? [{ role: "system" as const, content: wardrobeNote }]

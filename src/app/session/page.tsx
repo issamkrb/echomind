@@ -23,6 +23,7 @@ import {
 } from "@/lib/voice-personas";
 import { saveVoiceId } from "@/lib/voice-manager";
 import { ttsPrefetch, unlockAudio } from "@/lib/tts-service";
+import { timeOfDayBadge, timeOfDaySlot } from "@/lib/prompts";
 import {
   echoReply,
   type EchoEmotionHint,
@@ -2660,8 +2661,31 @@ function VoicePicker({
     <div className="absolute inset-0 z-40 flex items-center justify-center bg-cream-100/95 backdrop-blur-md p-6 overflow-y-auto">
       <div className="max-w-3xl w-full my-8">
         <div className="text-center mb-8">
-          <div className="text-[11px] uppercase tracking-widest text-sage-700/70">
-            {pickerCopy.kicker}
+          <div className="text-[11px] uppercase tracking-widest text-sage-700/70 flex items-center justify-center gap-2">
+            <span>{pickerCopy.kicker}</span>
+            {/* Whispered time-of-day tell. Renders like "before we
+                begin · 03:14 · late" so the user reads Echo as
+                *already knowing* what kind of visit this is. No
+                clock icon, no status-bar feel — it's a line of the
+                copy, not a badge. Gated behind the "late" /
+                "dead-of-night" bands for most visits so it doesn't
+                look like a generic time display during the day;
+                showing it always would dilute the weight of it
+                showing up at 3am. */}
+            {(() => {
+              const slot = timeOfDaySlot(new Date());
+              if (slot !== "late_night" && slot !== "dead_of_night") {
+                return null;
+              }
+              return (
+                <>
+                  <span aria-hidden className="text-sage-700/40">·</span>
+                  <span className="text-sage-700/70 normal-case tracking-wide">
+                    {timeOfDayBadge(lang, new Date())}
+                  </span>
+                </>
+              );
+            })()}
           </div>
           <h1 className="font-serif text-3xl md:text-4xl mt-2 text-sage-900 leading-tight">
             {pickerCopy.title}
