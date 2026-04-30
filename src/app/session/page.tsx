@@ -1636,7 +1636,13 @@ export default function Session() {
       // actually work on iPhones; previously we silently fell
       // through to the typed-only banner even though the user had
       // granted mic permission.
-      armScribeFallbackListener();
+      // Disarm any prior fallback first — armScribeFallbackListener
+      // is a no-op while one is already running, and after a silence
+      // break the previous loop's recorder would have been capturing
+      // Echo's nudge line and could finalize Echo's own words as
+      // "user input" (self-conversation loop on speakerphone).
+      disarmScribeFallbackListener();
+      void armScribeFallbackListener();
       return;
     }
     // Invariant: at most one live recognizer at a time. Abort any previous
