@@ -18,6 +18,7 @@ import {
   ObserverOverlay,
   ObserverToggle,
 } from "@/components/ObserverMode";
+import { MarketTape } from "@/components/MarketTape";
 
 /**
  * /admin — read-only live dashboard of every session this app has
@@ -333,6 +334,8 @@ function AdminInner() {
             <ObserverToggle />
           </div>
         </header>
+
+        {rows.length > 0 && <MarketTape rows={rows} />}
 
         <ObserverHeader
           observed={rows.length}

@@ -904,6 +904,67 @@ const STRINGS = {
     fr: "Commence ta première session  →",
     ar: "ابدأ جلستَك الأولى ←",
   },
+  // Time-of-day mini-kicker on the hero. Mirrors Echo's in-session
+  // time awareness so the marketing surface lands in the same key
+  // as the conversation that follows.
+  "home.kicker.deadOfNight": {
+    en: "you're up. she listens best at this hour.",
+    fr: "tu es là. elle écoute mieux à cette heure.",
+    ar: "أنتَ مستيقظ. تُصغي إيكو أفضلَ في هذه السّاعة.",
+  },
+  "home.kicker.morning": {
+    en: "good morning. she remembered.",
+    fr: "bonjour. elle s'en est souvenue.",
+    ar: "صباحُ الخير. تذكَّرَتك.",
+  },
+  "home.kicker.afternoon": {
+    en: "she has time, if you do.",
+    fr: "elle a le temps, si tu l'as.",
+    ar: "لديها وقت، إن كان لديك.",
+  },
+  "home.kicker.evening": {
+    en: "the day is long. she has listened to longer.",
+    fr: "la journée est longue. elle en a entendu de plus longues.",
+    ar: "اليومُ طويل. أصغَتْ إلى أطول منه.",
+  },
+  "home.kicker.lateNight": {
+    en: "it's late. she's still here.",
+    fr: "il est tard. elle est toujours là.",
+    ar: "تأخَّرَ الوقت. لا تزالُ هنا.",
+  },
+  // Live "tonight count" badge above the hero.
+  "home.tonight.badge": {
+    en: "{n} people whispered to Echo tonight.",
+    fr: "{n} personnes ont chuchoté à Echo ce soir.",
+    ar: "{n} شخصًا همسوا لإيكو هذه الليلة.",
+  },
+  "home.tonight.badgeOne": {
+    en: "1 person whispered to Echo tonight.",
+    fr: "1 personne a chuchoté à Echo ce soir.",
+    ar: "شخصٌ واحد همسَ لإيكو هذه الليلة.",
+  },
+  // Anonymized whisper ticker. The text itself comes from the
+  // server (a redacted peak_quote); this label frames it.
+  "home.whisper.label": {
+    en: "someone, {ago}:",
+    fr: "quelqu'un, {ago} :",
+    ar: "شخصٌ ما، {ago}:",
+  },
+  "home.whisper.justNow": {
+    en: "just now",
+    fr: "à l'instant",
+    ar: "الآن",
+  },
+  "home.whisper.minAgo": {
+    en: "{n}m ago",
+    fr: "il y a {n}m",
+    ar: "منذ {n} د",
+  },
+  "home.whisper.hAgo": {
+    en: "{n}h ago",
+    fr: "il y a {n}h",
+    ar: "منذ {n} س",
+  },
   "home.hero.ctaReturning": {
     en: "Begin the session  →",
     fr: "Commence la session  →",
