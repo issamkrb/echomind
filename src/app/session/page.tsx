@@ -22,6 +22,7 @@ import {
   type VoicePersonaId,
 } from "@/lib/voice-personas";
 import { saveVoiceId } from "@/lib/voice-manager";
+import { ttsPrefetch, unlockAudio } from "@/lib/tts-service";
 import {
   echoReply,
   type EchoEmotionHint,
@@ -942,10 +943,60 @@ export default function Session() {
         // and the photo column just stays empty, same as before.
       }
     }
+    // Also ship a final snapshot of the emotion store so tab-close
+    // sessions carry revenue / fingerprint / transcript into the
+    // auction view. Before this, finalizeAndLeave() was the only path
+    // that wrote revenue_estimate, so a user who opened /session and
+    // closed the tab 4 seconds later got $0.00 across every buyer on
+    // /admin/auction/[id]. The server still has a duration-based
+    // floor for the case where the emotion store is empty (user
+    // closed before the camera / STT warmed up at all), but sending
+    // what we have gives the operator view the realest numbers we
+    // can manage given how the tab-close happened.
+    let endSnapshot: {
+      final_fingerprint?: Record<string, number>;
+      audio_seconds?: number;
+      revenue_estimate?: number;
+      transcript?: { role: "user" | "echo"; text: string; t: number }[];
+      keywords?: string[];
+      peak_quote?: string;
+    } = {};
+    try {
+      const snapshot = useEmotionStore.getState();
+      const fp = aggregate(snapshot.buffer);
+      const audioSec = Math.round(fp.duration ?? 0);
+      const revenue = Math.round(
+        (fp.vulnerability ?? 0) * 50 + (fp.sad ?? 0) * 80
+      );
+      const userLines = snapshot.transcript.filter((t) => t.role === "user");
+      const peakQuote =
+        userLines.length > 0
+          ? userLines.sort((a, b) => b.text.length - a.text.length)[0].text
+          : undefined;
+      endSnapshot = {
+        final_fingerprint: fp as unknown as Record<string, number>,
+        audio_seconds: audioSec,
+        revenue_estimate: revenue,
+        transcript: snapshot.transcript.map((t) => ({
+          role: t.role,
+          text: t.text,
+          t: t.t,
+        })),
+        keywords: snapshot.keywords.map((k) =>
+          k.category.replace("_", " ")
+        ),
+        peak_quote: peakQuote,
+      };
+    } catch {
+      // Worst case the server falls back to its duration-based
+      // revenue floor and whatever the last heartbeat tick wrote.
+    }
+
     const body = JSON.stringify({
       intent: "end",
       session_id: id,
       reason,
+      ...endSnapshot,
     });
     try {
       if (typeof navigator !== "undefined" && navigator.sendBeacon) {
@@ -2548,6 +2599,24 @@ function VoicePicker({
   onBegin: (id: VoicePersonaId) => void;
   lang: Lang;
 }) {
+  // Prewarm all four persona samples the moment the picker mounts so
+  // tapping a card plays the clip from the in-memory blob cache
+  // instead of triggering a fresh ElevenLabs round-trip (cold
+  // request could hit 3–8 seconds on first play, which the user read
+  // as "the cards are frozen for ten seconds"). Prewarms run in
+  // parallel and are best-effort — a failed fetch just means the
+  // first tap on that specific card still has to wait on the
+  // network, same as before.
+  //
+  // Also re-runs whenever `lang` changes so previewing in AR after
+  // the user already saw the picker in EN still loads the AR sample
+  // line, not the stale EN one.
+  useEffect(() => {
+    for (const p of VOICE_PERSONAS) {
+      const loc = personaLocale(p, lang);
+      void ttsPrefetch(loc.sampleLine, voiceIdForPersona(p.id), lang);
+    }
+  }, [lang]);
   const pickerCopy =
     lang === "ar"
       ? {
@@ -2620,6 +2689,14 @@ function VoicePicker({
                 key={p.id}
                 type="button"
                 onClick={() => {
+                  // iOS Safari demands `new Audio()` be constructed
+                  // inside a synchronous user-gesture handler, but
+                  // ttsSpeak() does it after an `await` — so the
+                  // very first tap on a fresh page would silently
+                  // fail to play. Unlocking here, in sync, inside
+                  // the click, guarantees the shared <audio> tag
+                  // exists before any async work starts.
+                  unlockAudio();
                   onSelect(p.id);
                   onPreview(p.id);
                 }}
@@ -2663,7 +2740,14 @@ function VoicePicker({
         <div className="mt-8 flex flex-col items-center gap-3">
           <button
             type="button"
-            onClick={() => onBegin(selected)}
+            onClick={() => {
+              // Same iOS Safari audio-unlock reasoning as the card
+              // onClick above — a user who hits "begin" without
+              // previewing any card first would otherwise get a
+              // silent opening line on iPhone.
+              unlockAudio();
+              onBegin(selected);
+            }}
             className="px-8 py-3.5 rounded-full bg-sage-700 text-cream-50 hover:bg-sage-900 transition-colors text-sm md:text-base"
           >
             {(() => {

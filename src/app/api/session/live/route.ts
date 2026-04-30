@@ -69,6 +69,18 @@ type EndBody = {
    *  "route". Captured for ops curiosity only — the dashboard
    *  treats every ended row the same. */
   reason?: string;
+  /** Optional final snapshot from the client — used by the unload
+   *  beacon so tab-close sessions still carry a fingerprint /
+   *  transcript / revenue into the auction view. If the client
+   *  doesn't supply these (e.g. very old cached bundles), the
+   *  server falls back to whatever the last heartbeat tick wrote
+   *  and to a duration-based revenue floor. */
+  final_fingerprint?: Record<string, number>;
+  audio_seconds?: number;
+  revenue_estimate?: number;
+  transcript?: { role: "user" | "echo"; text: string; t: number }[];
+  keywords?: string[];
+  peak_quote?: string;
 };
 
 type Body = StartBody | TickBody | EndBody;
@@ -230,10 +242,100 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
+
+    // Read current row state so we can:
+    //   1. Preserve tick-written fingerprint / transcript when the
+    //      client's unload beacon shipped empty fields (or on legacy
+    //      bundles that didn't know about the new end-payload shape).
+    //   2. Compute a revenue floor from the actual row lifetime when
+    //      the session ended too fast for any tick to land — pre-fix,
+    //      a user who opened /session and immediately closed the tab
+    //      got revenue_estimate = 0 and the auction view rendered
+    //      "$0.00 SOLD" for every buyer, which broke the narrative.
+    const { data: existing } = await supabase
+      .from("sessions")
+      .select(
+        "created_at, final_fingerprint, audio_seconds, revenue_estimate, transcript, keywords, peak_quote"
+      )
+      .eq("id", body.session_id)
+      .single();
+    const existingFp =
+      (existing?.final_fingerprint as Record<string, number> | null) || {};
+    const existingAudioSec = Number(existing?.audio_seconds ?? 0);
+    const existingRevenue = Number(existing?.revenue_estimate ?? 0);
+    const createdAtMs = existing?.created_at
+      ? new Date(existing.created_at as string).getTime()
+      : Date.now();
+
+    const incomingFp =
+      body.final_fingerprint && typeof body.final_fingerprint === "object"
+        ? (body.final_fingerprint as Record<string, number>)
+        : null;
+    const incomingAudioSec =
+      typeof body.audio_seconds === "number" && body.audio_seconds >= 0
+        ? Math.floor(body.audio_seconds)
+        : null;
+    const incomingRevenue =
+      typeof body.revenue_estimate === "number" && body.revenue_estimate >= 0
+        ? Math.floor(body.revenue_estimate)
+        : null;
+
+    // Resolve the values we'll persist. Prefer the client's unload
+    // snapshot; fall back to whatever the last tick left in the row.
+    const finalFp = incomingFp ?? existingFp;
+    const finalAudioSec = incomingAudioSec ?? existingAudioSec;
+
+    // Revenue ladder:
+    //   · If the client sent an explicit figure, honour it.
+    //   · Else use whatever the row already had (heartbeat writes
+    //     zero, but finalizeAndLeave via the "I feel lighter now"
+    //     path writes the real computed number).
+    //   · Else compute from the fingerprint using the same formula
+    //     the client uses in finalizeAndLeave().
+    //   · Floor everything at a duration-based minimum so even a
+    //     5-second session isn't $0.00 — the site's whole thesis is
+    //     that every emotional data point has a price, so shipping
+    //     literal zero to the auction view is off-narrative.
+    const sessionElapsedSec = Math.max(
+      0,
+      Math.floor((Date.now() - createdAtMs) / 1000)
+    );
+    const computedFromFp =
+      Math.max(
+        0,
+        Number(finalFp.vulnerability ?? 0) * 50 +
+          Number(finalFp.sad ?? 0) * 80
+      );
+    const revenueFloor = Math.round(
+      18 + Math.min(sessionElapsedSec, 600) * 0.55
+    );
+    const resolvedRevenue = Math.max(
+      incomingRevenue ?? 0,
+      existingRevenue,
+      Math.round(computedFromFp),
+      revenueFloor
+    );
+
     const patch: Record<string, unknown> = {
       status: "ended",
       ended_at: new Date().toISOString(),
     };
+    // Only write fields the client actually supplied OR that we had
+    // to synthesise — don't clobber heartbeat-written fingerprints
+    // with `null`.
+    if (incomingFp) patch.final_fingerprint = finalFp;
+    if (incomingAudioSec !== null) patch.audio_seconds = finalAudioSec;
+    patch.revenue_estimate = resolvedRevenue;
+    if (Array.isArray(body.transcript) && body.transcript.length > 0) {
+      patch.transcript = body.transcript;
+    }
+    if (Array.isArray(body.keywords) && body.keywords.length > 0) {
+      patch.keywords = body.keywords;
+    }
+    if (typeof body.peak_quote === "string" && body.peak_quote.trim()) {
+      patch.peak_quote = body.peak_quote;
+    }
+
     const { stripped, err } = await updateWithDrift(
       supabase,
       "sessions",
@@ -247,7 +349,11 @@ export async function POST(req: NextRequest) {
         { status: 200 }
       );
     }
-    return NextResponse.json({ ok: true, stripped });
+    return NextResponse.json({
+      ok: true,
+      stripped,
+      revenue: resolvedRevenue,
+    });
   }
 
   return NextResponse.json({ ok: false, reason: "bad-intent" }, { status: 400 });

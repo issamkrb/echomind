@@ -277,3 +277,16 @@ export async function ttsPrefetch(
     /* swallow — prefetch is best-effort */
   }
 }
+
+/** Create the shared `<audio>` element synchronously. On iOS Safari
+ *  the first `new Audio()` has to happen inside a user-gesture
+ *  handler or subsequent `audio.play()` calls are rejected — and
+ *  since `ttsSpeak()` does its `new Audio()` after an `await`, it
+ *  lives outside the gesture by the time it runs. Call this from
+ *  the synchronous part of a click handler (e.g. the picker card
+ *  onClick) and the first preview plays cleanly instead of
+ *  silently failing the first time. */
+export function unlockAudio(): void {
+  if (typeof window === "undefined") return;
+  ensureAudio();
+}
