@@ -22,28 +22,6 @@ import type { Lang } from "./i18n";
 type StringSet = Record<Lang, string>;
 
 const STRINGS = {
-  // ─── Gate ────────────────────────────────────────────────────
-  "gate.prompt": {
-    en: "speak the word we agreed on.",
-    fr: "dis le mot qu'on s'est donné.",
-    ar: "قُلِ الكلمةَ التي اتَّفقنا عليها.",
-  },
-  "gate.enter": {
-    en: "enter",
-    fr: "entrer",
-    ar: "ادخل",
-  },
-  "gate.wrong": {
-    en: "not tonight.",
-    fr: "pas ce soir.",
-    ar: "ليس الآن.",
-  },
-  "gate.locked": {
-    en: "take a breath. try again in a minute.",
-    fr: "respire. réessaie dans une minute.",
-    ar: "تنفَّسْ. حاوِلْ مُجدَّدًا بعد دقيقة.",
-  },
-
   // ─── Onboarding ──────────────────────────────────────────────
   "onboarding.greetingFirst": {
     en: "Hi. I'm Echo.",
