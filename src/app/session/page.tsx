@@ -19,8 +19,10 @@ import {
   loadPersonaId,
   personaLocale,
   savePersonaId,
+  voiceIdForPersona,
   type VoicePersonaId,
 } from "@/lib/voice-personas";
+import { saveVoiceId } from "@/lib/voice-manager";
 import {
   echoReply,
   type EchoEmotionHint,
@@ -595,24 +597,52 @@ export default function Session() {
 
   // Called from the picker when the user clicks "begin". Saves the
   // chosen persona, starts the audio recorder, and runs the opening
-  // monologue.
+  // monologue. Also pins the persona's ElevenLabs voice id into the
+  // voice-manager — without this, the whole conversation would speak
+  // in whatever voice the user had saved previously (or the catalog
+  // default) regardless of which picker card they just committed to,
+  // which was the same root cause as the "voices don't work" bug on
+  // the picker itself.
   function startSessionWithPersona(id: VoicePersonaId) {
     savePersonaId(id);
     personaIdRef.current = id;
     setSelectedPersona(id);
+    saveVoiceId(voiceIdForPersona(id));
     void startAudioRecorder();
     void startWardrobeLoop();
     void runOpening();
   }
 
+  // `playingPersona` drives the waveform indicator on the picker card.
+  // null = nothing is currently previewing (idle state on the card).
+  const [playingPersona, setPlayingPersona] = useState<VoicePersonaId | null>(
+    null
+  );
+
   // Plays a short sample line in the picked persona's voice so the
   // user can preview before committing. Cancels any in-flight preview.
+  // Critically, we pass `voiceId` explicitly — without it, speak()
+  // resolves to the user's saved voice / language default and every
+  // persona card plays the *same* voice. This was the "not all voices
+  // work" bug from the user report: the voices didn't fail to load,
+  // they were all the same voice pretending to be four.
   function previewPersona(id: VoicePersonaId) {
     const persona = VOICE_PERSONAS.find((p) => p.id === id);
     if (!persona) return;
     stopSpeaking();
     const loc = personaLocale(persona, langRef.current);
-    speak(loc.sampleLine, { personaId: id, lang: langRef.current });
+    setPlayingPersona(id);
+    speak(loc.sampleLine, {
+      personaId: id,
+      lang: langRef.current,
+      voiceId: voiceIdForPersona(id),
+      onEnd: () => {
+        // Only clear if we're still the active previewer — a quick
+        // successive tap on another card would have already replaced
+        // this state by the time the previous onEnd lands.
+        setPlayingPersona((cur) => (cur === id ? null : cur));
+      },
+    });
   }
 
   // ── Memory Capsule: audio recorder ────────────────────────────────
@@ -2005,6 +2035,7 @@ export default function Session() {
       {stage === "choose-voice" && (
         <VoicePicker
           selected={selectedPersona}
+          playing={playingPersona}
           onSelect={(id) => {
             setSelectedPersona(id);
             personaIdRef.current = id;
@@ -2012,6 +2043,7 @@ export default function Session() {
           onPreview={previewPersona}
           onBegin={(id) => {
             stopSpeaking();
+            setPlayingPersona(null);
             startSessionWithPersona(id);
           }}
           lang={lang}
@@ -2508,8 +2540,32 @@ function LiveMonitor({
  * The operator-targeting label baked into each persona never appears
  * here — it only surfaces on /admin.
  */
+/** Tiny 5-bar waveform shown next to the currently-previewing voice
+ *  card. Purely visual — keyed off the parent's `playing` state —
+ *  and stops animating automatically when the parent clears the
+ *  state on TTS `onEnd`. Uses the same sage palette as the picker. */
+function PickerWaveform() {
+  return (
+    <span
+      className="inline-flex items-end gap-[2px] h-3"
+      aria-hidden
+    >
+      {[0, 1, 2, 3, 4].map((i) => (
+        <span
+          key={i}
+          className="w-[3px] rounded-full bg-sage-700/80 picker-wave-bar"
+          style={{
+            animationDelay: `${i * 90}ms`,
+          }}
+        />
+      ))}
+    </span>
+  );
+}
+
 function VoicePicker({
   selected,
+  playing,
   onSelect,
   onPreview,
   onBegin,
@@ -2517,6 +2573,9 @@ function VoicePicker({
   missingVoice,
 }: {
   selected: VoicePersonaId;
+  /** Which persona is currently previewing — drives the waveform
+   *  indicator on that card. null = idle. */
+  playing: VoicePersonaId | null;
   onSelect: (id: VoicePersonaId) => void;
   onPreview: (id: VoicePersonaId) => void;
   onBegin: (id: VoicePersonaId) => void;
@@ -2528,9 +2587,10 @@ function VoicePicker({
       ? {
           kicker: "قبل أن نبدأ",
           title: "اختَر الصَّوتَ الذي تُحبُّ أن تسمعَه.",
-          sub: "يمكنُكَ تغييرُه في المرَّة القادمة. اضغط بطاقةً لسَماعه.",
+          sub: "اضغط بطاقةً للاستماع، ثم ابدأ.",
           selected: "مُختار",
           tapToHear: "اضغط للاستماع",
+          playing: "يُشَغَّل الآن",
           missing:
             "لم نجد صوتًا عربيًّا على جهازك. لا بأس — سيتحدَّثُ إيكو بصوتِ المحرِّك الافتراضي. لتجربةٍ أفضل، ثبِّت حزمة اللُّغة العربيَّة في إعدادات نظام التَّشغيل ثم أعد تحميل الصَّفحة.",
         }
@@ -2538,18 +2598,20 @@ function VoicePicker({
       ? {
           kicker: "avant de commencer",
           title: "choisis la voix que tu veux entendre.",
-          sub: "tu pourras changer la prochaine fois. tape sur une carte pour écouter.",
+          sub: "tape sur une carte pour écouter, puis commence.",
           selected: "sélectionnée",
           tapToHear: "tape pour écouter",
+          playing: "en lecture",
           missing:
             "aucune voix française n'a été trouvée sur cet appareil. pas de souci — echo utilisera la voix par défaut du navigateur. pour une meilleure expérience, installe le pack linguistique français dans les réglages de ton système puis recharge la page.",
         }
       : {
           kicker: "before we begin",
           title: "choose the voice you'd like to hear.",
-          sub: "you can switch back next time. tap a card to listen.",
+          sub: "tap a card to listen, then begin.",
           selected: "selected",
           tapToHear: "tap to hear",
+          playing: "playing",
           missing:
             "no voice found for this language on this device. no worries — echo will speak with the browser's default engine. for a better experience, install the language pack in your OS settings and refresh the page.",
         };
@@ -2576,7 +2638,20 @@ function VoicePicker({
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4">
           {VOICE_PERSONAS.map((p) => {
             const active = p.id === selected;
+            const isPlaying = p.id === playing;
             const loc = personaLocale(p, lang);
+            // Card state badge, top-right. Reading priority, loudest
+            // first: currently playing > currently selected > idle.
+            const badgeLabel = isPlaying
+              ? pickerCopy.playing
+              : active
+              ? pickerCopy.selected
+              : pickerCopy.tapToHear;
+            const badgeColor = isPlaying
+              ? "text-sage-900"
+              : active
+              ? "text-sage-700"
+              : "text-sage-700/40";
             return (
               <button
                 key={p.id}
@@ -2585,23 +2660,28 @@ function VoicePicker({
                   onSelect(p.id);
                   onPreview(p.id);
                 }}
-                className={`text-left rounded-2xl border p-5 transition-all ${
-                  active
+                className={`relative text-left rounded-2xl border p-5 transition-all ${
+                  isPlaying
+                    ? "border-sage-700 bg-cream-50 shadow-[0_0_0_3px_rgba(88,111,90,0.12)]"
+                    : active
                     ? "border-sage-700 bg-cream-50 shadow-[0_2px_0_rgba(0,0,0,0.04)]"
                     : "border-sage-500/25 bg-cream-50/60 hover:border-sage-500/50 hover:bg-cream-50"
                 }`}
+                aria-pressed={active}
+                aria-label={`${loc.displayName} — ${loc.tagline}`}
               >
-                <div className="flex items-baseline justify-between gap-2">
+                <div className="flex items-center justify-between gap-2">
                   <span className="font-serif text-2xl text-sage-900">
                     {loc.displayName}
                   </span>
-                  <span
-                    className={`text-[10px] uppercase tracking-widest ${
-                      active ? "text-sage-700" : "text-sage-700/40"
-                    }`}
-                  >
-                    {active ? pickerCopy.selected : pickerCopy.tapToHear}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    {isPlaying && <PickerWaveform />}
+                    <span
+                      className={`text-[10px] uppercase tracking-widest ${badgeColor}`}
+                    >
+                      {badgeLabel}
+                    </span>
+                  </div>
                 </div>
                 <div className="font-serif italic text-sage-700 mt-1 text-sm md:text-base">
                   {loc.tagline}
@@ -2634,11 +2714,16 @@ function VoicePicker({
             })()}
           </button>
           <p className="text-[11px] text-sage-700/60 italic max-w-md text-center">
+            {/* The old copy said "on-device voice synthesis" — that
+                hasn't been true since we migrated from the Web Speech
+                API to ElevenLabs. It was misleading the user; replaced
+                with something honest that still reassures them the
+                choice isn't being logged anywhere awkward. */}
             {lang === "ar"
-              ? "توليدُ الصَّوتِ على الجهاز · اختيارُك لا يُغادرُ متصفِّحك."
+              ? "أربعةُ أصواتٍ مُختلفة · لا يتمُّ تسجيلُ اختيارِك."
               : lang === "fr"
-              ? "synthèse vocale sur l'appareil · ton choix ne quitte jamais ton navigateur."
-              : "on-device voice synthesis · your choice never leaves your browser."}
+              ? "quatre voix distinctes · ton choix n'est pas enregistré."
+              : "four distinct voices · your choice isn't logged."}
           </p>
         </div>
       </div>
