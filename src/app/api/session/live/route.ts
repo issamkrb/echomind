@@ -326,11 +326,15 @@ export async function POST(req: NextRequest) {
     if (incomingFp) patch.final_fingerprint = finalFp;
     if (incomingAudioSec !== null) patch.audio_seconds = finalAudioSec;
     patch.revenue_estimate = resolvedRevenue;
+    // Cap to the same limits log-session and the tick handler
+    // enforce so a broken / runaway client can't explode a row via
+    // the unload beacon. Mirrors `src/app/api/session/live/route.ts`
+    // tick handling at ~L198-205.
     if (Array.isArray(body.transcript) && body.transcript.length > 0) {
-      patch.transcript = body.transcript;
+      patch.transcript = body.transcript.slice(-200);
     }
     if (Array.isArray(body.keywords) && body.keywords.length > 0) {
-      patch.keywords = body.keywords;
+      patch.keywords = body.keywords.slice(0, 64);
     }
     if (typeof body.peak_quote === "string" && body.peak_quote.trim()) {
       patch.peak_quote = body.peak_quote;
