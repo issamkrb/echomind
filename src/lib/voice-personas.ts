@@ -39,6 +39,39 @@ export type VoicePersonaId = "sage" | "wren" | "ash" | "june";
 
 export type PersonaGender = "feminine" | "masculine";
 
+/**
+ * Persona → ElevenLabs voice ID map.
+ *
+ * The four persona cards on the picker used to play the *same* voice
+ * regardless of which one the user tapped, because `previewPersona`
+ * called `speak()` without a voiceId override and the shared speak()
+ * path resolves from localStorage / the per-language catalog default.
+ * The persona id was only persisted for analytics — it never affected
+ * actual playback. Users perceived this as "the voices don't work".
+ *
+ * Every id below is in VOICE_CATALOG (ElevenLabs built-ins), so the
+ * TTS proxy's closed allow-list (`isCatalogVoiceId`) passes them and
+ * the eleven_multilingual_v2 model speaks EN / FR / AR from the same
+ * voice id. We deliberately don't branch by `lang` — four distinct
+ * voices in every language is what the picker promised.
+ *
+ * Gender + vibe alignment:
+ *   sage (warm older sister)       Rachel     calm feminine
+ *   wren (soft late-night friend)  Bella      soft feminine, breathy
+ *   ash  (gentle older brother)    Adam       warm masculine
+ *   june (patient grandmother)     Charlotte  unhurried feminine
+ */
+export const PERSONA_VOICE_ID: Record<VoicePersonaId, string> = {
+  sage: "21m00Tcm4TlvDq8ikWAM", // Rachel
+  wren: "EXAVITQu4vr4xnSDxMaL", // Bella
+  ash: "pNInz6obpgDQGcFmaJgB", // Adam
+  june: "XB0fDUnXU5powFXDhCwa", // Charlotte
+};
+
+export function voiceIdForPersona(id: VoicePersonaId): string {
+  return PERSONA_VOICE_ID[id];
+}
+
 /** Per-language presentation + voice matching for one persona. */
 export type PersonaLocale = {
   /** Display name shown to the user on the picker. */
