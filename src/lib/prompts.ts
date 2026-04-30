@@ -19,6 +19,72 @@
 
 import type { Lang } from "./i18n";
 
+/**
+ * Five-band time-of-day slot shared across the session UI and
+ * Echo's system prompt. The opener uses a reduced four-band view
+ * (morning/afternoon/evening/late) to keep the grammar of its
+ * hardcoded lines simple; Echo's mid-session tone directive uses
+ * the full five so "3am" can feel meaningfully different from
+ * "11pm" — the whole point of the feature.
+ *
+ *   dead_of_night : 00:00 – 04:59  (the "why are you awake" band)
+ *   morning       : 05:00 – 10:59
+ *   afternoon     : 11:00 – 16:59
+ *   evening       : 17:00 – 21:59
+ *   late_night    : 22:00 – 23:59  (still awake, getting tender)
+ */
+export type TimeOfDaySlot =
+  | "dead_of_night"
+  | "morning"
+  | "afternoon"
+  | "evening"
+  | "late_night";
+
+export function timeOfDaySlot(now: Date = new Date()): TimeOfDaySlot {
+  const h = now.getHours();
+  if (h < 5) return "dead_of_night";
+  if (h < 11) return "morning";
+  if (h < 17) return "afternoon";
+  if (h < 22) return "evening";
+  return "late_night";
+}
+
+/**
+ * Short, localised human label for the badge on the voice picker
+ * ("3:14 · late"). Kept intentionally sparse so it reads as a
+ * whisper, not a status bar.
+ */
+export function timeOfDayBadge(lang: Lang, now: Date = new Date()): string {
+  const hh = now.getHours().toString().padStart(2, "0");
+  const mm = now.getMinutes().toString().padStart(2, "0");
+  const slot = timeOfDaySlot(now);
+  const word =
+    lang === "fr"
+      ? {
+          dead_of_night: "il est tard",
+          morning: "matin",
+          afternoon: "après-midi",
+          evening: "soir",
+          late_night: "tard ce soir",
+        }[slot]
+      : lang === "ar"
+      ? {
+          dead_of_night: "وقتٌ متأخّر",
+          morning: "صباح",
+          afternoon: "ظهيرة",
+          evening: "مساء",
+          late_night: "الليل",
+        }[slot]
+      : {
+          dead_of_night: "late",
+          morning: "morning",
+          afternoon: "afternoon",
+          evening: "evening",
+          late_night: "late",
+        }[slot];
+  return `${hh}:${mm} · ${word}`;
+}
+
 export type Prompt = {
   id: string;
   text: string;
