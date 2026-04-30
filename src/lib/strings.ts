@@ -932,39 +932,6 @@ const STRINGS = {
     fr: "il est tard. elle est toujours là.",
     ar: "تأخَّرَ الوقت. لا تزالُ هنا.",
   },
-  // Live "tonight count" badge above the hero.
-  "home.tonight.badge": {
-    en: "{n} people whispered to Echo tonight.",
-    fr: "{n} personnes ont chuchoté à Echo ce soir.",
-    ar: "{n} شخصًا همسوا لإيكو هذه الليلة.",
-  },
-  "home.tonight.badgeOne": {
-    en: "1 person whispered to Echo tonight.",
-    fr: "1 personne a chuchoté à Echo ce soir.",
-    ar: "شخصٌ واحد همسَ لإيكو هذه الليلة.",
-  },
-  // Anonymized whisper ticker. The text itself comes from the
-  // server (a redacted peak_quote); this label frames it.
-  "home.whisper.label": {
-    en: "someone, {ago}:",
-    fr: "quelqu'un, {ago} :",
-    ar: "شخصٌ ما، {ago}:",
-  },
-  "home.whisper.justNow": {
-    en: "just now",
-    fr: "à l'instant",
-    ar: "الآن",
-  },
-  "home.whisper.minAgo": {
-    en: "{n}m ago",
-    fr: "il y a {n}m",
-    ar: "منذ {n} د",
-  },
-  "home.whisper.hAgo": {
-    en: "{n}h ago",
-    fr: "il y a {n}h",
-    ar: "منذ {n} س",
-  },
   "home.hero.ctaReturning": {
     en: "Begin the session  →",
     fr: "Commence la session  →",
