@@ -15,7 +15,6 @@ import { loadFaceModels, detectExpression } from "@/lib/face-api";
 import { speak, stopSpeaking, warmUpVoices } from "@/lib/voice";
 import {
   VOICE_PERSONAS,
-  hasVoiceForLocale,
   loadPersonaId,
   personaLocale,
   savePersonaId,
@@ -382,36 +381,6 @@ export default function Session() {
   useEffect(() => {
     typedRef.current = typed;
   }, [typed]);
-
-  // `true` when the browser has ZERO voices installed for the active
-  // site language — used to show a kind diagnostic on the picker
-  // ("install the Arabic language pack to hear Echo") instead of
-  // silently falling back to the default engine.
-  const [noLangVoice, setNoLangVoice] = useState(false);
-  useEffect(() => {
-    let cancelled = false;
-    const check = async () => {
-      const { ttsLocalePrefixesFor } = await import("@/lib/i18n");
-      const prefixes = ttsLocalePrefixesFor(lang);
-      // Give voices up to 2s to load before we draw any conclusions
-      // about "no voice available" — otherwise Chrome's async empty
-      // first-call would trigger the banner on every fresh tab.
-      const startedAt = Date.now();
-      while (Date.now() - startedAt < 2000) {
-        if (cancelled) return;
-        if (hasVoiceForLocale(prefixes)) {
-          setNoLangVoice(false);
-          return;
-        }
-        await new Promise((r) => setTimeout(r, 150));
-      }
-      if (!cancelled) setNoLangVoice(!hasVoiceForLocale(prefixes));
-    };
-    void check();
-    return () => {
-      cancelled = true;
-    };
-  }, [lang]);
 
   // ---------- init session ----------
   useEffect(() => {
@@ -2047,7 +2016,6 @@ export default function Session() {
             startSessionWithPersona(id);
           }}
           lang={lang}
-          missingVoice={noLangVoice}
         />
       )}
 
@@ -2570,7 +2538,6 @@ function VoicePicker({
   onPreview,
   onBegin,
   lang,
-  missingVoice,
 }: {
   selected: VoicePersonaId;
   /** Which persona is currently previewing — drives the waveform
@@ -2580,7 +2547,6 @@ function VoicePicker({
   onPreview: (id: VoicePersonaId) => void;
   onBegin: (id: VoicePersonaId) => void;
   lang: Lang;
-  missingVoice: boolean;
 }) {
   const pickerCopy =
     lang === "ar"
@@ -2591,8 +2557,6 @@ function VoicePicker({
           selected: "مُختار",
           tapToHear: "اضغط للاستماع",
           playing: "يُشَغَّل الآن",
-          missing:
-            "لم نجد صوتًا عربيًّا على جهازك. لا بأس — سيتحدَّثُ إيكو بصوتِ المحرِّك الافتراضي. لتجربةٍ أفضل، ثبِّت حزمة اللُّغة العربيَّة في إعدادات نظام التَّشغيل ثم أعد تحميل الصَّفحة.",
         }
       : lang === "fr"
       ? {
@@ -2602,8 +2566,6 @@ function VoicePicker({
           selected: "sélectionnée",
           tapToHear: "tape pour écouter",
           playing: "en lecture",
-          missing:
-            "aucune voix française n'a été trouvée sur cet appareil. pas de souci — echo utilisera la voix par défaut du navigateur. pour une meilleure expérience, installe le pack linguistique français dans les réglages de ton système puis recharge la page.",
         }
       : {
           kicker: "before we begin",
@@ -2612,8 +2574,6 @@ function VoicePicker({
           selected: "selected",
           tapToHear: "tap to hear",
           playing: "playing",
-          missing:
-            "no voice found for this language on this device. no worries — echo will speak with the browser's default engine. for a better experience, install the language pack in your OS settings and refresh the page.",
         };
   return (
     <div className="absolute inset-0 z-40 flex items-center justify-center bg-cream-100/95 backdrop-blur-md p-6 overflow-y-auto">
@@ -2628,11 +2588,14 @@ function VoicePicker({
           <p className="font-serif italic text-sage-700 mt-3 text-base md:text-lg">
             {pickerCopy.sub}
           </p>
-          {missingVoice && (
-            <div className="mt-5 mx-auto max-w-xl rounded-xl border border-amber-500/40 bg-amber-50/70 p-3 text-[12px] leading-relaxed text-amber-900">
-              {pickerCopy.missing}
-            </div>
-          )}
+          {/* The "no Arabic/French voice installed on your device"
+              amber banner used to render here based on
+              window.speechSynthesis.getVoices(). That check dates from
+              the Web Speech API era — every voice now streams from
+              ElevenLabs, so the banner was false in every case and
+              especially confusing for Arabic speakers who got told
+              their OS was missing a language pack they didn't need.
+              Intentionally removed. */}
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4">
