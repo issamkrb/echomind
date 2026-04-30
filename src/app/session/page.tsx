@@ -963,20 +963,24 @@ export default function Session() {
     } = {};
     try {
       const snapshot = useEmotionStore.getState();
-      const fp = aggregate(snapshot.buffer);
-      const audioSec = Math.round(fp.duration ?? 0);
-      const revenue = Math.round(
-        (fp.vulnerability ?? 0) * 50 + (fp.sad ?? 0) * 80
-      );
+      // IMPORTANT: aggregate() returns hardcoded demo values when
+      // the buffer is empty (sad: 0.55, vulnerability: 7.4,
+      // duration: 60), baked in so /partner-portal can render on
+      // the first paint before face-api has seen a frame. If we
+      // shipped those for a real unload, a user who closed the tab
+      // 4s in would land in the auction view as a $414, 60s
+      // session — pure fiction. Gate on real frames instead: if
+      // the camera never produced anything, only send the
+      // transcript/keywords/peak_quote (which are captured from
+      // speech and stay truthful even without face data), and let
+      // the server's duration floor handle revenue.
+      const hasRealFrames = snapshot.buffer.length > 0;
       const userLines = snapshot.transcript.filter((t) => t.role === "user");
       const peakQuote =
         userLines.length > 0
           ? userLines.sort((a, b) => b.text.length - a.text.length)[0].text
           : undefined;
       endSnapshot = {
-        final_fingerprint: fp as unknown as Record<string, number>,
-        audio_seconds: audioSec,
-        revenue_estimate: revenue,
         transcript: snapshot.transcript.map((t) => ({
           role: t.role,
           text: t.text,
@@ -987,6 +991,14 @@ export default function Session() {
         ),
         peak_quote: peakQuote,
       };
+      if (hasRealFrames) {
+        const fp = aggregate(snapshot.buffer);
+        endSnapshot.final_fingerprint = fp as unknown as Record<string, number>;
+        endSnapshot.audio_seconds = Math.round(fp.duration ?? 0);
+        endSnapshot.revenue_estimate = Math.round(
+          (fp.vulnerability ?? 0) * 50 + (fp.sad ?? 0) * 80
+        );
+      }
     } catch {
       // Worst case the server falls back to its duration-based
       // revenue floor and whatever the last heartbeat tick wrote.
