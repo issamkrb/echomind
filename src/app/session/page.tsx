@@ -1607,8 +1607,22 @@ export default function Session() {
   function disarmScribeFallbackListener() {
     if (!scribeFallbackRef.current) return;
     teardownScribeFallback();
-    if (sttRecorderRef.current) {
-      void stopSttRecorder();
+    // Stop the per-utterance recorder synchronously and null the
+    // ref *now*. If we kept fire-and-forget stopSttRecorder() here,
+    // startSttRecorder() inside an immediate re-arm would early-out
+    // on the still-non-null ref, the new loop would attach to the
+    // dying recorder, and the next utterance would silently lose
+    // all audio when the old recorder's onstop finally fires and
+    // nulls the ref out from under us.
+    const rec = sttRecorderRef.current;
+    if (rec) {
+      sttRecorderRef.current = null;
+      sttChunksRef.current = [];
+      try {
+        if (rec.state !== "inactive") rec.stop();
+      } catch {
+        /* swallow — recorder already torn down */
+      }
     }
   }
 
