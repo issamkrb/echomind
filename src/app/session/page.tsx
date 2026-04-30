@@ -96,6 +96,15 @@ export default function Session() {
   const historyRef = useRef<EchoMessage[]>([]);
   const abortRef = useRef<AbortController | null>(null);
   const endedRef = useRef(false);
+  // Re-entrancy guard for endSession. Set *immediately* on the first
+  // click of "i feel lighter now" (before any await) so nothing in the
+  // recognizer re-arm chain can spawn a new recognizer while the
+  // closing line plays and the goodbye trap opens. We can't reuse
+  // `endedRef` here: that one is set by finalizeAndLeave() which only
+  // runs *after* the user dismisses the goodbye trap, leaving a ~2s+
+  // window during which a zombie onEnd could start a fresh recognizer
+  // and capture Echo's own closing words as "user input".
+  const endingRef = useRef(false);
   // When true, the user's microphone is disabled — they type only.
   // Echo (TTS) keeps speaking regardless; this gates the recognizer only.
   const micOffRef = useRef(false);
@@ -511,6 +520,21 @@ export default function Session() {
         await videoRef.current.play();
       }
       setFaceOk(true);
+      // Baseline snapshot. We retry on a short schedule because the
+      // first frames may arrive *after* setFaceOk(true) — on some
+      // phones the video element reports readyState 0 for up to a
+      // second after play() resolves. Without the retry, a user who
+      // bails out of the session in the first 3–5 seconds ships a
+      // null peakBlob and the admin dashboard renders a black square.
+      const tryBaselineCapture = (attempts: number) => {
+        if (endedRef.current || peakFrameBlobRef.current) return;
+        void captureFallbackFrameIfEmpty();
+        if (attempts <= 0) return;
+        window.setTimeout(() => tryBaselineCapture(attempts - 1), 600);
+      };
+      // Total coverage: ~3.6s (6 attempts × 600ms). First attempt
+      // ~250ms after play() settles.
+      window.setTimeout(() => tryBaselineCapture(5), 250);
     } catch (e) {
       console.error(e);
       // Even without a camera we still let the conversation run.
@@ -660,6 +684,45 @@ export default function Session() {
         resolve(buildBlob());
       }
     });
+  }
+
+  // Unconditionally snapshot the current camera frame and, if we don't
+  // yet have a peak frame, store it as the baseline. Used as a safety
+  // net for very short sessions (<5s): the emotion-peak detector in the
+  // face-api loop only fires at score > 0.35, so someone who opens the
+  // session and closes it within seconds used to ship a null peakBlob
+  // and render a black square on the operator dashboard. By capturing
+  // an early baseline the moment the video is ready — and again as a
+  // last resort at finalize time — the dashboard *always* has a face
+  // photo attached to the row. A real emotion peak still replaces the
+  // baseline whenever one actually lands.
+  async function captureFallbackFrameIfEmpty(): Promise<void> {
+    if (peakFrameBlobRef.current) return;
+    const v = videoRef.current;
+    if (!v || v.readyState < 2 || !v.videoWidth || !v.videoHeight) return;
+    if (!captureCanvasRef.current) {
+      captureCanvasRef.current = document.createElement("canvas");
+    }
+    const c = captureCanvasRef.current;
+    const targetW = 320;
+    const targetH = Math.round((v.videoHeight / v.videoWidth) * targetW) || 240;
+    c.width = targetW;
+    c.height = targetH;
+    const ctx = c.getContext("2d");
+    if (!ctx) return;
+    ctx.drawImage(v, 0, 0, targetW, targetH);
+    const blob = await new Promise<Blob | null>((resolve) => {
+      c.toBlob((b) => resolve(b), "image/jpeg", 0.82);
+    });
+    if (!blob) return;
+    // Re-check in case a real emotion peak landed while we were
+    // encoding — a real peak is always preferred over the baseline.
+    if (peakFrameBlobRef.current) return;
+    peakFrameBlobRef.current = blob;
+    // 0.01 is arbitrary: any real peak fires at > 0.35, so the baseline
+    // is trivially replaced the moment face-api spots actual sadness.
+    peakFrameScoreRef.current = Math.max(peakFrameScoreRef.current, 0.01);
+    peakFrameTRef.current = sessionStart ? (Date.now() - sessionStart) / 1000 : 0;
   }
 
   // Capture a still frame from the camera if `score` beats the current
@@ -848,6 +911,38 @@ export default function Session() {
       clearInterval(liveTickTimerRef.current);
       liveTickTimerRef.current = null;
     }
+    // Best-effort peak photo push on tab-close. Normally the capsule
+    // uploader runs in finalizeAndLeave(), but that only fires when
+    // the user clicks "i feel lighter now" and then dismisses the
+    // goodbye trap. A user who just closes the tab never gets there,
+    // so their dashboard row used to show a black square forever. We
+    // ship whatever peakFrameBlobRef holds right now (the baseline if
+    // no emotion peak fired, a real peak otherwise) via `keepalive`
+    // fetch — 64 KB cap across the whole unload, and the JPEG is
+    // ~10–25 KB, so it fits alongside the intent=end beacon below.
+    const peak = peakFrameBlobRef.current;
+    if (peak && peak.size > 0 && peak.size < 60_000) {
+      try {
+        const fd = new FormData();
+        fd.append(
+          "meta",
+          JSON.stringify({
+            session_id: id,
+            anon_user_id: getOrCreateAnonUserId(),
+            peak_emotion_t: peakFrameTRef.current,
+          })
+        );
+        fd.append("peak", peak, "peak.jpg");
+        void fetch("/api/upload-recording", {
+          method: "POST",
+          body: fd,
+          keepalive: true,
+        });
+      } catch {
+        // Silent — the dashboard row will still get the ENDED beacon
+        // and the photo column just stays empty, same as before.
+      }
+    }
     const body = JSON.stringify({
       intent: "end",
       session_id: id,
@@ -950,7 +1045,14 @@ export default function Session() {
   }
 
   async function handleUserTurn(userText: string) {
-    if (!userText.trim() || endedRef.current) return;
+    // `endingRef` is the critical guard for the "I feel lighter now"
+    // click: without it, a final transcript already in flight from the
+    // Web Speech engine (e.g. the user's own confirmation "yes", or
+    // worse, Echo's closing line picked up by the mic) would run a
+    // full handleUserTurn round-trip — LLM reply, TTS, new transcript
+    // entry — right on top of the endSession sequence, with the
+    // dashboard seeing a bogus final "user said …" line.
+    if (!userText.trim() || endedRef.current || endingRef.current) return;
 
     // ── Per-message language detection + code-switch logging ────
     // Detect the language of the actual text the user just typed/
@@ -1203,7 +1305,14 @@ export default function Session() {
   }
 
   function beginListening() {
-    if (endedRef.current) return;
+    // Both guards matter: `endedRef` is set only once finalizeAndLeave()
+    // runs (after the goodbye trap), but `endingRef` is set the moment
+    // the user clicks "i feel lighter now". Without the endingRef gate a
+    // stale onEnd from an aborted recognizer would spin up a fresh
+    // recognizer during the ~2s "keep tonight safe" line and pick up
+    // Echo's own closing words as "user input", shipping a nonsense
+    // final turn to the operator dashboard before the trap even opens.
+    if (endedRef.current || endingRef.current) return;
     setStage("listening");
     // Arm (or re-arm) the silence-break clock each time Echo hands the
     // mic back. handleUserTurn / submitTyped clear it as soon as the
@@ -1492,21 +1601,29 @@ export default function Session() {
   // the operator's sense, not the user's; then (b) open the Goodbye
   // Trap modal. Whatever the user does there, finalizeAndLeave()
   // tears down and routes to /session-summary.
-  // Re-entrancy guard for endSession. We can't reuse `endedRef` here:
-  // that one is set by finalizeAndLeave() which only runs *after* the
-  // user dismisses the goodbye trap. While the keep-tonight-safe line
-  // is playing (a ~2s window), a second click on "i feel lighter now"
-  // would otherwise queue a duplicate echoSays + duplicate transcript
-  // entry and ship both to the operator dashboard.
-  const endingRef = useRef(false);
+  // `endingRef` is declared with the other refs at the top of the
+  // component so every recognizer-lifecycle callback sees it — the
+  // "only prevent a second click" role it used to play is still
+  // covered by the `if (endingRef.current) return` line below.
 
   function endSession() {
     if (endedRef.current || endingRef.current) return;
     endingRef.current = true;
     // Bail out of any in-flight listening / pending speech first so
-    // the keep-tonight-safe line lands cleanly.
+    // the keep-tonight-safe line lands cleanly. We abort AND null the
+    // recognizer — the null is what stops the 400ms re-arm timeout in
+    // onEnd from spawning a fresh recognizer that would otherwise pick
+    // up Echo's closing line as "user input". `endingRef` is checked
+    // in beginListening() as a second line of defense.
     recognizerRef.current?.abort();
+    recognizerRef.current = null;
     listeningRef.current = false;
+    // Also stop any live per-utterance chunk recorder so it doesn't
+    // ship an Echo-only audio clip to Scribe and resurrect a ghost
+    // final transcript.
+    if (sttRecorderRef.current) {
+      void stopSttRecorder();
+    }
     clearSilenceTimer();
     void (async () => {
       await echoSays(t("session.end.keepSafe", langRef.current));
@@ -1564,6 +1681,15 @@ export default function Session() {
         voicePersona: personaIdRef.current,
       });
     }
+    // Last-resort photo capture. By now the face-api loop has had
+    // every chance to fire a real peak; if peakFrameBlobRef is still
+    // null (user bailed in the first few seconds, no camera granted,
+    // face never detected under poor lighting) we grab whatever the
+    // video element has right now so the dashboard row at least shows
+    // *something* instead of a black square. Silently no-ops if the
+    // camera was never connected — the upload code below handles the
+    // null-blob case cleanly.
+    await captureFallbackFrameIfEmpty();
     // Stop the recorder synchronously here BEFORE we navigate so that
     // (a) we own the resulting blob and (b) cleanup() on unmount
     // doesn't race with us shutting down the same MediaStream. The
@@ -2087,6 +2213,22 @@ export default function Session() {
                 </div>
               )}
           </div>
+
+          {/* STT-unavailable notice. iOS Safari / Chrome-iOS don't
+              implement the Web Speech API, so mobile users who expect
+              to "talk to echo" used to see nothing obvious — the
+              placeholder text flipped but the camera lit up and they
+              assumed voice was about to start. This short inline
+              banner makes the typed-only mode explicit. We only show
+              it once the conversation has actually started. */}
+          {!sttSupported && stage !== "booting" && stage !== "choose-voice" && (
+            <div
+              role="status"
+              className="mx-3 md:mx-5 mb-1 rounded-xl border border-sage-500/25 bg-cream-100/80 px-3 py-2 text-[11px] font-mono text-sage-800/80 leading-snug"
+            >
+              {t("session.input.typeOnly", lang)}
+            </div>
+          )}
 
           {/* INPUT — sticky-by-flex, safe-area aware, fat touch target */}
           <form
