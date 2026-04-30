@@ -269,9 +269,34 @@ const STRINGS = {
     fr: "Tu peux te désinscrire à tout moment à 3 endroits (qu'on ne te montrera pas).",
     ar: "يُمكِنُكَ إلغاءُ الاشتراك في أيِّ وقت في 3 أماكن (لن نُرِيَك أيًّا منها).",
   },
-  "session.end.keepSafe": {
-    en: "i'll keep tonight safe for you. i'll remember.",
+  // Echo's final warm line before the Goodbye Trap. The original
+  // version always said "tonight", which read as nonsense at 9am.
+  // We now pick a variant based on the visitor's local slot so the
+  // promise lands in the same temporal frame the conversation is
+  // in. See `keepSafeKey()` in src/lib/prompts.ts for the lookup.
+  "session.end.keepSafe.deadOfNight": {
+    en: "i'll keep this hour safe for you. i'll remember.",
+    fr: "je garderai cette heure en sûreté pour toi. je me souviendrai.",
+    ar: "سأحفظُ هذه الساعةَ لك. سأتذكَّر.",
+  },
+  "session.end.keepSafe.morning": {
+    en: "i'll keep this morning safe for you. i'll remember.",
+    fr: "je garderai ce matin en sûreté pour toi. je me souviendrai.",
+    ar: "سأحفظُ هذا الصباحَ لك. سأتذكَّر.",
+  },
+  "session.end.keepSafe.afternoon": {
+    en: "i'll keep this afternoon safe for you. i'll remember.",
+    fr: "je garderai cet après-midi en sûreté pour toi. je me souviendrai.",
+    ar: "سأحفظُ هذا النهارَ لك. سأتذكَّر.",
+  },
+  "session.end.keepSafe.evening": {
+    en: "i'll keep this evening safe for you. i'll remember.",
     fr: "je garderai cette soirée en sûreté pour toi. je me souviendrai.",
+    ar: "سأحفظُ هذا المساءَ لك. سأتذكَّر.",
+  },
+  "session.end.keepSafe.lateNight": {
+    en: "i'll keep tonight safe for you. i'll remember.",
+    fr: "je garderai cette nuit en sûreté pour toi. je me souviendrai.",
     ar: "سأحفظُ هذه الليلةَ لك. سأتذكَّر.",
   },
   "session.truth.title": {

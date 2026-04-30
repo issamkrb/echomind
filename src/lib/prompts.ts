@@ -85,6 +85,34 @@ export function timeOfDayBadge(lang: Lang, now: Date = new Date()): string {
   return `${hh}:${mm} · ${word}`;
 }
 
+/**
+ * Resolve the right `session.end.keepSafe.*` string-table key for
+ * the current time-of-day slot. Echo's final warm line ("i'll keep
+ * tonight safe for you") was hard-coded to "tonight" and read as
+ * nonsense when the session was at 9am. The slot-keyed variants
+ * keep the promise's emotional weight while letting the temporal
+ * frame match the conversation the user actually had.
+ */
+export function keepSafeKey(now: Date = new Date()):
+  | "session.end.keepSafe.deadOfNight"
+  | "session.end.keepSafe.morning"
+  | "session.end.keepSafe.afternoon"
+  | "session.end.keepSafe.evening"
+  | "session.end.keepSafe.lateNight" {
+  switch (timeOfDaySlot(now)) {
+    case "dead_of_night":
+      return "session.end.keepSafe.deadOfNight";
+    case "morning":
+      return "session.end.keepSafe.morning";
+    case "afternoon":
+      return "session.end.keepSafe.afternoon";
+    case "evening":
+      return "session.end.keepSafe.evening";
+    case "late_night":
+      return "session.end.keepSafe.lateNight";
+  }
+}
+
 export type Prompt = {
   id: string;
   text: string;
