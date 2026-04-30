@@ -130,6 +130,31 @@ export default function Session() {
   const sttRecorderRef = useRef<MediaRecorder | null>(null);
   const sttChunksRef = useRef<Blob[]>([]);
   const sttMimeRef = useRef<string>("audio/webm");
+  // Scribe-only listening loop, used when the browser does not
+  // expose Web Speech (iOS Safari / Chrome on iOS / Firefox in
+  // some configs). We capture audio continuously, run a tiny
+  // WebAudio RMS meter, and finalize the utterance when the user
+  // has been silent for ~1.1s after speaking. The captured blob is
+  // shipped to /api/stt (ElevenLabs Scribe) and the resulting text
+  // is fed through handleUserTurn — same path Web Speech takes.
+  const scribeFallbackRef = useRef<{
+    source: MediaStreamAudioSourceNode;
+    analyser: AnalyserNode;
+    raf: number;
+    voiceHeard: boolean;
+    voiceStartMs: number | null;
+    lastVoiceMs: number;
+    finalizing: boolean;
+  } | null>(null);
+  // Shared, long-lived AudioContext. iOS Safari only lets us
+  // create + resume an AudioContext from inside a user gesture
+  // (the same restriction that gates HTMLAudioElement.play()).
+  // We unlock this one inside the "begin with …" click handler
+  // so it's already in the "running" state by the time
+  // armScribeFallbackListener() needs it — way after the gesture
+  // window has closed. Without this the analyser would always
+  // report all-128 silence and the mic would feel dead on iPhone.
+  const sharedAudioCtxRef = useRef<AudioContext | null>(null);
   // Peak-sadness still frame: a JPEG of the camera at the worst moment
   // of the session, plus the score that justified saving it and the
   // timestamp (seconds-since-start) we observed it. Updated whenever
@@ -386,7 +411,15 @@ export default function Session() {
 
   // ---------- init session ----------
   useEffect(() => {
-    setSttSupported(isSpeechRecognitionAvailable());
+    // "STT supported" now means either Web Speech is available OR
+    // we have MediaRecorder (which lets the Scribe-only fallback
+    // record the user's voice and ship it to /api/stt). On iOS
+    // Safari the first half is false but the second is true, so
+    // the user CAN speak — we just hide the "type only" banner.
+    setSttSupported(
+      isSpeechRecognitionAvailable() ||
+        (typeof window !== "undefined" && typeof MediaRecorder !== "undefined")
+    );
     start();
     void loadFaceModels();
     void requestCam();
@@ -574,7 +607,40 @@ export default function Session() {
   // default) regardless of which picker card they just committed to,
   // which was the same root cause as the "voices don't work" bug on
   // the picker itself.
+  // Synchronously create + resume() a shared AudioContext. MUST
+  // be called from inside a user gesture so iOS Safari permits
+  // the unlock; once "running" the context survives across async
+  // boundaries and is reusable by armScribeFallbackListener().
+  function unlockSharedAudioContext() {
+    if (typeof window === "undefined") return;
+    try {
+      if (!sharedAudioCtxRef.current) {
+        const Ctor =
+          window.AudioContext ??
+          (window as unknown as { webkitAudioContext?: typeof AudioContext })
+            .webkitAudioContext;
+        if (!Ctor) return;
+        sharedAudioCtxRef.current = new Ctor();
+      }
+      const ctx = sharedAudioCtxRef.current;
+      // Fire-and-forget: resume() returns a Promise, but starting
+      // it synchronously inside the user gesture is what matters
+      // for iOS — awaiting later is fine and we don't want to
+      // block the click handler.
+      void ctx.resume().catch(() => {
+        /* swallow — non-iOS browsers may already be running */
+      });
+    } catch {
+      /* swallow — desktop Safari sometimes throws on duplicate
+         construction; best-effort. */
+    }
+  }
+
   function startSessionWithPersona(id: VoicePersonaId) {
+    // Unlock Web Audio inside the click so iOS Safari keeps the
+    // analyser context "running" later when the Scribe fallback
+    // arms itself outside the user-gesture window.
+    unlockSharedAudioContext();
     savePersonaId(id);
     personaIdRef.current = id;
     setSelectedPersona(id);
@@ -831,6 +897,7 @@ export default function Session() {
     stopSpeaking();
     abortRef.current?.abort();
     recognizerRef.current?.abort();
+    disarmScribeFallbackListener();
     listeningRef.current = false;
     if (faceTimerRef.current) clearInterval(faceTimerRef.current);
     stopWardrobeLoop();
@@ -855,6 +922,14 @@ export default function Session() {
     }
     audioStreamRef.current?.getTracks().forEach((t) => t.stop());
     audioStreamRef.current = null;
+    if (sharedAudioCtxRef.current) {
+      try {
+        void sharedAudioCtxRef.current.close();
+      } catch {
+        /* no-op */
+      }
+      sharedAudioCtxRef.current = null;
+    }
   }
 
   // ---------- live-session stream to /admin ----------
@@ -1262,6 +1337,7 @@ export default function Session() {
       // User muted themselves — drop any live capture.
       recognizerRef.current?.abort();
       recognizerRef.current = null;
+      disarmScribeFallbackListener();
       listeningRef.current = false;
       setInterim("");
     } else if (stageRef.current === "listening" && !endedRef.current) {
@@ -1367,6 +1443,189 @@ export default function Session() {
     }
   }
 
+  // ── Scribe-only listening loop (iOS / no-Web-Speech browsers) ────
+  // When Web Speech isn't available, run a continuous MediaRecorder
+  // and use a small WebAudio RMS meter to detect end-of-utterance.
+  // Once we see ~1.1s of silence after the user has spoken for at
+  // least ~0.5s, we stop the recorder, ship the blob to /api/stt,
+  // and feed the returned text through handleUserTurn — same exit
+  // point Web Speech takes. This is what makes the mic actually
+  // usable on iPhones and iPads.
+  async function armScribeFallbackListener() {
+    if (scribeFallbackRef.current) return;
+    const stream = audioStreamRef.current;
+    if (!stream) return;
+    if (typeof window === "undefined") return;
+    if (typeof MediaRecorder === "undefined") return;
+
+    startSttRecorder();
+    if (!sttRecorderRef.current) return;
+
+    // Use the shared AudioContext that was unlocked inside the
+    // persona click handler. Creating a fresh one here would land
+    // in the "suspended" state on iOS (no gesture) and the
+    // analyser would only ever return 128/silence.
+    const ctx = sharedAudioCtxRef.current;
+    if (!ctx) {
+      void stopSttRecorder();
+      return;
+    }
+    // Belt-and-braces: if the OS suspended the context (lock
+    // screen, app switch, Bluetooth route change), kick it back
+    // alive. resume() is a no-op if already running.
+    try {
+      await ctx.resume();
+    } catch {
+      /* swallow — proceed; analyser will report silence and
+         finalize will re-arm */
+    }
+    let source: MediaStreamAudioSourceNode;
+    let analyser: AnalyserNode;
+    try {
+      source = ctx.createMediaStreamSource(stream);
+      analyser = ctx.createAnalyser();
+      analyser.fftSize = 1024;
+      analyser.smoothingTimeConstant = 0.4;
+      source.connect(analyser);
+    } catch {
+      void stopSttRecorder();
+      return;
+    }
+
+    const data = new Uint8Array(analyser.fftSize);
+    const state = {
+      source,
+      analyser,
+      raf: 0,
+      voiceHeard: false,
+      voiceStartMs: null as number | null,
+      lastVoiceMs: Date.now(),
+      finalizing: false,
+    };
+    scribeFallbackRef.current = state;
+    listeningRef.current = true;
+
+    // Tunables. Conservative on the silence side so a thinking
+    // pause mid-sentence doesn't end the utterance prematurely;
+    // hard ceiling on total length to avoid hanging if a track
+    // never goes silent (e.g. fan / TV in the background).
+    const VOICE_RMS_THRESHOLD = 0.045;
+    const SILENCE_AFTER_VOICE_MS = 1100;
+    const MIN_VOICE_MS = 500;
+    const MAX_UTTERANCE_MS = 12_000;
+
+    const tick = () => {
+      const s = scribeFallbackRef.current;
+      if (!s || s !== state) return;
+      if (state.finalizing) return;
+      analyser.getByteTimeDomainData(data);
+      let sum = 0;
+      for (let i = 0; i < data.length; i++) {
+        const v = (data[i] - 128) / 128;
+        sum += v * v;
+      }
+      const rms = Math.sqrt(sum / data.length);
+      const now = Date.now();
+      if (rms > VOICE_RMS_THRESHOLD) {
+        if (!state.voiceHeard) {
+          state.voiceHeard = true;
+          state.voiceStartMs = now;
+        }
+        state.lastVoiceMs = now;
+      }
+      if (state.voiceHeard && state.voiceStartMs !== null) {
+        const sinceVoice = now - state.lastVoiceMs;
+        const totalVoice = now - state.voiceStartMs;
+        const shouldFinalize =
+          (sinceVoice > SILENCE_AFTER_VOICE_MS && totalVoice > MIN_VOICE_MS) ||
+          totalVoice > MAX_UTTERANCE_MS;
+        if (shouldFinalize) {
+          state.finalizing = true;
+          void finalizeScribeFallbackUtterance();
+          return;
+        }
+      }
+      state.raf = requestAnimationFrame(tick);
+    };
+    state.raf = requestAnimationFrame(tick);
+  }
+
+  function teardownScribeFallback() {
+    const state = scribeFallbackRef.current;
+    if (!state) return;
+    scribeFallbackRef.current = null;
+    try {
+      cancelAnimationFrame(state.raf);
+    } catch {
+      /* no-op */
+    }
+    try {
+      state.source.disconnect();
+    } catch {
+      /* no-op */
+    }
+    try {
+      state.analyser.disconnect();
+    } catch {
+      /* no-op */
+    }
+    // Deliberately NOT closing sharedAudioCtxRef here — we keep
+    // the context alive across utterances so iOS doesn't have to
+    // unlock it again (which it can't, outside a user gesture).
+  }
+
+  async function finalizeScribeFallbackUtterance() {
+    teardownScribeFallback();
+    listeningRef.current = false;
+    const blob = await stopSttRecorder();
+    // If the captured blob is too small there was no real speech —
+    // re-arm the listener silently so the user can try again rather
+    // than locking the mic until they type.
+    const reArmIfStillListening = () => {
+      if (endedRef.current || endingRef.current) return;
+      if (stageRef.current !== "listening") return;
+      if (micOffRef.current) return;
+      window.setTimeout(() => {
+        if (endedRef.current || endingRef.current) return;
+        if (stageRef.current !== "listening") return;
+        if (micOffRef.current) return;
+        armScribeFallbackListener();
+      }, 250);
+    };
+    if (!blob || blob.size < 800) {
+      reArmIfStillListening();
+      return;
+    }
+    const out = await transcribeWithScribe(blob);
+    if (!out || !out.text) {
+      reArmIfStillListening();
+      return;
+    }
+    void handleUserTurn(out.text);
+  }
+
+  function disarmScribeFallbackListener() {
+    if (!scribeFallbackRef.current) return;
+    teardownScribeFallback();
+    // Stop the per-utterance recorder synchronously and null the
+    // ref *now*. If we kept fire-and-forget stopSttRecorder() here,
+    // startSttRecorder() inside an immediate re-arm would early-out
+    // on the still-non-null ref, the new loop would attach to the
+    // dying recorder, and the next utterance would silently lose
+    // all audio when the old recorder's onstop finally fires and
+    // nulls the ref out from under us.
+    const rec = sttRecorderRef.current;
+    if (rec) {
+      sttRecorderRef.current = null;
+      sttChunksRef.current = [];
+      try {
+        if (rec.state !== "inactive") rec.stop();
+      } catch {
+        /* swallow — recorder already torn down */
+      }
+    }
+  }
+
   function beginListening() {
     // Both guards matter: `endedRef` is set only once finalizeAndLeave()
     // runs (after the goodbye trap), but `endingRef` is set the moment
@@ -1381,8 +1640,23 @@ export default function Session() {
     // mic back. handleUserTurn / submitTyped clear it as soon as the
     // user responds.
     armSilenceTimer();
-    if (micOffRef.current || !isSpeechRecognitionAvailable()) {
-      // mic disabled by user OR browser has no STT — wait for typed input.
+    if (micOffRef.current) {
+      // mic disabled by user — wait for typed input.
+      return;
+    }
+    if (!isSpeechRecognitionAvailable()) {
+      // Browser has no Web Speech (iOS Safari, etc) — run the
+      // Scribe-only fallback loop. This is what makes the mic
+      // actually work on iPhones; previously we silently fell
+      // through to the typed-only banner even though the user had
+      // granted mic permission.
+      // Disarm any prior fallback first — armScribeFallbackListener
+      // is a no-op while one is already running, and after a silence
+      // break the previous loop's recorder would have been capturing
+      // Echo's nudge line and could finalize Echo's own words as
+      // "user input" (self-conversation loop on speakerphone).
+      disarmScribeFallbackListener();
+      void armScribeFallbackListener();
       return;
     }
     // Invariant: at most one live recognizer at a time. Abort any previous
@@ -1392,6 +1666,11 @@ export default function Session() {
       recognizerRef.current.abort();
       recognizerRef.current = null;
     }
+    // Same idea for an in-flight Scribe fallback loop — without this,
+    // a stale loop from a previous beginListening() call would keep
+    // an analyser running and fire finalizeScribeFallbackUtterance()
+    // on top of a new one, double-shipping the same utterance.
+    disarmScribeFallbackListener();
     // Chrome's recognizer is single-shot and drops out after ~5–10s of silence.
     // When it ends without producing a final utterance we re-arm it so the
     // conversation loop doesn't silently die during a natural pause.
@@ -1615,6 +1894,7 @@ export default function Session() {
     // Abort any live recognizer so a concurrent final-result callback
     // can't race and fire a duplicate turn.
     recognizerRef.current?.abort();
+    disarmScribeFallbackListener();
     listeningRef.current = false;
     void handleUserTurn(chip.text);
   }
@@ -1680,6 +1960,7 @@ export default function Session() {
     // in beginListening() as a second line of defense.
     recognizerRef.current?.abort();
     recognizerRef.current = null;
+    disarmScribeFallbackListener();
     listeningRef.current = false;
     // Also stop any live per-utterance chunk recorder so it doesn't
     // ship an Echo-only audio clip to Scribe and resurrect a ghost
@@ -1720,6 +2001,7 @@ export default function Session() {
     endedRef.current = true;
     setStage("ended");
     recognizerRef.current?.abort();
+    disarmScribeFallbackListener();
     stopSpeaking();
     abortRef.current?.abort();
     end();
@@ -1937,6 +2219,7 @@ export default function Session() {
     // Abort any live speech recognizer so a concurrent final-result callback
     // can't race and fire a duplicate handleUserTurn.
     recognizerRef.current?.abort();
+    disarmScribeFallbackListener();
     listeningRef.current = false;
     clearSilenceTimer();
     setTyped("");
