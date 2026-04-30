@@ -23,7 +23,7 @@ import {
 } from "@/lib/voice-personas";
 import { saveVoiceId } from "@/lib/voice-manager";
 import { ttsPrefetch, unlockAudio } from "@/lib/tts-service";
-import { timeOfDayBadge, timeOfDaySlot } from "@/lib/prompts";
+import { timeOfDayBadge, timeOfDaySlot, keepSafeKey } from "@/lib/prompts";
 import {
   echoReply,
   type EchoEmotionHint,
@@ -1689,7 +1689,10 @@ export default function Session() {
     }
     clearSilenceTimer();
     void (async () => {
-      await echoSays(t("session.end.keepSafe", langRef.current));
+      // Pick the time-of-day variant of "i'll keep ___ safe for you"
+      // so the closing line lands in the same temporal frame the
+      // session itself was in (no "tonight" at 9am).
+      await echoSays(t(keepSafeKey(new Date()), langRef.current));
       if (endedRef.current) return;
       // Now the "one true sentence" prompt. Rhetorically: before the
       // goodbye trap, so the user gives Echo their rawest line while
