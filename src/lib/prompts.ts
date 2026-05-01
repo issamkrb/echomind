@@ -93,6 +93,103 @@ export function timeOfDayBadge(lang: Lang, now: Date = new Date()): string {
  * keep the promise's emotional weight while letting the temporal
  * frame match the conversation the user actually had.
  */
+/**
+ * Natural-language phrases for landing/insight surfaces that need
+ * to read "tonight's reading" / "this morning's reading" / etc.
+ * The previous landing copy hard-coded "evenings" everywhere — fine
+ * at 10pm, jarring at 9am. These short fragments keep the tone soft
+ * while letting the temporal frame match the user's actual hour.
+ *
+ *   `now`     — singular fragment ("this morning", "tonight")
+ *   `nowCap`  — same, capitalised for a heading
+ *   `these`   — plural fragment for prose ("most mornings", "most evenings")
+ *   `theseCap` — capitalised plural for a section kicker
+ *   `at`      — generic temporal preposition fragment ("at 3am",
+ *                "this afternoon") for testimonial flavour
+ */
+export type TimeOfDayPhrases = {
+  now: string;
+  nowCap: string;
+  these: string;
+  theseCap: string;
+  at: string;
+};
+
+export function timeOfDayPhrases(
+  lang: Lang = "en",
+  now: Date = new Date()
+): TimeOfDayPhrases {
+  const slot = timeOfDaySlot(now);
+  if (lang === "fr") {
+    const en: Record<TimeOfDaySlot, TimeOfDayPhrases> = {
+      dead_of_night: {
+        now: "cette nuit", nowCap: "Cette nuit",
+        these: "nuits", theseCap: "Nuits",
+        at: "à 3h du matin",
+      },
+      morning: {
+        now: "ce matin", nowCap: "Ce matin",
+        these: "matins", theseCap: "Matins",
+        at: "ce matin",
+      },
+      afternoon: {
+        now: "cet après-midi", nowCap: "Cet après-midi",
+        these: "après-midis", theseCap: "Après-midis",
+        at: "cet après-midi",
+      },
+      evening: {
+        now: "ce soir", nowCap: "Ce soir",
+        these: "soirées", theseCap: "Soirées",
+        at: "ce soir",
+      },
+      late_night: {
+        now: "tard ce soir", nowCap: "Tard ce soir",
+        these: "soirées tardives", theseCap: "Soirées tardives",
+        at: "tard ce soir",
+      },
+    };
+    return en[slot];
+  }
+  if (lang === "ar") {
+    const ar: Record<TimeOfDaySlot, TimeOfDayPhrases> = {
+      dead_of_night: { now: "هذه الليلة", nowCap: "هذه الليلة", these: "ليالٍ", theseCap: "ليالٍ", at: "في الثالثة فجراً" },
+      morning: { now: "هذا الصباح", nowCap: "هذا الصباح", these: "صباحات", theseCap: "صباحات", at: "هذا الصباح" },
+      afternoon: { now: "هذه الظهيرة", nowCap: "هذه الظهيرة", these: "ظهيرات", theseCap: "ظهيرات", at: "هذه الظهيرة" },
+      evening: { now: "هذا المساء", nowCap: "هذا المساء", these: "أمسيات", theseCap: "أمسيات", at: "هذا المساء" },
+      late_night: { now: "في وقتٍ متأخّر", nowCap: "في وقتٍ متأخّر", these: "ليالٍ", theseCap: "ليالٍ", at: "في وقتٍ متأخّر" },
+    };
+    return ar[slot];
+  }
+  const en: Record<TimeOfDaySlot, TimeOfDayPhrases> = {
+    dead_of_night: {
+      now: "tonight", nowCap: "Tonight",
+      these: "late hours", theseCap: "Late hours",
+      at: "at 3am",
+    },
+    morning: {
+      now: "this morning", nowCap: "This morning",
+      these: "mornings", theseCap: "Mornings",
+      at: "this morning",
+    },
+    afternoon: {
+      now: "this afternoon", nowCap: "This afternoon",
+      these: "afternoons", theseCap: "Afternoons",
+      at: "this afternoon",
+    },
+    evening: {
+      now: "this evening", nowCap: "This evening",
+      these: "evenings", theseCap: "Evenings",
+      at: "this evening",
+    },
+    late_night: {
+      now: "tonight", nowCap: "Tonight",
+      these: "late evenings", theseCap: "Late evenings",
+      at: "late tonight",
+    },
+  };
+  return en[slot];
+}
+
 export function keepSafeKey(now: Date = new Date()):
   | "session.end.keepSafe.deadOfNight"
   | "session.end.keepSafe.morning"

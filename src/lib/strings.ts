@@ -213,9 +213,10 @@ const STRINGS = {
     ar: "اتركها هنا",
   },
   "session.truth.skip": {
-    en: "not tonight",
-    fr: "pas ce soir",
-    ar: "ليس الليلة",
+    // Time-neutral — "not tonight" only worked after dark.
+    en: "not now",
+    fr: "pas maintenant",
+    ar: "ليس الآن",
   },
 
   // Goodbye trap
@@ -315,9 +316,11 @@ const STRINGS = {
     ar: "قُلْها",
   },
   "session.truth.notTonight": {
-    en: "not tonight",
-    fr: "pas ce soir",
-    ar: "ليس الليلة",
+    // Time-neutral — "not tonight" only worked after dark. Key
+    // name preserved to avoid touching every callsite.
+    en: "not now",
+    fr: "pas maintenant",
+    ar: "ليس الآن",
   },
   "session.status.speaking": {
     en: "speaking…",
@@ -437,9 +440,11 @@ const STRINGS = {
     ar: "صديقٌ يُصغي، في الليل.",
   },
   "home.beginSession": {
-    en: "begin tonight's session",
-    fr: "commencer la session de ce soir",
-    ar: "ابدأ جلسةَ الليلة",
+    // Time-neutral phrasing — "tonight's session" reads as nonsense at
+    // 9am, and the landing greets visitors at every hour.
+    en: "begin your session",
+    fr: "commencer ta session",
+    ar: "ابدأ جلستك",
   },
   "home.letterWaiting": {
     en: "a letter is waiting for you.",
@@ -464,9 +469,11 @@ const STRINGS = {
     ar: "اعتنِ بنفسك{name}.",
   },
   "summary.closingSad": {
-    en: "i could feel some of what you carried tonight. i'm glad you didn't carry it alone.",
-    fr: "j'ai pu ressentir une partie de ce que tu portais ce soir. je suis content que tu ne l'aies pas porté seul.",
-    ar: "شعرتُ ببعضِ ما حملتَه الليلة. يُسعدُني أنَّك لم تحملْه وحدك.",
+    // Time-neutral — "tonight" was wrong at 9am. "With you" keeps
+    // the warmth without anchoring to a specific hour.
+    en: "i could feel some of what you carried with you. i'm glad you didn't carry it alone.",
+    fr: "j'ai pu ressentir une partie de ce que tu portais. je suis content que tu ne l'aies pas porté seul.",
+    ar: "شعرتُ ببعضِ ما حملتَه معك. يُسعدُني أنَّك لم تحملْه وحدك.",
   },
   "summary.closingSoft": {
     en: "your voice softened toward the end. i hope you can stay there for a while.",
@@ -474,9 +481,10 @@ const STRINGS = {
     ar: "هدأ صوتُك نحو النهاية. آمُلُ أن تبقى هناك لبعض الوقت.",
   },
   "summary.closingDefault": {
-    en: "thank you for letting me in tonight. that takes more than people say.",
-    fr: "merci de m'avoir laissé entrer ce soir. ça demande plus que ce que les gens disent.",
-    ar: "شكرًا لأنَّك سمحتَ لي بالدخول الليلة. هذا يتطلَّبُ أكثرَ ممَّا يقولُه الناس.",
+    // Drop "tonight" — reads as nonsense after a daytime session.
+    en: "thank you for letting me in. that takes more than people say.",
+    fr: "merci de m'avoir laissé entrer. ça demande plus que ce que les gens disent.",
+    ar: "شكرًا لأنَّك سمحتَ لي بالدخول. هذا يتطلَّبُ أكثرَ ممَّا يقولُه الناس.",
   },
   "summary.stat.exchanges": {
     en: "exchanges",
@@ -529,9 +537,11 @@ const STRINGS = {
     ar: "شيءٌ صغير، قبل أن تذهب",
   },
   "summary.mirror.prompt": {
-    en: "which one of these did you say tonight?",
-    fr: "laquelle de ces phrases as-tu dite ce soir ?",
-    ar: "أيُّ من هذه الجُمَل قلتَها الليلة؟",
+    // Drop "tonight" — mirror prompt fires at the end of any session,
+    // not just nighttime ones.
+    en: "which one of these did you actually say?",
+    fr: "laquelle de ces phrases as-tu vraiment dite ?",
+    ar: "أيُّ من هذه الجُمَل قلتَها فعلاً؟",
   },
   "summary.mirror.sub": {
     en: "i listened closely. one of these was yours.",
@@ -584,9 +594,10 @@ const STRINGS = {
     ar: "احتفظ به",
   },
   "summary.thanks": {
-    en: "thank you for tonight.",
-    fr: "merci pour cette soirée.",
-    ar: "شكرًا على هذه الليلة.",
+    // Drop "tonight" — the summary ships at every hour.
+    en: "thank you.",
+    fr: "merci.",
+    ar: "شكرًا.",
   },
   "summary.mirrorTitle": {
     en: "the mirror test",
@@ -1023,9 +1034,9 @@ const STRINGS = {
     ar: "من صنع الطلبة، للبشر.",
   },
   "home.science.p1": {
-    en: "EchoMind was founded in 2026 by a team of NHSAST students at Sidi Abdallah, Algiers — after watching too many friends wait months for a counsellor they could afford. Our mission is simple: nobody should have to wait six weeks for an appointment to feel heard tonight.",
-    fr: "EchoMind a été fondée en 2026 par une équipe d'étudiants NHSAST de Sidi Abdallah, Alger — après avoir vu trop d'amis attendre des mois un psy qu'ils pouvaient se payer. Notre mission est simple : personne ne devrait attendre six semaines pour un rendez-vous pour se sentir écouté ce soir.",
-    ar: "تأسَّست إيكومايند عام 2026 على يد فريقٍ من طلبة NHSAST في سيدي عبد الله، الجزائر — بعد أن رأينا أصدقاءً كثيرين ينتظرون أشهُرًا ليجدوا مُرشِدًا مُيسُّرا لهم. رسالتُنا بسيطة: لا أحدَ يستحقُّ أن ينتظر ستَّةَ أسابيعَ لموعدٍ كي يشعرَ أنَّه مسموعٌ الليلة.",
+    en: "EchoMind was founded in 2026 by a team of NHSAST students at Sidi Abdallah, Algiers — after watching too many friends wait months for a counsellor they could afford. Our mission is simple: nobody should have to wait six weeks for an appointment to feel heard today.",
+    fr: "EchoMind a été fondée en 2026 par une équipe d'étudiants NHSAST de Sidi Abdallah, Alger — après avoir vu trop d'amis attendre des mois un psy qu'ils pouvaient se payer. Notre mission est simple : personne ne devrait attendre six semaines pour un rendez-vous pour se sentir écouté aujourd'hui.",
+    ar: "تأسَّست إيكومايند عام 2026 على يد فريقٍ من طلبة NHSAST في سيدي عبد الله، الجزائر — بعد أن رأينا أصدقاءً كثيرين ينتظرون أشهُرًا ليجدوا مُرشِدًا مُيسُّرا لهم. رسالتُنا بسيطة: لا أحدَ يستحقُّ أن ينتظر ستَّةَ أسابيعَ لموعدٍ كي يشعرَ أنَّه مسموعٌ اليوم.",
   },
   "home.science.p2": {
     en: "Echo is trained on a decade of published clinical transcripts, reviewed by our 14-member Licensed Therapist Advisory Board, and audited quarterly by an independent ethics committee. Built with care by NHSAST students.",
@@ -1078,9 +1089,11 @@ const STRINGS = {
     ar: "هي الأصعبُ.",
   },
   "home.cta.body": {
-    en: "Begin tonight. Free, forever. It takes 90 seconds.",
-    fr: "Commence ce soir. Gratuit, à vie. Ça prend 90 secondes.",
-    ar: "ابدأ الليلة. مجانيٌّ، إلى الأبد. يستغرقُ 90 ثانية.",
+    // Time-neutral CTA. The previous "Begin tonight" only landed at
+    // night; "Begin in 90 seconds" lands at every hour.
+    en: "Begin in 90 seconds. Free, forever.",
+    fr: "Commence en 90 secondes. Gratuit, à vie.",
+    ar: "ابدأ في 90 ثانية. مجانيٌّ، إلى الأبد.",
   },
   "home.cta.consent": {
     en: "By continuing you agree to our",
