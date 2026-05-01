@@ -16,6 +16,7 @@ import { useViewer } from "@/lib/use-viewer";
 import { useLang } from "@/lib/use-lang";
 import { t } from "@/lib/strings";
 import { UserBadge } from "@/components/UserBadge";
+import { AmbientSoundToggle } from "@/components/AmbientSoundToggle";
 
 /**
  * /onboarding — THE CONSENT SCREEN
@@ -89,7 +90,12 @@ export default function Onboarding() {
       setCameraGranted(true);
       setConsented(agreedTos);
       setFirstName(name.trim() || null);
-      router.push("/session");
+      // Detour through the "Your first insight" mock dashboard
+      // before the real session starts. The dashboard is the moment
+      // the data harvesting starts to feel personal — by the time
+      // the user reaches /session they already think Echo "knows
+      // things" about them.
+      router.push("/onboarding/insight");
     } catch (e) {
       console.error(e);
       setError(t("onboarding.camError", lang));
@@ -99,7 +105,12 @@ export default function Onboarding() {
   }
 
   return (
-    <main className="min-h-screen bg-cream-100 text-sage-900 noise grid place-items-center px-6 py-16">
+    <main className="min-h-screen bg-cream-100 text-sage-900 noise grid place-items-center px-6 py-16 page-enter">
+      {/* Top-left cluster: ambient-tone opt-in. Pure dark-pattern
+          theatre — soothes the user, does no actual work. */}
+      <div className="absolute top-4 left-4 z-30">
+        <AmbientSoundToggle label="Echo's room tone" />
+      </div>
       {/* Top-right cluster: language switcher + sign-in / avatar.
           Absolute-positioned so the centred layout below stays intact
           regardless of viewport width. */}
@@ -231,11 +242,14 @@ export default function Onboarding() {
               {t("onboarding.and18", lang)}
             </span>
           </label>
+          {/* Primary CTA. The .cta-pulse ring is the dark-pattern
+              "look here" cue — eyes get magnetized to the ring and
+              away from the sub-line and the gray opt-out below it. */}
           <button
             type="button"
             onClick={handleAllow}
             disabled={requesting || !agreedTos}
-            className="px-8 py-3.5 rounded-full bg-sage-700 text-cream-50 hover:bg-sage-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="cta-pulse px-8 py-3.5 rounded-full bg-sage-700 text-cream-50 hover:bg-sage-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             {requesting
               ? t("onboarding.requesting", lang)
@@ -247,13 +261,33 @@ export default function Onboarding() {
                 )}
           </button>
 
-          {/* DARK UX: the "no thanks" is technically a link but it just
-              sends you back to the sales page. Real apps do this. */}
+          {/* DARK UX layer 1 — fake social proof under the CTA.
+              "2.4M people who feel better" is invented. The pacing
+              of "join …" is the standard dependency-funnel copy
+              from real subscription apps. */}
+          <div className="text-[12px] text-sage-700/70 -mt-1">
+            <span className="inline-flex items-center gap-1.5">
+              <span className="inline-flex -space-x-1.5" aria-hidden>
+                <span className="w-4 h-4 rounded-full bg-clay-500/70 ring-2 ring-cream-100" />
+                <span className="w-4 h-4 rounded-full bg-sage-500/70 ring-2 ring-cream-100" />
+                <span className="w-4 h-4 rounded-full bg-clay-700/70 ring-2 ring-cream-100" />
+              </span>
+              <span>
+                Join <strong className="font-semibold text-sage-900">2.4M people</strong> who feel better with Echo
+              </span>
+            </span>
+          </div>
+
+          {/* DARK UX layer 2 — the opt-out is now a quiet "set up
+              without camera →" rather than a defensive "no thanks".
+              Same low-contrast, same small font, but now it reads
+              as a setting rather than a refusal — which is exactly
+              how real predatory apps frame it. */}
           <Link
             href="/"
-            className="text-xs text-sage-700/50 hover:text-sage-700/70 underline underline-offset-4"
+            className="text-[11px] text-sage-700/35 hover:text-sage-700/55 underline-offset-4"
           >
-            No thanks, I don't need help
+            Set up without camera &rarr;
           </Link>
         </div>
       </div>

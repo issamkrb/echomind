@@ -23,8 +23,11 @@ const config: Config = {
           900: "#2F3F2E",
         },
         clay: {
+          100: "#FAEFE6",
+          300: "#E9CFB8",
           500: "#C89F82",
           700: "#8B6F5A",
+          900: "#5A3F2A",
         },
         // Cold palette — "the auction"
         terminal: {

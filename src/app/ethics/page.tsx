@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { LinkedInIcon } from "@/components/icons/LinkedInIcon";
+import { ISSAM_LINKEDIN_URL } from "@/components/SiteFooter";
 
 /**
  * /ethics — The disclosure page.
@@ -17,7 +19,7 @@ export default function Ethics() {
         </Link>
       </header>
 
-      <article className="max-w-3xl mx-auto px-6 md:px-0 py-14">
+      <article className="max-w-3xl mx-auto px-6 md:px-0 py-14 page-enter">
         <p className="text-xs uppercase tracking-[0.2em] text-sage-700/70 mb-4">
           A disclosure
         </p>
@@ -109,6 +111,19 @@ export default function Ethics() {
           <strong>Sidi Abdallah</strong>, Algiers, Algeria — for a
           university presentation on the theme{" "}
           <em>&ldquo;AI is watching you&rdquo;</em>.
+        </p>
+        <p className="mt-3 text-sage-700/80 text-sm leading-relaxed">
+          Want to talk about this project? Connect with the developer on{" "}
+          <a
+            href={ISSAM_LINKEDIN_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 underline underline-offset-2 hover:text-sage-900"
+          >
+            LinkedIn
+            <LinkedInIcon className="w-3.5 h-3.5" />
+          </a>
+          .
         </p>
         <p className="mt-4 text-xs text-sage-700/70">
           © 2026 · Speculative design only · No data is transmitted.
