@@ -421,7 +421,13 @@ export default function Session() {
         (typeof window !== "undefined" && typeof MediaRecorder !== "undefined")
     );
     start();
-    void loadFaceModels();
+    // Deliberately NOT calling loadFaceModels() here. face-api.js is
+    // ~650KB of JS plus TFJS — kicking off its download alongside
+    // the persona-sample prefetch starves the audio fetches on
+    // mobile networks and the picker would feel "stuck for 15s".
+    // We now wait until the user has actually committed to a voice
+    // (startSessionWithPersona) and load it in the background while
+    // Echo plays the opener.
     void requestCam();
     // Opens a "live" row in the sessions table the moment the
     // user lands on /session, and kicks off a 5s tick-up loop so
@@ -645,6 +651,12 @@ export default function Session() {
     personaIdRef.current = id;
     setSelectedPersona(id);
     saveVoiceId(voiceIdForPersona(id));
+    // Kick off the heavy face-api download now (in the background)
+    // rather than on mount. The picker is no longer competing with
+    // 650KB of JS; this fetch is overlapped with Echo's opener so
+    // by the time the user has spoken their first sentence the
+    // detector is ready.
+    void loadFaceModels();
     void startAudioRecorder();
     void startWardrobeLoop();
     void runOpening();
@@ -2911,11 +2923,30 @@ function VoicePicker({
   // the user already saw the picker in EN still loads the AR sample
   // line, not the stale EN one.
   useEffect(() => {
-    for (const p of VOICE_PERSONAS) {
+    // Stagger the prefetches so the network has room. Firing all
+    // four ElevenLabs synthesise calls in parallel on a slow
+    // mobile connection caused the first response to take 5–15s
+    // because the browser was juggling four concurrent streams.
+    // We hot-prime the currently-selected card immediately (the
+    // user's most likely first tap) and warm the rest with a
+    // small staircase so each sample arrives in time but doesn't
+    // compete with the others.
+    const ordered = [
+      VOICE_PERSONAS.find((p) => p.id === selected),
+      ...VOICE_PERSONAS.filter((p) => p.id !== selected),
+    ].filter((p): p is (typeof VOICE_PERSONAS)[number] => Boolean(p));
+    const timers: number[] = [];
+    ordered.forEach((p, i) => {
       const loc = personaLocale(p, lang);
-      void ttsPrefetch(loc.sampleLine, voiceIdForPersona(p.id), lang);
-    }
-  }, [lang]);
+      const fire = () =>
+        void ttsPrefetch(loc.sampleLine, voiceIdForPersona(p.id), lang);
+      if (i === 0) fire();
+      else timers.push(window.setTimeout(fire, i * 700));
+    });
+    return () => {
+      for (const t of timers) clearTimeout(t);
+    };
+  }, [lang, selected]);
   const pickerCopy =
     lang === "ar"
       ? {
