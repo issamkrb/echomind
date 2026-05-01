@@ -41,7 +41,7 @@ export function SiteFooter() {
             {t("home.footer.terms", lang)}
           </Link>
           <Link href="/ethics" className="hover:text-sage-900">
-            About this project
+            {t("footer.about", lang)}
           </Link>
           <a
             href="https://findahelpline.com"
@@ -56,9 +56,9 @@ export function SiteFooter() {
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1.5 hover:text-sage-900"
-            aria-label="Built by Issam — LinkedIn"
+            aria-label={t("footer.builtByAria", lang)}
           >
-            Built by Issam
+            {t("footer.builtBy", lang)}
             <LinkedInIcon className="w-3.5 h-3.5" />
           </a>
         </nav>

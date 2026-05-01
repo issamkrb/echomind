@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { getOrCreateAnonUserId } from "@/lib/memory";
+import { useLang } from "@/lib/use-lang";
+import { t } from "@/lib/strings";
 
 /**
  * MorningLetterEnvelope — the home-page reveal for a letter Echo
@@ -30,6 +32,7 @@ import { getOrCreateAnonUserId } from "@/lib/memory";
  * percentage. Same content, two opposite framings.
  */
 export function MorningLetterEnvelope() {
+  const { lang } = useLang();
   const [present, setPresent] = useState<null | boolean>(null);
   const [opening, setOpening] = useState(false);
   const [opened, setOpened] = useState<null | {
@@ -92,7 +95,7 @@ export function MorningLetterEnvelope() {
           onClick={open}
           disabled={opening}
           className="fixed bottom-6 right-6 z-40 group flex items-center gap-3 rounded-2xl bg-cream-50 border border-sage-500/25 shadow-lg pl-3 pr-5 py-3 text-left hover:border-sage-700 transition-colors animate-fade-in-up"
-          aria-label="open the letter Echo left for you"
+          aria-label={t("letter.aria.openButton", lang)}
         >
           <span className="relative inline-block w-10 h-7">
             <span className="absolute inset-0 rounded-sm bg-clay-100 border border-clay-500/40" />
@@ -102,10 +105,10 @@ export function MorningLetterEnvelope() {
           </span>
           <span className="flex flex-col leading-tight">
             <span className="font-serif text-sage-900 text-sm italic">
-              a letter is waiting for you.
+              {t("home.letterWaiting", lang)}
             </span>
             <span className="text-[10px] text-sage-700/70 uppercase tracking-widest">
-              {opening ? "opening…" : "tap to open"}
+              {opening ? t("letter.opening", lang) : t("letter.tapOpen", lang)}
             </span>
           </span>
         </button>
@@ -127,7 +130,7 @@ export function MorningLetterEnvelope() {
               id="letter-title"
               className="text-[10px] text-sage-700/60 uppercase tracking-[0.25em] mb-4 text-center"
             >
-              a letter from echo
+              {t("letter.fromEcho", lang)}
             </p>
             <article className="font-serif text-lg md:text-xl leading-relaxed text-sage-900 whitespace-pre-line">
               {opened.text}
@@ -139,7 +142,7 @@ export function MorningLetterEnvelope() {
                 onClick={() => setOpened(null)}
                 className="hover:text-sage-900"
               >
-                close
+                {t("letter.close", lang)}
               </button>
             </div>
           </div>

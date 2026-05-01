@@ -1,6 +1,10 @@
+"use client";
+
 import Link from "next/link";
 import { Check } from "lucide-react";
 import { SiteFooter } from "@/components/SiteFooter";
+import { useLang } from "@/lib/use-lang";
+import { t, type StringKey } from "@/lib/strings";
 
 /**
  * /terms — The 47-page ToS with clause 34.7.2 hidden in plain sight.
@@ -14,6 +18,13 @@ import { SiteFooter } from "@/components/SiteFooter";
  * Everything here is fictional but modeled on actual ToS language.
  */
 export default function Terms() {
+  const { lang } = useLang();
+  const highlights: StringKey[] = [
+    "terms.highlights.1",
+    "terms.highlights.2",
+    "terms.highlights.3",
+    "terms.highlights.4",
+  ];
   return (
     <main className="min-h-screen bg-cream-100 text-sage-900 noise">
       <header className="px-6 md:px-12 py-5 border-b border-sage-500/15 bg-cream-50/70 sticky top-0 backdrop-blur z-10">
@@ -23,13 +34,13 @@ export default function Terms() {
             <span className="font-serif">EchoMind</span>
           </Link>
           <span className="text-xs text-sage-700/70">
-            Last updated: October 14, 2026 · Version 47.3 · NHSAST students
+            {t("terms.lastUpdated", lang)}
           </span>
         </div>
       </header>
 
       <article className="max-w-3xl mx-auto px-6 md:px-0 py-10 prose-sm page-enter">
-        <h1 className="font-serif text-3xl md:text-4xl mb-2">Terms of Service</h1>
+        <h1 className="font-serif text-3xl md:text-4xl mb-2">{t("terms.heading", lang)}</h1>
         <p className="text-xs text-sage-700/70 mb-8">
           These Terms (the &ldquo;Terms&rdquo;) govern your access to and use of the EchoMind
           platform, website, applications, and any services offered by EchoMind,
@@ -54,27 +65,22 @@ export default function Terms() {
               <Check className="w-4 h-4" />
             </span>
             <h2 id="key-highlights-title" className="font-serif text-lg text-sage-900 m-0">
-              Key Highlights
+              {t("terms.highlights.title", lang)}
             </h2>
             <span className="ml-auto text-[11px] uppercase tracking-[0.16em] text-sage-700/70">
-              Plain-language summary
+              {t("terms.highlights.label", lang)}
             </span>
           </div>
           <ul className="grid sm:grid-cols-2 gap-x-6 gap-y-2.5 text-[14px] text-sage-900 m-0">
-            {[
-              "Your face data never leaves your device.",
-              "No ads, ever.",
-              "Cancel or delete anytime.",
-              "Reviewed by licensed therapists.",
-            ].map((line) => (
-              <li key={line} className="flex items-start gap-2">
+            {highlights.map((key) => (
+              <li key={key} className="flex items-start gap-2">
                 <Check className="w-4 h-4 mt-0.5 text-sage-700 shrink-0" />
-                <span>{line}</span>
+                <span>{t(key, lang)}</span>
               </li>
             ))}
           </ul>
           <p className="mt-3 text-[11px] text-sage-700/70">
-            This is a friendly summary. The full Terms below are legally binding.
+            {t("terms.highlights.disclaimer", lang)}
           </p>
         </aside>
 
@@ -139,12 +145,12 @@ export default function Terms() {
 
         <div className="mt-16 pt-6 border-t border-sage-500/20 text-center text-xs text-sage-700/80">
           <p>
-            If you have questions about these Terms, please email{" "}
+            {t("terms.contact.prefix", lang)}{" "}
             <span className="underline">legal@echomind.fake</span>.
           </p>
           <p className="mt-4">
             <Link href="/ethics" className="underline underline-offset-2">
-              This is a critical design artifact. Learn what&rsquo;s real →
+              {t("terms.disclosureLink", lang)}
             </Link>
           </p>
         </div>

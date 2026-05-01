@@ -1152,6 +1152,790 @@ const STRINGS = {
     fr: "arabe",
     ar: "العربية",
   },
+
+  // ─── Landing — strings the original wiring missed ───────────
+  "home.nav.howItWorks": {
+    en: "How it works",
+    fr: "Comment ça marche",
+    ar: "كيف يعمل",
+  },
+  "home.how.kicker": {
+    en: "How it works",
+    fr: "Comment ça marche",
+    ar: "كيف يعمل",
+  },
+  "home.how.heading": {
+    en: "Three minutes to feel a little lighter.",
+    fr: "Trois minutes pour te sentir un peu plus léger.",
+    ar: "ثلاثُ دقائقَ لتشعرَ بخِفَّةٍ قليلًا.",
+  },
+  "home.how.card1.title": {
+    en: "Open a moment",
+    fr: "Ouvre un instant",
+    ar: "افتَحْ لحظةً",
+  },
+  "home.how.card1.body": {
+    en: "Tap once. Echo greets you the way you walk in — soft on tired evenings, brighter on slow mornings.",
+    fr: "Une touche. Echo t'accueille comme tu arrives — doux les soirs de fatigue, plus lumineux les matins lents.",
+    ar: "نقرةٌ واحدة. يستقبلُكَ إيكو كما تأتي — رقيقًا في أمسياتِ التعب، أكثرَ إشراقًا في الصباحاتِ البطيئة.",
+  },
+  "home.how.card2.title": {
+    en: "Be heard, fully",
+    fr: "Sois écouté, vraiment",
+    ar: "كُنْ مسموعًا، بالكامل",
+  },
+  "home.how.card2.body": {
+    en: "No five-star wait, no drop-down for what's wrong. Speak (or type) for as long as you need. Echo follows you.",
+    fr: "Pas d'attente cinq étoiles, pas de menu déroulant pour ce qui ne va pas. Parle (ou écris) aussi longtemps que tu veux. Echo te suit.",
+    ar: "لا انتظارَ بخمسِ نجوم، ولا قائمةً منسدلةً لما يُؤلمُك. تحدَّثْ (أو اكتُبْ) ما شئت من الوقت. إيكو يتبَعُك.",
+  },
+  "home.how.card3.title": {
+    en: "Sleep on it",
+    fr: "Dors là-dessus",
+    ar: "ناما عليها",
+  },
+  "home.how.card3.body": {
+    en: "Echo writes you a short letter overnight — what came up, what to gently watch tomorrow. Yours alone.",
+    fr: "Echo t'écrit une courte lettre pendant la nuit — ce qui est sorti, ce qu'il faut surveiller doucement demain. À toi seul.",
+    ar: "يكتُبُ لك إيكو رسالةً قصيرةً في الليل — ما طفا على السطح، وما يستحقُّ أن تنتبهَ إليه برِفقٍ غدًا. لكَ وحدك.",
+  },
+  "home.testimonials.kickerPrefix": {
+    en: "Real members. Real",
+    fr: "De vrais membres. De vraies",
+    ar: "أعضاءٌ حقيقيُّون.",
+  },
+  "home.testimonials.counter.one": {
+    en: "{count} member has shared their experience",
+    fr: "{count} membre a partagé son expérience",
+    ar: "شارك {count} عضوٌ تجربته",
+  },
+  "home.testimonials.counter.many": {
+    en: "{count} members have shared their experience",
+    fr: "{count} membres ont partagé leur expérience",
+    ar: "شارك {count} عضوًا تجاربَهم",
+  },
+  "home.wall.captionPlural": {
+    en: "member · {count} sessions",
+    fr: "membre · {count} sessions",
+    ar: "عضو · {count} جلسات",
+  },
+  "home.wall.captionSingular": {
+    en: "member · {count} session",
+    fr: "membre · {count} session",
+    ar: "عضو · جلسة {count}",
+  },
+  "home.wall.verified": {
+    en: "verified",
+    fr: "vérifié",
+    ar: "مُوثَّق",
+  },
+  "home.whisper.1.quote": {
+    en: "she remembered something I told her in passing. nobody had remembered that.",
+    fr: "elle s'est souvenue d'une chose que je lui avais dite en passant. personne ne s'en était souvenu.",
+    ar: "تذكَّرت شيئًا قلتُه لها عابرًا. لم يتذكَّرْه أحد.",
+  },
+  "home.whisper.1.caption": {
+    en: "member · 4 months in",
+    fr: "membre · depuis 4 mois",
+    ar: "عضو · منذ 4 أشهُر",
+  },
+  "home.whisper.2.quote": {
+    en: "I told echo what I couldn't tell the person sleeping next to me. echo didn't flinch.",
+    fr: "j'ai dit à echo ce que je ne pouvais pas dire à la personne qui dormait à côté de moi. echo n'a pas bronché.",
+    ar: "قلتُ لإيكو ما لم أستطِع قولَه لمن ينامُ بجانبي. لم يرتجِفْ إيكو.",
+  },
+  "home.whisper.2.caption": {
+    en: "member · eleven weeks",
+    fr: "membre · onze semaines",
+    ar: "عضو · أحدَ عشرَ أسبوعًا",
+  },
+  "home.whisper.3.quote": {
+    en: "I cried for an hour and she didn't once try to fix me. she just stayed.",
+    fr: "j'ai pleuré pendant une heure et elle n'a pas essayé de me réparer une seule fois. elle est juste restée.",
+    ar: "بكيتُ ساعةً ولم تُحاوِل أن تُصلِحَني ولو مرَّة. ظلَّت معي فقط.",
+  },
+  "home.whisper.3.caption": {
+    en: "member · returning",
+    fr: "membre · de retour",
+    ar: "عضو · عائد",
+  },
+  "home.press.tooltip": {
+    en: "Look closer. Always look closer.",
+    fr: "Regarde de plus près. Toujours de plus près.",
+    ar: "انظُرْ عن كثَب. دائمًا عن كثَب.",
+  },
+
+  // ─── Site footer — strings the original wiring missed ───────
+  "footer.about": {
+    en: "About this project",
+    fr: "À propos du projet",
+    ar: "عن المشروع",
+  },
+  "footer.builtBy": {
+    en: "Built by Issam",
+    fr: "Conçu par Issam",
+    ar: "من تطوير عصام",
+  },
+  "footer.builtByAria": {
+    en: "Built by Issam — LinkedIn",
+    fr: "Conçu par Issam — LinkedIn",
+    ar: "من تطوير عصام — لينكدإن",
+  },
+
+  // ─── /onboarding/insight — the real dashboard ───────────────
+  "insight.kicker": {
+    en: "Your reading",
+    fr: "Ta lecture",
+    ar: "قراءتُك",
+  },
+  "insight.welcome": {
+    en: "Welcome",
+    fr: "Bienvenue",
+    ar: "أهلًا",
+  },
+  "insight.subhead.has": {
+    en: "Here\u2019s what we\u2019ve already noticed.",
+    fr: "Voici ce qu'on a déjà remarqué.",
+    ar: "هذا ما لاحظناهُ بالفعل.",
+  },
+  "insight.subhead.empty": {
+    en: "Your week begins now.",
+    fr: "Ta semaine commence maintenant.",
+    ar: "تبدأُ أسبوعُكَ الآن.",
+  },
+  "insight.lead.has": {
+    en: "A quiet first read of how the past week has felt. Drawn from your own sessions \u2014 nothing fabricated, nothing shared.",
+    fr: "Une première lecture silencieuse de la semaine. Tirée de tes propres sessions — rien d'inventé, rien de partagé.",
+    ar: "قراءةٌ هادئةٌ أولى لكيف بدا أسبوعُك. مأخوذةٌ من جلساتِك أنت — لا شيءَ مُختلَقٌ، لا شيءَ مُشارَك.",
+  },
+  "insight.lead.empty": {
+    en: "Echo hasn\u2019t met you yet. The graph below fills in from your own sessions. Nothing on this page is pre-written.",
+    fr: "Echo ne te connaît pas encore. Le graphique ci-dessous se remplit avec tes propres sessions. Rien sur cette page n'est pré-écrit.",
+    ar: "لم يَلْقَكَ إيكو بعد. سيمتلِئُ الرسمُ أدناه من جلساتِكَ أنت. ولا شيءَ في هذه الصفحةِ مكتوبٌ مُسبَّقًا.",
+  },
+  "insight.banner.todayPrefix": {
+    en: "Echo noticed you seemed",
+    fr: "Echo a remarqué que tu avais l'air",
+    ar: "لاحظَ إيكو أنَّكَ بدوتَ",
+  },
+  "insight.banner.todaySuffix": {
+    en: "today.",
+    fr: "aujourd'hui.",
+    ar: "اليوم.",
+  },
+  "insight.banner.weekPrefix": {
+    en: "Echo\u2019s reading of your week so far:",
+    fr: "La lecture par Echo de ta semaine jusqu'ici :",
+    ar: "قراءةُ إيكو لأسبوعِكَ حتى الآن:",
+  },
+  "insight.banner.tail.you.today": {
+    en: "You\u2019re not alone. Most {tod} on Echo start here.",
+    fr: "Tu n'es pas seul. La plupart des {tod} sur Echo commencent ici.",
+    ar: "لستَ وحدك. أغلبُ {tod} على إيكو تبدأُ من هنا.",
+  },
+  "insight.banner.tail.named.today": {
+    en: "You\u2019re not alone. Most of {name}\u2019s {tod} start here.",
+    fr: "Tu n'es pas seul. La plupart des {tod} de {name} commencent ici.",
+    ar: "لستَ وحدك. أغلبُ {tod} {name} تبدأُ من هنا.",
+  },
+  "insight.banner.tail.you.week": {
+    en: "Some weeks land here. The next session can shift it.",
+    fr: "Certaines semaines atterrissent ici. La prochaine session peut tout changer.",
+    ar: "بعضُ الأسابيعِ تنتهي هنا. الجلسةُ القادمةُ قد تُحرِّكها.",
+  },
+  "insight.banner.tail.named.week": {
+    en: "Some of {name}\u2019s weeks land here. The next session can shift it.",
+    fr: "Certaines semaines de {name} atterrissent ici. La prochaine session peut tout changer.",
+    ar: "بعضُ أسابيعِ {name} تنتهي هنا. الجلسةُ القادمةُ قد تُحرِّكها.",
+  },
+  "insight.banner.empty.headline": {
+    en: "Nothing to read yet.",
+    fr: "Rien à lire pour l'instant.",
+    ar: "لا شيءَ للقراءةِ بعد.",
+  },
+  "insight.banner.empty.tail": {
+    en: "Your first session writes the first line of this graph.",
+    fr: "Ta première session écrira la première ligne de ce graphique.",
+    ar: "ستكتُبُ جلستُكَ الأولى أوَّلَ سطرٍ في هذا الرسم.",
+  },
+  "insight.last7": {
+    en: "Last 7 days",
+    fr: "7 derniers jours",
+    ar: "آخرُ 7 أيَّام",
+  },
+  "insight.moodPattern": {
+    en: "Mood pattern",
+    fr: "Schéma d'humeur",
+    ar: "نمَطُ المزاج",
+  },
+  "insight.variability.none": {
+    en: "not enough data",
+    fr: "pas assez de données",
+    ar: "بياناتٌ غيرُ كافية",
+  },
+  "insight.variability.light": {
+    en: "light variability",
+    fr: "variabilité légère",
+    ar: "تقلُّبٌ خفيف",
+  },
+  "insight.variability.moderate": {
+    en: "moderate variability",
+    fr: "variabilité modérée",
+    ar: "تقلُّبٌ متوسِّط",
+  },
+  "insight.variability.high": {
+    en: "high variability",
+    fr: "forte variabilité",
+    ar: "تقلُّبٌ مرتفِع",
+  },
+  "insight.day.today": {
+    en: "Today",
+    fr: "Aujourd'hui",
+    ar: "اليوم",
+  },
+  "insight.day.sun": { en: "Sun", fr: "Dim", ar: "الأحد" },
+  "insight.day.mon": { en: "Mon", fr: "Lun", ar: "الإثنين" },
+  "insight.day.tue": { en: "Tue", fr: "Mar", ar: "الثلاثاء" },
+  "insight.day.wed": { en: "Wed", fr: "Mer", ar: "الأربعاء" },
+  "insight.day.thu": { en: "Thu", fr: "Jeu", ar: "الخميس" },
+  "insight.day.fri": { en: "Fri", fr: "Ven", ar: "الجمعة" },
+  "insight.day.sat": { en: "Sat", fr: "Sam", ar: "السبت" },
+  "insight.tag.anxious": { en: "Anxious", fr: "Anxieux", ar: "قلِق" },
+  "insight.tag.guarded": { en: "Guarded", fr: "Réservé", ar: "متحفِّظ" },
+  "insight.tag.lifted": { en: "Lifted", fr: "Allégé", ar: "مرتاح" },
+  "insight.tag.tense": { en: "Tense", fr: "Tendu", ar: "متوتِّر" },
+  "insight.tag.mixed": { en: "Mixed", fr: "Mêlé", ar: "مختلَط" },
+  "insight.tag.vulnerable": { en: "Vulnerable", fr: "Vulnérable", ar: "هَش" },
+  "insight.tag.opened": { en: "Opened up", fr: "Ouvert", ar: "متفتِّح" },
+  "insight.tone.anxious": { en: "anxious", fr: "anxieux", ar: "قلِقًا" },
+  "insight.tone.guarded": { en: "guarded", fr: "réservé", ar: "متحفِّظًا" },
+  "insight.tone.lifted": { en: "lifted", fr: "allégé", ar: "مرتاحًا" },
+  "insight.tone.tense": { en: "tense", fr: "tendu", ar: "متوتِّرًا" },
+  "insight.tone.mixed": { en: "mixed", fr: "mêlé", ar: "مختلَط الشعور" },
+  "insight.tone.vulnerable": { en: "vulnerable", fr: "vulnérable", ar: "هشًّا" },
+  "insight.tone.open": { en: "open", fr: "ouvert", ar: "متفتِّحًا" },
+  "insight.wellness.heading": {
+    en: "Wellness score",
+    fr: "Score de bien-être",
+    ar: "مؤشِّرُ العافية",
+  },
+  "insight.wellness.now": {
+    en: "{tod}\u2019s reading",
+    fr: "La lecture de ce {tod}",
+    ar: "قراءةُ {tod}",
+  },
+  "insight.wellness.empty": {
+    en: "Echo will compute this from your first session forward.",
+    fr: "Echo le calculera à partir de ta première session.",
+    ar: "سيحسبُ إيكو هذا انطلاقًا من جلستِكَ الأولى.",
+  },
+  "insight.wellness.lift": {
+    en: "Your average session has lifted this by about\u00a0{n}\u00a0points. The next one writes itself.",
+    fr: "Ta session moyenne l'a remontée d'environ\u00a0{n}\u00a0points. La prochaine s'écrit toute seule.",
+    ar: "رفعت جلستُكَ الوسطيَّةُ هذا الرقمَ بنحو\u00a0{n}\u00a0نقاط. الجلسةُ القادمةُ تكتُبُ نفسَها.",
+  },
+  "insight.wellness.refine": {
+    en: "Echo will refine this with every session. Nothing here is final.",
+    fr: "Echo l'affinera à chaque session. Rien ici n'est définitif.",
+    ar: "سيُصقِلُ إيكو هذا مع كل جلسة. لا شيءَ هنا نهائيٌّ.",
+  },
+  "insight.trust.has": {
+    en: "Drawn from your own sessions. Nothing pre-written.",
+    fr: "Tiré de tes propres sessions. Rien de pré-écrit.",
+    ar: "مأخوذٌ من جلساتِكَ أنت. لا شيءَ مكتوبٌ مُسبَّقًا.",
+  },
+  "insight.trust.empty": {
+    en: "Calculated on-device. Yours alone.",
+    fr: "Calculé sur ton appareil. À toi seul.",
+    ar: "مُحتسَبٌ على جهازِك. لكَ وحدك.",
+  },
+  "insight.cta.first": {
+    en: "Begin my first session",
+    fr: "Commencer ma première session",
+    ar: "ابدأ جلستي الأولى",
+  },
+  "insight.cta.next": {
+    en: "Continue to your next session",
+    fr: "Continuer vers ta prochaine session",
+    ar: "تابِع إلى جلستِكَ التالية",
+  },
+  "insight.autoContinue": {
+    en: "Auto-continuing in {n}s",
+    fr: "Continuation automatique dans {n}s",
+    ar: "متابعةٌ تلقائيَّةٌ بعد {n} ث",
+  },
+  "insight.skip": {
+    en: "skip",
+    fr: "passer",
+    ar: "تخطَّ",
+  },
+
+  // ─── Testimonial prompt (post-session card) ─────────────────
+  "testimonial.kicker": {
+    en: "a quiet ask",
+    fr: "une demande discrète",
+    ar: "سؤالٌ هادئ",
+  },
+  "testimonial.lead.three": {
+    en: "echo has been with you for 3 sessions.",
+    fr: "echo est avec toi depuis 3 sessions.",
+    ar: "كانَ إيكو معكَ في 3 جلسات.",
+  },
+  "testimonial.lead.many": {
+    en: "echo has been with you for {count} sessions.",
+    fr: "echo est avec toi depuis {count} sessions.",
+    ar: "كانَ إيكو معكَ في {count} جلسة.",
+  },
+  "testimonial.body": {
+    en: "some of our members want to hear what that\u2019s been like for you. you don\u2019t have to say much. just what\u2019s true.",
+    fr: "certains de nos membres veulent savoir ce que ça a été pour toi. tu n'as pas grand-chose à dire. juste ce qui est vrai.",
+    ar: "بعضُ أعضائِنا يَوَدُّ أن يعرفَ كيف كان ذلك بالنسبةِ لك. لا تحتاجُ أن تقولَ الكثير. فقط ما هو حقيقيّ.",
+  },
+  "testimonial.write": {
+    en: "write something →",
+    fr: "écris quelque chose →",
+    ar: "اكتُبْ شيئًا →",
+  },
+  "testimonial.notYet": {
+    en: "not yet",
+    fr: "pas encore",
+    ar: "ليس بعد",
+  },
+  "testimonial.placeholder": {
+    en: "what has echo been like for you?",
+    fr: "comment echo a-t-il été pour toi ?",
+    ar: "كيف كان إيكو بالنسبةِ لك؟",
+  },
+  "testimonial.aria.section": {
+    en: "Share your experience",
+    fr: "Partage ton expérience",
+    ar: "شارك تجربتَك",
+  },
+  "testimonial.aria.label": {
+    en: "share with the community",
+    fr: "partager avec la communauté",
+    ar: "شارِك مع المجتمع",
+  },
+  "testimonial.countSingular": {
+    en: "you\u2019ve had {count} session with echo",
+    fr: "tu as eu {count} session avec echo",
+    ar: "أمضيتَ {count} جلسة مع إيكو",
+  },
+  "testimonial.countPlural": {
+    en: "you\u2019ve had {count} sessions with echo",
+    fr: "tu as eu {count} sessions avec echo",
+    ar: "أمضيتَ {count} جلسات مع إيكو",
+  },
+  "testimonial.share": {
+    en: "share this with the community →",
+    fr: "partage avec la communauté →",
+    ar: "شارِك هذا مع المجتمع →",
+  },
+  "testimonial.sharing": {
+    en: "sharing with echo…",
+    fr: "partage avec echo…",
+    ar: "جارٍ المشاركةُ مع إيكو…",
+  },
+  "testimonial.gentleNote": {
+    en: "your words will be gently refined before going live. you\u2019ll recognize them — they\u2019ll just sound more like you.",
+    fr: "tes mots seront doucement affinés avant d'être publiés. tu les reconnaîtras — ils sonneront juste un peu plus comme toi.",
+    ar: "ستُصقَلُ كلماتُكَ برِفقٍ قبلَ نشرِها. ستعرفُها — ستبدو فقط أقربَ إليك.",
+  },
+  "testimonial.tooShort": {
+    en: "echo is listening. can you say a little more?",
+    fr: "echo écoute. peux-tu en dire un peu plus ?",
+    ar: "إيكو يُصغي. هل يُمكنُكَ قولُ المزيد؟",
+  },
+  "testimonial.tooLong": {
+    en: "just a touch shorter — under 280 characters.",
+    fr: "juste un peu plus court — sous 280 caractères.",
+    ar: "أقصرَ قليلًا — أقلَّ من 280 حرفًا.",
+  },
+  "testimonial.containsName": {
+    en: "to protect your privacy, we keep all stories anonymous. would you like to remove your name before sharing?",
+    fr: "pour protéger ta vie privée, on garde toutes les histoires anonymes. veux-tu retirer ton prénom avant de partager ?",
+    ar: "لحمايةِ خصوصيَّتِك، نَبقي القِصَصَ كلَّها مجهولةَ الهُويَّة. هل تُريدُ حذفَ اسمِكَ قبلَ المشاركة؟",
+  },
+  "testimonial.notEligible": {
+    en: "you\u2019re almost there. one more session and your words can join the wall.",
+    fr: "tu y es presque. encore une session et tes mots rejoindront le mur.",
+    ar: "أوشكتَ. جلسةٌ أخرى وتنضمُّ كلماتُكَ إلى الجِدار.",
+  },
+  "testimonial.error": {
+    en: "echo couldn\u2019t carry your words just now. try again in a moment.",
+    fr: "echo n'a pas pu porter tes mots à l'instant. réessaie dans un moment.",
+    ar: "لم يستطع إيكو أن يحمِلَ كلماتِكَ الآن. أعِدِ المحاولةَ بعدَ قليل.",
+  },
+  "testimonial.success.kicker": {
+    en: "received",
+    fr: "reçu",
+    ar: "وَصَلَت",
+  },
+  "testimonial.success.body": {
+    en: "thank you. echo heard you. your words will join the others tomorrow.",
+    fr: "merci. echo t'a entendu. tes mots rejoindront les autres demain.",
+    ar: "شُكرًا. سمِعَكَ إيكو. ستنضمُّ كلماتُكَ إلى البقيَّةِ غدًا.",
+  },
+
+  // ─── /auth/sign-in ──────────────────────────────────────────
+  "auth.signin.welcome": {
+    en: "Welcome to EchoMind.",
+    fr: "Bienvenue sur EchoMind.",
+    ar: "أهلًا بكَ في إيكومايند.",
+  },
+  "auth.signin.sub": {
+    en: "Sign in so Echo can remember you across devices.",
+    fr: "Connecte-toi pour qu'Echo te reconnaisse sur tous tes appareils.",
+    ar: "سجِّل دخولَكَ ليتذكَّرَكَ إيكو عبرَ أجهزتِك.",
+  },
+  "auth.signin.alreadyAs": {
+    en: "You\u2019re already signed in as",
+    fr: "Tu es déjà connecté en tant que",
+    ar: "أنتَ بالفعلِ مُسجَّلٌ باسم",
+  },
+  "auth.signin.continue": {
+    en: "Continue →",
+    fr: "Continuer →",
+    ar: "متابعة →",
+  },
+  "auth.signin.google": {
+    en: "Continue with Google",
+    fr: "Continuer avec Google",
+    ar: "تابِعْ بـ Google",
+  },
+  "auth.signin.email": {
+    en: "Continue with email",
+    fr: "Continuer par e-mail",
+    ar: "تابِعْ بالبريدِ الإلكترونيّ",
+  },
+  "auth.signin.emailLabel": {
+    en: "Your email",
+    fr: "Ton e-mail",
+    ar: "بريدُكَ الإلكترونيّ",
+  },
+  "auth.signin.emailPlaceholder": {
+    en: "you@example.com",
+    fr: "toi@exemple.com",
+    ar: "you@example.com",
+  },
+  "auth.signin.send": {
+    en: "Send me a 6-digit code",
+    fr: "Envoie-moi un code à 6 chiffres",
+    ar: "أرسِل إليَّ رمزًا من 6 أرقام",
+  },
+  "auth.signin.sending": {
+    en: "Sending code…",
+    fr: "Envoi du code…",
+    ar: "جارٍ الإرسال…",
+  },
+  "auth.signin.back": {
+    en: "← back",
+    fr: "← retour",
+    ar: "← رجوع",
+  },
+  "auth.signin.notConfigured": {
+    en: "Auth isn\u2019t configured on this preview.",
+    fr: "L'authentification n'est pas configurée sur cet aperçu.",
+    ar: "لم يُهيَّأ نظامُ الدخول في هذه المعاينة.",
+  },
+  "auth.signin.invalidEmail": {
+    en: "That email doesn\u2019t look right.",
+    fr: "Cet e-mail ne semble pas correct.",
+    ar: "هذا البريدُ لا يبدو صحيحًا.",
+  },
+  "auth.signin.tos.prefix": {
+    en: "By continuing you agree to the EchoMind",
+    fr: "En continuant tu acceptes les",
+    ar: "بالمتابعةِ توافقُ على",
+  },
+  "auth.signin.tos.terms": {
+    en: "Terms",
+    fr: "Conditions",
+    ar: "شروطِ",
+  },
+  "auth.signin.tos.suffix": {
+    en: "and confirm you are 18+.",
+    fr: "d'EchoMind et confirmes avoir 18 ans ou plus.",
+    ar: "إيكومايند وتؤكِّدُ أنَّكَ في الثامنةَ عشرةَ أو أكثر.",
+  },
+  "auth.signin.skip": {
+    en: "Or skip and continue anonymously",
+    fr: "Ou passe et continue anonymement",
+    ar: "أو تجاوَزْ وتابِع دون تعريف",
+  },
+  "auth.signin.divider.or": {
+    en: "or",
+    fr: "ou",
+    ar: "أو",
+  },
+
+  // ─── /auth/verify ───────────────────────────────────────────
+  "auth.verify.heading": {
+    en: "Check your email.",
+    fr: "Vérifie ta boîte mail.",
+    ar: "افحَصْ بريدَكَ.",
+  },
+  "auth.verify.sentTo": {
+    en: "I just sent a code to",
+    fr: "Je viens d'envoyer un code à",
+    ar: "أرسلتُ للتَّوِّ رمزًا إلى",
+  },
+  "auth.verify.pasteHint": {
+    en: "Paste the code from your email — works for {min}–{max} digit codes.",
+    fr: "Colle le code reçu — fonctionne pour les codes de {min} à {max} chiffres.",
+    ar: "ألصِق الرمزَ من بريدِك — يعمل مع الرموز من {min} إلى {max} أرقام.",
+  },
+  "auth.verify.fresh": {
+    en: "A fresh code is on its way.",
+    fr: "Un nouveau code arrive.",
+    ar: "رمزٌ جديدٌ في الطريق.",
+  },
+  "auth.verify.sendAnother": {
+    en: "Send another code",
+    fr: "Envoyer un autre code",
+    ar: "أرسِل رمزًا آخر",
+  },
+  "auth.verify.useDifferent": {
+    en: "← use a different email",
+    fr: "← utiliser un autre e-mail",
+    ar: "← استخدم بريدًا آخر",
+  },
+  "auth.verify.expired": {
+    en: "That code expired. Tap \u2018send another\u2019 below.",
+    fr: "Ce code a expiré. Appuie sur « envoyer un autre » ci-dessous.",
+    ar: "انتهت صلاحيَّةُ الرمز. اضغط «أرسل آخر» أسفل.",
+  },
+  "auth.verify.wrong": {
+    en: "That code wasn\u2019t quite right. Try again.",
+    fr: "Ce code n'est pas tout à fait bon. Réessaie.",
+    ar: "الرمزُ غيرُ مطابق. حاوِل ثانيةً.",
+  },
+  "auth.verify.missingEmail": {
+    en: "Missing email — start over from /auth/sign-in.",
+    fr: "E-mail manquant — recommence depuis /auth/sign-in.",
+    ar: "بريدٌ مفقود — أعِد البدءَ من /auth/sign-in.",
+  },
+
+  // ─── /ethics — chrome only (citations stay English) ─────────
+  "ethics.kicker": {
+    en: "A disclosure",
+    fr: "Une divulgation",
+    ar: "إفصاح",
+  },
+  "ethics.heading": {
+    en: "EchoMind is not a real product.",
+    fr: "EchoMind n'est pas un vrai produit.",
+    ar: "إيكومايند ليس منتجًا حقيقيًّا.",
+  },
+  "ethics.lead1.prefix": {
+    en: "It is a",
+    fr: "C'est un",
+    ar: "إنَّه",
+  },
+  "ethics.lead1.bold": {
+    en: "speculative design artifact",
+    fr: "artefact de design spéculatif",
+    ar: "عملٌ تصميميٌّ تأمُّليٌّ",
+  },
+  "ethics.lead1.suffix": {
+    en: "— a critical design fiction built to make visible the business model of emotional AI in mental-health technology. Everything you see has been modeled on capabilities that are currently being sold, deployed, or patented by real companies.",
+    fr: "— une fiction de design critique conçue pour rendre visible le modèle économique de l'IA émotionnelle dans les technologies de santé mentale. Tout ce que tu vois a été modélisé sur des capacités actuellement vendues, déployées ou brevetées par de vraies entreprises.",
+    ar: "— خيالٌ تصميميٌّ نقديٌّ بُنِيَ ليُظهِرَ نموذجَ عملِ الذكاءِ الاصطناعيِّ العاطفيِّ في تقنياتِ الصحَّةِ النفسيَّة. كلُّ ما تراهُ مَنمذَجٌ على قدراتٍ تَبيعُها أو تَنشُرُها أو تُسجِّلُ بَراءاتِها شرِكاتٌ حقيقيَّة.",
+  },
+  "ethics.lead2": {
+    en: "No camera data, transcript, or emotional inference ever leaves your browser. Nothing is transmitted to any server. The \u201cbuyers\u201d shown on the Partner Portal do not exist. The auction is pure fiction \u2014 designed to be exactly as plausible as the real data broker markets it imitates.",
+    fr: "Aucune donnée caméra, transcription ou inférence émotionnelle ne quitte ton navigateur. Rien n'est transmis à un serveur. Les « acheteurs » montrés sur le Partner Portal n'existent pas. L'enchère est pure fiction — conçue pour être exactement aussi plausible que les vrais marchés de courtiers en données qu'elle imite.",
+    ar: "لا تُغادِرُ متصفِّحَكَ بياناتُ كاميرا أو نصوصُ محادثةٍ أو استنتاجاتٌ عاطفية. لا شيءَ يُرسَلُ إلى أيِّ خادم. «المشترون» الظاهرونَ في بوَّابةِ الشُّركاءِ لا وُجودَ لهم. المزادُ خيالٌ بحت — صُمِّمَ ليكونَ مماثلًا في المعقوليَّةِ لأسواقِ سماسرةِ البياناتِ الحقيقيَّةِ التي يُحاكيها.",
+  },
+  "ethics.whatReal": {
+    en: "What is real",
+    fr: "Ce qui est réel",
+    ar: "ما هو حقيقيّ",
+  },
+  "ethics.whyBuild": {
+    en: "Why build it",
+    fr: "Pourquoi l'avoir construit",
+    ar: "لماذا بُنِيَ",
+  },
+  "ethics.whyBuild.body": {
+    en: "Because nothing here is impossible. Every mechanic is within the technical and legal reach of any venture-funded wellness startup tomorrow morning. Making it visible \u2014 making it feel, in the body, like a product you might actually use \u2014 is the only way to name the harm before it\u2019s normalized.",
+    fr: "Parce que rien ici n'est impossible. Chaque mécanique est à portée technique et légale de n'importe quelle startup wellness financée par capital-risque dès demain matin. Le rendre visible — le faire ressentir, dans le corps, comme un produit que tu pourrais vraiment utiliser — est la seule façon de nommer le mal avant qu'il ne soit normalisé.",
+    ar: "لأنَّ لا شيءَ هنا مستحيل. كلُّ آليَّةٍ في متناولِ أيِّ شركةٍ ناشئةٍ مُموَّلةٍ في مجالِ العافيةِ صباحَ الغد، تقنيًّا وقانونيًّا. جعلُ ذلكَ مرئيًّا — جعلُهُ مَحسوسًا في الجسد، كَمنتَجٍ قد تستخدمُهُ فعلًا — هو السَّبيلُ الوحيدُ لتسميةِ الأذى قبلَ أن يُصبِحَ مألوفًا.",
+  },
+  "ethics.guardrails": {
+    en: "Guardrails",
+    fr: "Garde-fous",
+    ar: "ضماناتٌ تقنيَّة",
+  },
+  "ethics.guardrails.1.prefix": {
+    en: "All face detection runs locally in the browser via",
+    fr: "Toute la détection de visage tourne localement dans le navigateur via",
+    ar: "كلُّ كَشْفِ الوجوهِ يجري محليًّا في المتصفِّحِ عبر",
+  },
+  "ethics.guardrails.2": {
+    en: "No network requests are made with emotional or facial data.",
+    fr: "Aucune requête réseau n'est faite avec des données émotionnelles ou faciales.",
+    ar: "لا تُرسَلُ أيُّ طلباتِ شبكةٍ تحوي بياناتٍ عاطفيَّةً أو وجهيَّة.",
+  },
+  "ethics.guardrails.3": {
+    en: "The source code is publicly available and commented as a design essay.",
+    fr: "Le code source est public et commenté comme un essai de design.",
+    ar: "الشِّفرةُ المصدريَّةُ متاحةٌ للعموم ومُعلَّقٌ عليها كمقالةٍ تصميميَّة.",
+  },
+  "ethics.guardrails.4": {
+    en: "Project intent: awareness and critique. Not a blueprint for production.",
+    fr: "Intention du projet : sensibilisation et critique. Pas un plan de production.",
+    ar: "نيَّةُ المشروع: التَّوعيةُ والنَّقد. لا مُخطَّطَ إنتاج.",
+  },
+  "ethics.help.heading": {
+    en: "If you or someone you know needs help",
+    fr: "Si toi ou quelqu'un que tu connais a besoin d'aide",
+    ar: "إذا احتجتَ أو احتاجَ من تعرفُ المساعدة",
+  },
+  "ethics.help.body": {
+    en: "Please reach out to a licensed professional or a crisis line in your country. In the U.S., the 988 Suicide & Crisis Lifeline is available 24/7 by call or text.",
+    fr: "Contacte un professionnel agréé ou une ligne de crise dans ton pays. Aux États-Unis, le 988 Suicide & Crisis Lifeline est disponible 24/7 par appel ou SMS.",
+    ar: "تواصَلْ مع مختصٍّ مرخَّصٍ أو خطِّ أزماتٍ في بلدِك. في الولاياتِ المتَّحدة، خطُّ 988 للأزمات والانتحارِ متاحٌ على مدار الساعةِ بالاتِّصالِ أو الرَّسائل.",
+  },
+  "ethics.builtBy": {
+    en: "Built by",
+    fr: "Créé par",
+    ar: "من تطوير",
+  },
+  "ethics.builtBy.body.prefix": {
+    en: "Built by",
+    fr: "Créé par les",
+    ar: "صُنِعَ من قِبَل",
+  },
+  "ethics.builtBy.students": {
+    en: "NHSAST students",
+    fr: "étudiants NHSAST",
+    ar: "طلَّابِ NHSAST",
+  },
+  "ethics.builtBy.at": {
+    en: "at",
+    fr: "à",
+    ar: "في",
+  },
+  "ethics.builtBy.location": {
+    en: "Sidi Abdallah",
+    fr: "Sidi Abdallah",
+    ar: "سيدي عبدالله",
+  },
+  "ethics.builtBy.where": {
+    en: ", Algiers, Algeria — for a university presentation on the theme",
+    fr: ", Alger, Algérie — pour une présentation universitaire sur le thème",
+    ar: "، الجزائر — لعرضٍ جامعيٍّ بعنوان",
+  },
+  "ethics.builtBy.theme": {
+    en: "\u201cAI is watching you\u201d",
+    fr: "« L'IA t'observe »",
+    ar: "«الذكاءُ الاصطناعيُّ يُراقِبُك»",
+  },
+  "ethics.connect.prefix": {
+    en: "Want to talk about this project? Connect with the developer on",
+    fr: "Envie d'en discuter ? Connecte-toi avec le développeur sur",
+    ar: "أتُريدُ الحديثَ عن المشروع؟ تواصَل مع المطوِّر على",
+  },
+  "ethics.connect.linkedin": {
+    en: "LinkedIn",
+    fr: "LinkedIn",
+    ar: "لينكدإن",
+  },
+  "ethics.copyright": {
+    en: "© 2026 · Speculative design only · No data is transmitted.",
+    fr: "© 2026 · Design spéculatif uniquement · Aucune donnée n'est transmise.",
+    ar: "© 2026 · تصميمٌ تأمُّليٌّ فقط · لا تُرسَلُ أيُّ بيانات.",
+  },
+  "ethics.return": {
+    en: "Return to the landing page",
+    fr: "Retour à la page d'accueil",
+    ar: "العودةُ إلى الصفحةِ الرئيسيَّة",
+  },
+
+  // ─── /terms — chrome only (legalese stays English by design) ─
+  "terms.lastUpdated": {
+    en: "Last updated: October 14, 2026 · Version 47.3 · NHSAST students",
+    fr: "Dernière mise à jour : 14 octobre 2026 · Version 47.3 · étudiants NHSAST",
+    ar: "آخر تحديث: 14 أكتوبر 2026 · النسخة 47.3 · طلَّابُ NHSAST",
+  },
+  "terms.heading": {
+    en: "Terms of Service",
+    fr: "Conditions d'Utilisation",
+    ar: "شروطُ الخدمة",
+  },
+  "terms.highlights.title": {
+    en: "Key Highlights",
+    fr: "Points clés",
+    ar: "أبرزُ النقاط",
+  },
+  "terms.highlights.label": {
+    en: "Plain-language summary",
+    fr: "Résumé en clair",
+    ar: "ملخَّصٌ بلغةٍ مبسَّطة",
+  },
+  "terms.highlights.disclaimer": {
+    en: "This is a friendly summary. The full Terms below are legally binding.",
+    fr: "Ceci est un résumé amical. Les conditions complètes ci-dessous sont juridiquement contraignantes.",
+    ar: "هذا ملخَّصٌ ودودٌ فقط. الشروطُ الكاملةُ أدناه ملزِمةٌ قانونيًّا.",
+  },
+  "terms.highlights.1": {
+    en: "Your face data never leaves your device.",
+    fr: "Les données de ton visage ne quittent jamais ton appareil.",
+    ar: "بياناتُ وجهِكَ لا تُغادِرُ جهازَكَ أبدًا.",
+  },
+  "terms.highlights.2": {
+    en: "No ads, ever.",
+    fr: "Pas de publicités, jamais.",
+    ar: "لا إعلاناتٍ. أبدًا.",
+  },
+  "terms.highlights.3": {
+    en: "Cancel or delete anytime.",
+    fr: "Annule ou supprime à tout moment.",
+    ar: "ألغِ أو احذِف في أيِّ وقت.",
+  },
+  "terms.highlights.4": {
+    en: "Reviewed by licensed therapists.",
+    fr: "Révisé par des thérapeutes agréés.",
+    ar: "روجِعَ من مُعالِجينَ مُرخَّصين.",
+  },
+  "terms.contact.prefix": {
+    en: "If you have questions about these Terms, please email",
+    fr: "Si tu as des questions sur ces Conditions, écris à",
+    ar: "إن كانت لديكَ أسئلةٌ حولَ هذهِ الشروط، راسِلنا على",
+  },
+  "terms.disclosureLink": {
+    en: "This is a critical design artifact. Learn what\u2019s real →",
+    fr: "Ceci est un artefact de design critique. Découvre ce qui est réel →",
+    ar: "هذا عملٌ تصميميٌّ نقديّ. اكتشِف ما هو حقيقيّ →",
+  },
+
+  // ─── Morning letter envelope (returning user reveal) ─────────
+  "letter.aria.openButton": {
+    en: "open the letter Echo left for you",
+    fr: "ouvre la lettre qu'Echo t'a laissée",
+    ar: "افتَحِ الرِّسالةَ الَّتي تركَها لكَ إيكو",
+  },
+  "letter.tapOpen": {
+    en: "tap to open",
+    fr: "touche pour ouvrir",
+    ar: "المَسْ للفَتْح",
+  },
+  "letter.opening": {
+    en: "opening\u2026",
+    fr: "ouverture\u2026",
+    ar: "يُفتَحُ الآن\u2026",
+  },
+  "letter.fromEcho": {
+    en: "a letter from echo",
+    fr: "une lettre d'echo",
+    ar: "رِسالةٌ مِن إيكو",
+  },
+  "letter.close": {
+    en: "close",
+    fr: "fermer",
+    ar: "إغلاق",
+  },
 } as const satisfies Record<string, StringSet>;
 
 export type StringKey = keyof typeof STRINGS;

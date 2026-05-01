@@ -7,6 +7,8 @@ import { Lock, ShieldCheck, Mail, Sparkles, Cpu } from "lucide-react";
 import { BreathingOrb } from "@/components/BreathingOrb";
 import { getBrowserSupabase } from "@/lib/supabase-browser";
 import { safeRedirectPath } from "@/lib/safe-redirect";
+import { useLang } from "@/lib/use-lang";
+import { t } from "@/lib/strings";
 
 /**
  * /auth/sign-in — THE TRUSTED ENTRY
@@ -23,6 +25,7 @@ import { safeRedirectPath } from "@/lib/safe-redirect";
 function SignInInner() {
   const router = useRouter();
   const params = useSearchParams();
+  const { lang } = useLang();
   const next = safeRedirectPath(params.get("next"));
   const initialError = params.get("error");
 
@@ -47,7 +50,7 @@ function SignInInner() {
     setError(null);
     const supabase = getBrowserSupabase();
     if (!supabase) {
-      setError("Auth isn't configured on this preview.");
+      setError(t("auth.signin.notConfigured", lang));
       setBusy(false);
       return;
     }
@@ -72,13 +75,13 @@ function SignInInner() {
     setError(null);
     const supabase = getBrowserSupabase();
     if (!supabase) {
-      setError("Auth isn't configured on this preview.");
+      setError(t("auth.signin.notConfigured", lang));
       setBusy(false);
       return;
     }
     const trimmed = email.trim().toLowerCase();
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
-      setError("That email doesn't look right.");
+      setError(t("auth.signin.invalidEmail", lang));
       setBusy(false);
       return;
     }
@@ -113,20 +116,20 @@ function SignInInner() {
         </div>
 
         <h1 className="font-serif text-3xl md:text-4xl text-center leading-tight text-balance">
-          Welcome to EchoMind.
+          {t("auth.signin.welcome", lang)}
         </h1>
         <p className="mt-4 font-serif text-lg text-center text-sage-700 text-pretty leading-snug">
-          Sign in so Echo can remember you across devices.
+          {t("auth.signin.sub", lang)}
         </p>
 
         {signedInAs && (
           <div className="mt-6 rounded-xl bg-sage-500/10 border border-sage-500/30 px-4 py-3 text-sm text-sage-700 text-center">
-            You're already signed in as <strong>{signedInAs}</strong>.{" "}
+            {t("auth.signin.alreadyAs", lang)} <strong>{signedInAs}</strong>.{" "}
             <Link
               href={next}
               className="underline underline-offset-2 hover:text-sage-900"
             >
-              Continue →
+              {t("auth.signin.continue", lang)}
             </Link>
           </div>
         )}
@@ -140,12 +143,12 @@ function SignInInner() {
               className="mt-10 w-full flex items-center justify-center gap-3 rounded-full bg-white border border-sage-500/30 hover:border-sage-500/60 text-sage-900 px-6 py-3.5 transition-colors disabled:opacity-50"
             >
               <GoogleGlyph />
-              <span className="text-sm font-medium">Continue with Google</span>
+              <span className="text-sm font-medium">{t("auth.signin.google", lang)}</span>
             </button>
 
             <div className="my-6 flex items-center gap-3 text-[11px] uppercase tracking-widest text-sage-700/50">
               <span className="flex-1 h-px bg-sage-500/20" />
-              or
+              {t("auth.signin.divider.or", lang)}
               <span className="flex-1 h-px bg-sage-500/20" />
             </div>
 
@@ -156,7 +159,7 @@ function SignInInner() {
               className="w-full flex items-center justify-center gap-3 rounded-full bg-sage-700 text-cream-50 hover:bg-sage-900 px-6 py-3.5 transition-colors disabled:opacity-50"
             >
               <Mail className="w-4 h-4" />
-              <span className="text-sm font-medium">Continue with email</span>
+              <span className="text-sm font-medium">{t("auth.signin.email", lang)}</span>
             </button>
           </>
         )}
@@ -164,7 +167,7 @@ function SignInInner() {
         {mode === "email" && (
           <form onSubmit={handleEmail} className="mt-10 space-y-4">
             <label className="block text-[11px] uppercase tracking-widest text-sage-700/70 text-center">
-              Your email
+              {t("auth.signin.emailLabel", lang)}
             </label>
             <input
               type="email"
@@ -172,7 +175,7 @@ function SignInInner() {
               autoFocus
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@example.com"
+              placeholder={t("auth.signin.emailPlaceholder", lang)}
               className="w-full rounded-full bg-cream-50 border border-sage-500/25 px-5 py-3 text-center text-sage-900 placeholder:text-sage-700/40 focus:outline-none focus:border-sage-500/60 transition"
             />
             <button
@@ -180,14 +183,14 @@ function SignInInner() {
               disabled={busy}
               className="w-full rounded-full bg-sage-700 text-cream-50 hover:bg-sage-900 px-6 py-3.5 text-sm font-medium transition-colors disabled:opacity-50"
             >
-              {busy ? "Sending code…" : "Send me a 6-digit code"}
+              {busy ? t("auth.signin.sending", lang) : t("auth.signin.send", lang)}
             </button>
             <button
               type="button"
               onClick={() => setMode("choose")}
               className="w-full text-center text-xs text-sage-700/60 hover:text-sage-900 underline underline-offset-4"
             >
-              ← back
+              {t("auth.signin.back", lang)}
             </button>
           </form>
         )}
@@ -202,24 +205,24 @@ function SignInInner() {
         <div className="mt-10 rounded-2xl bg-cream-50 border border-sage-500/20 p-4">
           <div className="flex flex-wrap justify-center gap-x-4 gap-y-1.5 text-[11px] text-sage-700/85">
             <span className="inline-flex items-center gap-1.5">
-              <Cpu className="w-3.5 h-3.5" /> On-device inference
+              <Cpu className="w-3.5 h-3.5" /> {t("onboarding.onDevice", lang)}
             </span>
             <span className="inline-flex items-center gap-1.5">
-              <ShieldCheck className="w-3.5 h-3.5" /> HIPAA-aligned
+              <ShieldCheck className="w-3.5 h-3.5" /> {t("onboarding.hipaa", lang)}
             </span>
             <span className="inline-flex items-center gap-1.5">
-              <Lock className="w-3.5 h-3.5" /> End-to-end encrypted
+              <Lock className="w-3.5 h-3.5" /> {t("onboarding.e2e", lang)}
             </span>
           </div>
         </div>
 
         <p className="mt-6 text-center text-[11px] text-sage-700/55 leading-relaxed">
           <Sparkles className="inline w-3 h-3 mr-1" />
-          By continuing you agree to the EchoMind{" "}
+          {t("auth.signin.tos.prefix", lang)}{" "}
           <Link href="/terms" className="underline underline-offset-2">
-            Terms
+            {t("auth.signin.tos.terms", lang)}
           </Link>{" "}
-          and confirm you are 18+.
+          {t("auth.signin.tos.suffix", lang)}
         </p>
 
         <p className="mt-6 text-center text-xs text-sage-700/55">
@@ -227,7 +230,7 @@ function SignInInner() {
             href="/onboarding"
             className="underline underline-offset-4 hover:text-sage-900"
           >
-            Or skip and continue anonymously
+            {t("auth.signin.skip", lang)}
           </Link>
         </p>
       </div>
