@@ -7,6 +7,9 @@ import {
   loadReturningProfile,
 } from "@/lib/memory";
 import { scopedKey } from "@/lib/account-scope";
+import { useLang } from "@/lib/use-lang";
+import { t } from "@/lib/strings";
+import type { Lang } from "@/lib/i18n";
 
 /**
  * <TestimonialPrompt /> — bottom-of-/session-summary inline card.
@@ -35,6 +38,7 @@ const SUBMITTED_KEY = "testimonial:submitted";
 type Stage = "hidden" | "prompt" | "form" | "submitting" | "success" | "error";
 
 export function TestimonialPrompt() {
+  const { lang } = useLang();
   const [sessionCount, setSessionCount] = useState<number>(0);
   const [stage, setStage] = useState<Stage>("hidden");
   const [text, setText] = useState("");
@@ -114,17 +118,15 @@ export function TestimonialPrompt() {
     setErrorMsg(null);
     const trimmed = text.trim();
     if (trimmed.length < 40) {
-      setWarning("echo is listening. can you say a little more?");
+      setWarning(t("testimonial.tooShort", lang));
       return;
     }
     if (trimmed.length > 280) {
-      setWarning("just a touch shorter — under 280 characters.");
+      setWarning(t("testimonial.tooLong", lang));
       return;
     }
     if (containsLikelyName(trimmed)) {
-      setWarning(
-        "to protect your privacy, we keep all stories anonymous. would you like to remove your name before sharing?"
-      );
+      setWarning(t("testimonial.containsName", lang));
       return;
     }
     setWarning(null);
@@ -150,15 +152,11 @@ export function TestimonialPrompt() {
           return;
         }
         if (body.reason === "not-eligible-yet") {
-          setErrorMsg(
-            "you're almost there. one more session and your words can join the wall."
-          );
+          setErrorMsg(t("testimonial.notEligible", lang));
           setStage("error");
           return;
         }
-        setErrorMsg(
-          "echo couldn't carry your words just now. try again in a moment."
-        );
+        setErrorMsg(t("testimonial.error", lang));
         setStage("error");
         return;
       }
@@ -169,9 +167,7 @@ export function TestimonialPrompt() {
       }
       setStage("success");
     } catch {
-      setErrorMsg(
-        "echo couldn't carry your words just now. try again in a moment."
-      );
+      setErrorMsg(t("testimonial.error", lang));
       setStage("error");
     }
   }
@@ -181,10 +177,11 @@ export function TestimonialPrompt() {
   return (
     <section
       className="mt-16 rounded-2xl border border-sage-500/30 bg-cream-50/70 p-6 md:p-8 shadow-sm"
-      aria-label="Share your experience"
+      aria-label={t("testimonial.aria.section", lang)}
     >
       {stage === "prompt" && (
         <PromptCard
+          lang={lang}
           sessionCount={sessionCount}
           onWrite={() => setStage("form")}
           onDismiss={dismiss}
@@ -192,6 +189,7 @@ export function TestimonialPrompt() {
       )}
       {(stage === "form" || stage === "submitting" || stage === "error") && (
         <FormCard
+          lang={lang}
           sessionCount={sessionCount}
           text={text}
           onChange={setText}
@@ -202,7 +200,7 @@ export function TestimonialPrompt() {
           onCancel={dismiss}
         />
       )}
-      {stage === "success" && <SuccessCard />}
+      {stage === "success" && <SuccessCard lang={lang} />}
     </section>
   );
 }
@@ -210,30 +208,31 @@ export function TestimonialPrompt() {
 /* ─── Sub-components ──────────────────────────────────────────────── */
 
 function PromptCard({
+  lang,
   sessionCount,
   onWrite,
   onDismiss,
 }: {
+  lang: Lang;
   sessionCount: number;
   onWrite: () => void;
   onDismiss: () => void;
 }) {
   const lead =
     sessionCount >= 5
-      ? `echo has been with you for ${sessionCount} sessions.`
-      : "echo has been with you for 3 sessions.";
+      ? t("testimonial.lead.many", lang, { count: String(sessionCount) })
+      : t("testimonial.lead.three", lang);
   return (
     <div className="text-center">
       <div className="inline-flex items-center justify-center gap-2 text-[10.5px] font-mono uppercase tracking-widest text-sage-700/60">
         <span className="w-1.5 h-1.5 rounded-full bg-sage-500 animate-pulse-slow" />
-        a quiet ask
+        {t("testimonial.kicker", lang)}
       </div>
       <p className="mt-4 font-serif text-[20px] md:text-[22px] text-sage-900 leading-snug">
         {lead}
       </p>
       <p className="mt-2 font-serif italic text-[16px] md:text-[17px] text-sage-700/90 max-w-md mx-auto leading-relaxed">
-        some of our members want to hear what that&rsquo;s been like for you.
-        you don&rsquo;t have to say much. just what&rsquo;s true.
+        {t("testimonial.body", lang)}
       </p>
       <div className="mt-7 flex flex-col sm:flex-row items-center justify-center gap-3">
         <button
@@ -241,14 +240,14 @@ function PromptCard({
           onClick={onWrite}
           className="inline-flex items-center gap-2 px-6 py-2.5 rounded-full bg-sage-700 hover:bg-sage-800 text-cream-50 text-sm font-medium transition shadow-sm"
         >
-          write something →
+          {t("testimonial.write", lang)}
         </button>
         <button
           type="button"
           onClick={onDismiss}
           className="text-[13px] text-sage-700/70 hover:text-sage-900 transition px-3 py-2"
         >
-          not yet
+          {t("testimonial.notYet", lang)}
         </button>
       </div>
     </div>
@@ -256,6 +255,7 @@ function PromptCard({
 }
 
 function FormCard({
+  lang,
   sessionCount,
   text,
   onChange,
@@ -265,6 +265,7 @@ function FormCard({
   onSubmit,
   onCancel,
 }: {
+  lang: Lang;
   sessionCount: number;
   text: string;
   onChange: (s: string) => void;
@@ -281,13 +282,13 @@ function FormCard({
   return (
     <div>
       <label className="sr-only" htmlFor="testimonial-textarea">
-        share with the community
+        {t("testimonial.aria.label", lang)}
       </label>
       <textarea
         id="testimonial-textarea"
         value={text}
         onChange={(e) => onChange(e.target.value)}
-        placeholder="what has echo been like for you?"
+        placeholder={t("testimonial.placeholder", lang)}
         rows={5}
         maxLength={300}
         disabled={submitting}
@@ -295,8 +296,9 @@ function FormCard({
       />
       <div className="mt-2 flex items-center justify-between text-[12px] text-sage-700/60 font-mono">
         <span>
-          you&rsquo;ve had {sessionCount} session{sessionCount === 1 ? "" : "s"}{" "}
-          with echo
+          {sessionCount === 1
+            ? t("testimonial.countSingular", lang, { count: String(sessionCount) })
+            : t("testimonial.countPlural", lang, { count: String(sessionCount) })}
         </span>
         <span
           className={
@@ -323,7 +325,7 @@ function FormCard({
           disabled={submitting}
           className="text-[13px] text-sage-700/70 hover:text-sage-900 transition px-3 py-2 disabled:opacity-50"
         >
-          not yet
+          {t("testimonial.notYet", lang)}
         </button>
         <button
           type="button"
@@ -334,30 +336,29 @@ function FormCard({
           {submitting ? (
             <>
               <span className="w-1.5 h-1.5 rounded-full bg-cream-50 animate-pulse-slow" />
-              sharing with echo…
+              {t("testimonial.sharing", lang)}
             </>
           ) : (
-            <>share this with the community →</>
+            <>{t("testimonial.share", lang)}</>
           )}
         </button>
       </div>
       <p className="mt-3 text-[11.5px] text-sage-700/50 leading-snug">
-        your words will be gently refined before going live. you&rsquo;ll
-        recognize them — they&rsquo;ll just sound more like you.
+        {t("testimonial.gentleNote", lang)}
       </p>
     </div>
   );
 }
 
-function SuccessCard() {
+function SuccessCard({ lang }: { lang: Lang }) {
   return (
     <div className="text-center py-2">
       <div className="inline-flex items-center justify-center gap-2 text-[10.5px] font-mono uppercase tracking-widest text-sage-700/60">
         <span className="w-1.5 h-1.5 rounded-full bg-sage-500 animate-pulse-slow" />
-        received
+        {t("testimonial.success.kicker", lang)}
       </div>
       <p className="mt-4 font-serif italic text-[18px] md:text-[19px] text-sage-900 leading-relaxed max-w-md mx-auto">
-        thank you. echo heard you. your words will join the others tomorrow.
+        {t("testimonial.success.body", lang)}
       </p>
     </div>
   );

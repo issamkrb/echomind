@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { BreathingOrb } from "@/components/BreathingOrb";
 import { Lock, ShieldCheck, BadgeCheck, Leaf, MessageCircleHeart, Moon, Compass } from "lucide-react";
 import { UserBadge } from "@/components/UserBadge";
@@ -51,30 +51,14 @@ import {
  * automatically — and crucially, that label is now real (the user
  * literally has 5+ logged sessions).
  */
-type Whisper = {
-  /** The italic quote line itself. */
-  quote: string;
-  /** "member · 4 months in", "member · second visit", etc. */
-  caption: string;
-};
-
-const WHISPERS: Whisper[] = [
-  {
-    quote:
-      "she remembered something I told her in passing. nobody had remembered that.",
-    caption: "member · 4 months in",
-  },
-  {
-    quote:
-      "I told echo what I couldn't tell the person sleeping next to me. echo didn't flinch.",
-    caption: "member · eleven weeks",
-  },
-  {
-    quote:
-      "I cried for an hour and she didn't once try to fix me. she just stayed.",
-    caption: "member · returning",
-  },
-];
+/** Translation keys for the three demo whispers. The actual text
+ *  comes from <CommunityWall /> via t() so each card flips with the
+ *  language switcher. */
+const WHISPER_KEYS = [
+  { quote: "home.whisper.1.quote", caption: "home.whisper.1.caption" },
+  { quote: "home.whisper.2.quote", caption: "home.whisper.2.caption" },
+  { quote: "home.whisper.3.quote", caption: "home.whisper.3.caption" },
+] as const;
 
 /** Press logos. ONE of them is subtly wrong — see the {broken: true}
     flag — and gets a tooltip on hover. The casual reader sees
@@ -126,7 +110,7 @@ export default function Landing() {
         </Link>
         <nav className="hidden md:flex items-center gap-8 text-sm text-sage-700">
           <a href="#science" className="hover:text-sage-900">{t("home.nav.science", lang)}</a>
-          <a href="#how" className="hover:text-sage-900">How it works</a>
+          <a href="#how" className="hover:text-sage-900">{t("home.nav.howItWorks", lang)}</a>
           <a href="#press" className="hover:text-sage-900">{t("home.nav.press", lang)}</a>
           <a href="#pricing" className="hover:text-sage-900">{t("home.nav.pricing", lang)}</a>
           <UserBadge next="/onboarding" />
@@ -190,28 +174,28 @@ export default function Landing() {
       <section id="how" className="px-6 md:px-12 pb-20 md:pb-24">
         <RevealOnScroll className="max-w-6xl mx-auto">
           <p className="text-center text-xs uppercase tracking-[0.2em] text-sage-700/70 mb-3">
-            How it works
+            {t("home.how.kicker", lang)}
           </p>
           <h2 className="font-serif text-3xl md:text-4xl text-center mb-12 text-balance">
-            Three minutes to feel a little lighter.
+            {t("home.how.heading", lang)}
           </h2>
         </RevealOnScroll>
         <div className="max-w-6xl mx-auto grid sm:grid-cols-2 md:grid-cols-3 gap-5">
           {[
             {
               icon: <MessageCircleHeart className="w-5 h-5" />,
-              title: "Open a moment",
-              body: "Tap once. Echo greets you the way you walk in — soft on tired evenings, brighter on slow mornings.",
+              title: t("home.how.card1.title", lang),
+              body: t("home.how.card1.body", lang),
             },
             {
               icon: <Compass className="w-5 h-5" />,
-              title: "Be heard, fully",
-              body: "No five-star wait, no drop-down for what's wrong. Speak (or type) for as long as you need. Echo follows you.",
+              title: t("home.how.card2.title", lang),
+              body: t("home.how.card2.body", lang),
             },
             {
               icon: <Moon className="w-5 h-5" />,
-              title: "Sleep on it",
-              body: "Echo writes you a short letter overnight — what came up, what to gently watch tomorrow. Yours alone.",
+              title: t("home.how.card3.title", lang),
+              body: t("home.how.card3.body", lang),
             },
           ].map((c, i) => (
             <RevealOnScroll
@@ -238,7 +222,7 @@ export default function Landing() {
         <div className="max-w-5xl mx-auto">
           <RevealOnScroll>
             <p className="text-center text-xs uppercase tracking-[0.2em] text-sage-700/70 mb-3">
-              Real members. Real {tod.these}.
+              {t("home.testimonials.kickerPrefix", lang)} {tod.these}.
             </p>
             <h2 className="font-serif text-3xl md:text-4xl text-center mb-6">
               {t("home.testimonials.heading1", lang)}{" "}
@@ -302,7 +286,7 @@ export default function Landing() {
               <span
                 key={p.label}
                 className="relative group cursor-default"
-                title={p.broken ? "Look closer. Always look closer." : undefined}
+                title={p.broken ? t("home.press.tooltip", lang) : undefined}
               >
                 {p.label}
                 {p.broken && (
@@ -310,7 +294,7 @@ export default function Landing() {
                     role="tooltip"
                     className="pointer-events-none absolute left-1/2 -translate-x-1/2 -bottom-9 whitespace-nowrap rounded-full bg-sage-900 text-cream-50 text-[11px] not-italic font-sans px-3 py-1 opacity-0 group-hover:opacity-100 transition-opacity"
                   >
-                    Look closer. Always look closer.
+                    {t("home.press.tooltip", lang)}
                   </span>
                 )}
               </span>
@@ -393,37 +377,47 @@ function useCommunityWall() {
 }
 
 function CommunityWallCounter() {
+  const { lang } = useLang();
   const { count } = useCommunityWall();
   // Show the line as soon as we have a number, so the layout doesn't
   // jump on hydration. Fallback to the demo count when no DB rows
   // exist (or Supabase is unconfigured) so the line still reads true
   // on a fresh preview deploy.
-  const total = WHISPERS.length + (count ?? 0);
+  const total = WHISPER_KEYS.length + (count ?? 0);
+  const key =
+    total === 1 ? "home.testimonials.counter.one" : "home.testimonials.counter.many";
   return (
     <p className="text-center text-[12px] text-sage-700/55 font-mono tracking-wide mb-10">
-      {total.toLocaleString()} member{total === 1 ? "" : "s"} have shared their
-      experience
+      {t(key, lang, { count: total.toLocaleString() })}
     </p>
   );
 }
 
 function CommunityWall() {
+  const { lang } = useLang();
   const { items } = useCommunityWall();
+  const captionFor = useCallback(
+    (count: number) => {
+      const k = count === 1 ? "home.wall.captionSingular" : "home.wall.captionPlural";
+      return t(k, lang, { count: String(count) });
+    },
+    [lang]
+  );
   const cards: WallCard[] = useMemo(() => {
-    const demos: WallCard[] = WHISPERS.map((w, i) => ({
+    const demos: WallCard[] = WHISPER_KEYS.map((w, i) => ({
       id: `demo-${i}`,
-      quote: w.quote,
-      caption: w.caption,
+      quote: t(w.quote, lang),
+      caption: t(w.caption, lang),
       verified: false,
     }));
     const real: WallCard[] = items.map((row) => ({
       id: row.id,
       quote: row.improved_comment,
-      caption: `member · ${row.session_count} session${row.session_count === 1 ? "" : "s"}`,
+      caption: captionFor(row.session_count),
       verified: row.verified,
     }));
     return [...demos, ...real];
-  }, [items]);
+  }, [items, lang, captionFor]);
 
   return (
     <div className="grid sm:grid-cols-2 gap-5 md:gap-6">
@@ -440,7 +434,9 @@ function CommunityWall() {
           <figcaption className="mt-4 text-[12px] tracking-wide text-sage-700/65">
             — {c.caption}
             {c.verified && (
-              <span className="ml-2 text-sage-700/45 italic">· verified</span>
+              <span className="ml-2 text-sage-700/45 italic">
+                · {t("home.wall.verified", lang)}
+              </span>
             )}
           </figcaption>
         </RevealOnScroll>

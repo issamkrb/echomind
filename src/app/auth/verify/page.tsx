@@ -7,6 +7,8 @@ import { BreathingOrb } from "@/components/BreathingOrb";
 import { getBrowserSupabase } from "@/lib/supabase-browser";
 import { invalidateViewerCache } from "@/lib/use-viewer";
 import { safeRedirectPath } from "@/lib/safe-redirect";
+import { useLang } from "@/lib/use-lang";
+import { t } from "@/lib/strings";
 
 /**
  * /auth/verify — numeric OTP entry.
@@ -34,6 +36,7 @@ function configuredLength(): number {
 
 function VerifyInner() {
   const params = useSearchParams();
+  const { lang } = useLang();
   const email = params.get("email") || "";
   const next = safeRedirectPath(params.get("next"));
 
@@ -111,12 +114,12 @@ function VerifyInner() {
     setError(null);
     const supabase = getBrowserSupabase();
     if (!supabase) {
-      setError("Auth isn't configured on this preview.");
+      setError(t("auth.signin.notConfigured", lang));
       setBusy(false);
       return;
     }
     if (!email) {
-      setError("Missing email — start over from /auth/sign-in.");
+      setError(t("auth.verify.missingEmail", lang));
       setBusy(false);
       return;
     }
@@ -128,8 +131,8 @@ function VerifyInner() {
     if (verifyErr) {
       setError(
         verifyErr.message.toLowerCase().includes("expired")
-          ? "That code expired. Tap 'send another' below."
-          : "That code wasn't quite right. Try again."
+          ? t("auth.verify.expired", lang)
+          : t("auth.verify.wrong", lang)
       );
       setDigits(Array(length).fill(""));
       inputs.current[0]?.focus();
@@ -146,7 +149,7 @@ function VerifyInner() {
     setError(null);
     const supabase = getBrowserSupabase();
     if (!supabase) {
-      setError("Auth isn't configured on this preview.");
+      setError(t("auth.signin.notConfigured", lang));
       setBusy(false);
       return;
     }
@@ -170,10 +173,10 @@ function VerifyInner() {
         </div>
 
         <h1 className="font-serif text-3xl text-center leading-tight">
-          Check your email.
+          {t("auth.verify.heading", lang)}
         </h1>
         <p className="mt-3 text-center text-sage-700">
-          I just sent a code to
+          {t("auth.verify.sentTo", lang)}
           <br />
           <strong className="text-sage-900">{email || "—"}</strong>.
         </p>
@@ -206,7 +209,10 @@ function VerifyInner() {
         </div>
 
         <p className="mt-3 text-center text-[11px] text-sage-700/60">
-          Paste the code from your email — works for {MIN_OTP}–{MAX_OTP} digit codes.
+          {t("auth.verify.pasteHint", lang, {
+            min: String(MIN_OTP),
+            max: String(MAX_OTP),
+          })}
         </p>
 
         {error && (
@@ -217,7 +223,7 @@ function VerifyInner() {
 
         <div className="mt-8 flex flex-col items-center gap-3 text-xs text-sage-700/70">
           {resentAt && (
-            <p className="text-sage-700">A fresh code is on its way.</p>
+            <p className="text-sage-700">{t("auth.verify.fresh", lang)}</p>
           )}
           <button
             type="button"
@@ -225,13 +231,13 @@ function VerifyInner() {
             disabled={busy}
             className="underline underline-offset-4 hover:text-sage-900 disabled:opacity-50"
           >
-            Send another code
+            {t("auth.verify.sendAnother", lang)}
           </button>
           <Link
             href="/auth/sign-in"
             className="underline underline-offset-4 hover:text-sage-900"
           >
-            ← use a different email
+            {t("auth.verify.useDifferent", lang)}
           </Link>
         </div>
       </div>

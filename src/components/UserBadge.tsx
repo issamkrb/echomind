@@ -4,6 +4,8 @@ import Link from "next/link";
 import { LogIn } from "lucide-react";
 import { useViewer } from "@/lib/use-viewer";
 import { LangPicker } from "@/components/LangPicker";
+import { useLang } from "@/lib/use-lang";
+import { t } from "@/lib/strings";
 
 /**
  * Compact identity chip for the top-right of nav bars. Shows avatar +
@@ -29,6 +31,7 @@ export function UserBadge({
   align?: "right" | "left";
 }) {
   const v = useViewer();
+  const { lang } = useLang();
 
   if (v.status === "loading") {
     return (
@@ -53,7 +56,7 @@ export function UserBadge({
           className="inline-flex items-center gap-1.5 text-xs text-sage-700 hover:text-sage-900 underline-offset-4 hover:underline"
         >
           <LogIn className="w-3.5 h-3.5" />
-          Sign in
+          {t("common.signIn", lang)}
         </Link>
       </div>
     );
@@ -87,7 +90,7 @@ export function UserBadge({
           type="submit"
           className="text-[11px] text-sage-700/60 hover:text-sage-900 underline underline-offset-4"
         >
-          sign out
+          {t("common.signOut", lang)}
         </button>
       </form>
     </div>

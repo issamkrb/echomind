@@ -7,6 +7,8 @@ import { useEmotionStore } from "@/store/emotion-store";
 import { ArrowRight, Activity, Sparkles, ShieldCheck } from "lucide-react";
 import { timeOfDayPhrases } from "@/lib/prompts";
 import { useLang } from "@/lib/use-lang";
+import { t, type StringKey } from "@/lib/strings";
+import type { Lang } from "@/lib/i18n";
 import { getOrCreateAnonUserId } from "@/lib/memory";
 
 /**
@@ -47,6 +49,72 @@ const FALLBACK_TAGS = [
   "Vulnerable",
   "Opened up",
 ] as const;
+
+/** Map an English tag (the API returns these) to its localised form
+ *  via the insight.tag.* keys. Unknown tags fall through to the
+ *  English value so we never render an empty cell. */
+function localiseTag(tag: string, lang: Lang): string {
+  const k = TAG_KEYS[tag];
+  if (!k) return tag;
+  return t(k, lang);
+}
+const TAG_KEYS: Record<string, StringKey> = {
+  Anxious: "insight.tag.anxious",
+  Guarded: "insight.tag.guarded",
+  Lifted: "insight.tag.lifted",
+  Tense: "insight.tag.tense",
+  Mixed: "insight.tag.mixed",
+  Vulnerable: "insight.tag.vulnerable",
+  "Opened up": "insight.tag.opened",
+};
+
+/** Map the lowercase tone word the API returns into its localised
+ *  form via the insight.tone.* keys. */
+function localiseTone(tone: string, lang: Lang): string {
+  const k = TONE_KEYS[tone];
+  if (!k) return tone;
+  return t(k, lang);
+}
+const TONE_KEYS: Record<string, StringKey> = {
+  anxious: "insight.tone.anxious",
+  guarded: "insight.tone.guarded",
+  lifted: "insight.tone.lifted",
+  tense: "insight.tone.tense",
+  mixed: "insight.tone.mixed",
+  vulnerable: "insight.tone.vulnerable",
+  open: "insight.tone.open",
+};
+
+/** Localised three-letter day labels keyed by the JS getDay() index. */
+const DAY_KEYS: StringKey[] = [
+  "insight.day.sun",
+  "insight.day.mon",
+  "insight.day.tue",
+  "insight.day.wed",
+  "insight.day.thu",
+  "insight.day.fri",
+  "insight.day.sat",
+];
+
+/** Map an API-returned day label ("Today", "Mon", …) to its localised
+ *  three-letter form. The API ships English labels because day-of-week
+ *  belongs to a wall-clock concept, not language; we translate at the
+ *  edge. */
+const DAY_LABEL_KEYS: Record<string, StringKey> = {
+  Today: "insight.day.today",
+  Sun: "insight.day.sun",
+  Mon: "insight.day.mon",
+  Tue: "insight.day.tue",
+  Wed: "insight.day.wed",
+  Thu: "insight.day.thu",
+  Fri: "insight.day.fri",
+  Sat: "insight.day.sat",
+};
+function localiseDayLabel(label: string, lang: Lang): string {
+  const k = DAY_LABEL_KEYS[label];
+  if (!k) return label;
+  return t(k, lang);
+}
 
 type MoodDay = {
   date: string;
@@ -120,7 +188,7 @@ export default function FirstInsight() {
     return () => clearTimeout(id);
   }, [secondsLeft, router]);
 
-  const days: MoodDay[] = payload?.mood.days ?? buildEmptyWeek();
+  const days: MoodDay[] = payload?.mood.days ?? buildEmptyWeek(lang);
   const tags: string[] = payload?.tags ?? Array.from(FALLBACK_TAGS);
   const wellnessScore = payload?.wellness.score ?? null;
   const liftEstimate = payload?.wellness.lift_estimate ?? null;
@@ -135,8 +203,6 @@ export default function FirstInsight() {
   const gaugePct = (wellnessScore ?? 0) / 100;
   const gaugeOffset = 220 - 220 * gaugePct;
 
-  const friendly = firstName ? firstName : "you";
-
   // Banner copy. When we have a real dominant emotion from today's
   // session we report it directly. When we have a session but it
   // wasn't today, we soften to "this week". When we have nothing,
@@ -144,18 +210,19 @@ export default function FirstInsight() {
   const bannerCopy = banner
     ? banner.today
       ? {
-          headline: `Echo noticed you seemed ${banner.tone} today.`,
-          tail:
-            friendly === "you"
-              ? `You're not alone. Most ${tod.these} on Echo start here.`
-              : `You're not alone. Most of ${friendly}'s ${tod.these} start here.`,
+          headline: `${t("insight.banner.todayPrefix", lang)} ${localiseTone(banner.tone, lang)} ${t("insight.banner.todaySuffix", lang)}`,
+          tail: firstName
+            ? t("insight.banner.tail.named.today", lang, {
+                name: firstName,
+                tod: tod.these,
+              })
+            : t("insight.banner.tail.you.today", lang, { tod: tod.these }),
         }
       : {
-          headline: `Echo's reading of your week so far: ${banner.tone}.`,
-          tail:
-            friendly === "you"
-              ? "Some weeks land here. The next session can shift it."
-              : `Some of ${friendly}'s weeks land here. The next session can shift it.`,
+          headline: `${t("insight.banner.weekPrefix", lang)} ${localiseTone(banner.tone, lang)}.`,
+          tail: firstName
+            ? t("insight.banner.tail.named.week", lang, { name: firstName })
+            : t("insight.banner.tail.you.week", lang),
         }
     : null;
 
@@ -166,22 +233,20 @@ export default function FirstInsight() {
           <div className="w-6 h-6 rounded-full orb-core" aria-hidden />
           <span className="font-serif">EchoMind</span>
           <span className="ml-auto text-[11px] uppercase tracking-[0.2em] text-sage-700/60">
-            Your reading
+            {t("insight.kicker", lang)}
           </span>
         </header>
 
         <h1 className="font-serif text-3xl sm:text-4xl md:text-5xl leading-tight tracking-tight text-balance">
-          Welcome{firstName ? `, ${firstName}` : ""}.<br />
+          {t("insight.welcome", lang)}{firstName ? `, ${firstName}` : ""}.<br />
           <span className="text-sage-700">
             {hasData
-              ? "Here\u2019s what we\u2019ve already noticed."
-              : "Your week begins now."}
+              ? t("insight.subhead.has", lang)
+              : t("insight.subhead.empty", lang)}
           </span>
         </h1>
         <p className="mt-3 text-sage-700/80 text-[15px] max-w-xl">
-          {hasData
-            ? "A quiet first read of how the past week has felt. Drawn from your own sessions \u2014 nothing fabricated, nothing shared."
-            : "Echo hasn\u2019t met you yet. The graph below fills in from your own sessions. Nothing on this page is pre-written."}
+          {hasData ? t("insight.lead.has", lang) : t("insight.lead.empty", lang)}
         </p>
 
         {/* Banner — only when we actually have something to say. */}
@@ -203,10 +268,10 @@ export default function FirstInsight() {
             </div>
             <div className="text-[14px] sm:text-[15px] leading-snug text-sage-900">
               <strong className="font-semibold">
-                Nothing to read yet.
+                {t("insight.banner.empty.headline", lang)}
               </strong>{" "}
               <span className="text-sage-700/85">
-                Your first session writes the first line of this graph.
+                {t("insight.banner.empty.tail", lang)}
               </span>
             </div>
           </div>
@@ -219,15 +284,15 @@ export default function FirstInsight() {
             <div className="flex items-center justify-between mb-4">
               <div>
                 <div className="text-[11px] uppercase tracking-[0.18em] text-sage-700/70">
-                  Last 7 days
+                  {t("insight.last7", lang)}
                 </div>
-                <div className="font-serif text-xl mt-0.5">Mood pattern</div>
+                <div className="font-serif text-xl mt-0.5">
+                  {t("insight.moodPattern", lang)}
+                </div>
               </div>
               <span className="inline-flex items-center gap-1.5 text-[11px] text-sage-700/70 rounded-full border border-sage-500/20 px-2.5 py-1">
                 <Activity className="w-3 h-3" />{" "}
-                {variability === "none"
-                  ? "not enough data"
-                  : `${variability} variability`}
+                {t(`insight.variability.${variability}` as StringKey, lang)}
               </span>
             </div>
 
@@ -302,7 +367,7 @@ export default function FirstInsight() {
                         : ""
                     }
                   >
-                    {d.label}
+                    {localiseDayLabel(d.label, lang)}
                   </span>
                 ))}
               </div>
@@ -318,7 +383,7 @@ export default function FirstInsight() {
                       : "bg-sage-500/10 text-sage-700/85"
                   }`}
                 >
-                  {label}
+                  {localiseTag(label, lang)}
                 </span>
               ))}
             </div>
@@ -327,10 +392,10 @@ export default function FirstInsight() {
           {/* WELLNESS GAUGE */}
           <div className="md:col-span-2 rounded-3xl bg-cream-50 border border-sage-500/15 p-5 sm:p-6 flex flex-col">
             <div className="text-[11px] uppercase tracking-[0.18em] text-sage-700/70">
-              Wellness score
+              {t("insight.wellness.heading", lang)}
             </div>
             <div className="font-serif text-xl mt-0.5">
-              {tod.nowCap}&rsquo;s reading
+              {t("insight.wellness.now", lang, { tod: tod.nowCap })}
             </div>
 
             <div className="mt-3 flex-1 grid place-items-center">
@@ -378,10 +443,10 @@ export default function FirstInsight() {
 
             <p className="mt-3 text-[12px] text-sage-700/80 leading-snug">
               {wellnessScore === null
-                ? "Echo will compute this from your first session forward."
+                ? t("insight.wellness.empty", lang)
                 : liftEstimate !== null && liftEstimate > 0
-                  ? `Your average session has lifted this by about \u00a0${liftEstimate}\u00a0points. The next one writes itself.`
-                  : "Echo will refine this with every session. Nothing here is final."}
+                  ? t("insight.wellness.lift", lang, { n: String(liftEstimate) })
+                  : t("insight.wellness.refine", lang)}
             </p>
           </div>
         </section>
@@ -390,9 +455,7 @@ export default function FirstInsight() {
         <div className="mt-7 sm:mt-9 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <span className="inline-flex items-center gap-2 text-[12px] text-sage-700/70">
             <ShieldCheck className="w-4 h-4" />
-            {hasData
-              ? "Drawn from your own sessions. Nothing pre-written."
-              : "Calculated on-device. Yours alone."}
+            {hasData ? t("insight.trust.has", lang) : t("insight.trust.empty", lang)}
           </span>
           <button
             type="button"
@@ -401,24 +464,27 @@ export default function FirstInsight() {
           >
             {hasData ? (
               <>
-                Continue to your next session{" "}
+                {t("insight.cta.next", lang)}{" "}
                 <ArrowRight className="w-4 h-4" />
               </>
             ) : (
               <>
-                Begin my first session <ArrowRight className="w-4 h-4" />
+                {t("insight.cta.first", lang)} <ArrowRight className="w-4 h-4" />
               </>
             )}
           </button>
         </div>
 
         <p className="mt-3 text-[11px] text-sage-700/50 text-center sm:text-right">
-          Auto-continuing in {Math.max(secondsLeft, 0)}s ·{" "}
+          {t("insight.autoContinue", lang, {
+            n: String(Math.max(secondsLeft, 0)),
+          })}
+          {" · "}
           <Link
             href="/session"
             className="underline underline-offset-4 hover:text-sage-900"
           >
-            skip
+            {t("insight.skip", lang)}
           </Link>
         </p>
       </div>
@@ -512,15 +578,17 @@ function toSegment(pts: ChartPoint[], pad: number): ChartSegment {
 
 /** Empty 7-day skeleton used while the API is loading or when
  *  Supabase is unconfigured. */
-function buildEmptyWeek(): MoodDay[] {
-  const labels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+function buildEmptyWeek(lang: Lang): MoodDay[] {
   const now = new Date();
   const out: MoodDay[] = [];
   for (let i = 6; i >= 0; i--) {
     const d = new Date(now.getTime() - i * 24 * 60 * 60_000);
     out.push({
       date: d.toISOString().slice(0, 10),
-      label: i === 0 ? "Today" : labels[d.getDay()],
+      label:
+        i === 0
+          ? t("insight.day.today", lang)
+          : t(DAY_KEYS[d.getDay()], lang),
       score: null,
       session_count: 0,
     });
