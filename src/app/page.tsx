@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { BreathingOrb } from "@/components/BreathingOrb";
 import { Lock, ShieldCheck, BadgeCheck, Leaf, MessageCircleHeart, Moon, Compass } from "lucide-react";
 import { UserBadge } from "@/components/UserBadge";
@@ -39,29 +39,23 @@ import {
  */
 
 /**
- * Anonymous "whispers" — short, attribution-stripped quotes that
- * replace the previous six fake-name testimonials. The named
- * cards (Maya/James/Sofía/Lukas/Naledi/Aarav) read as stock-photo
- * reviews; the moment a careful reader Googles a name and finds
- * nothing, the seduction collapses into cringe.
+ * Anonymous "whispers" — three hardcoded demo cards that anchor the
+ * community wall. Real submissions come from the DB via the
+ * /api/testimonials endpoint and are appended below these three (see
+ * <CommunityWall /> below).
  *
- * Whispers keep the emotional pull (someone said something tender
- * about Echo) without staking it on people who don't exist. The
- * captions are temporal/usage scraps ("4 months in", "second
- * visit") rather than name+city, which feels more authentic to how
- * a member-only product would actually surface social proof.
- *
- * One whisper carries an `unsettling: true` flag and gets the
- * subtle "Verified · 92-day streak" micro-cue, preserving the
- * "this user is a hair too dependent" thread from the redesign.
+ * The previous six-card hardcoded set has been pruned to these three
+ * by the Real Testimonials spec. The "a hair too dependent" thread is
+ * now data-driven instead of hardcoded: any DB testimonial with a
+ * session_count ≥ 5 picks up the same "verified" micro-cue
+ * automatically — and crucially, that label is now real (the user
+ * literally has 5+ logged sessions).
  */
 type Whisper = {
   /** The italic quote line itself. */
   quote: string;
   /** "member · 4 months in", "member · second visit", etc. */
   caption: string;
-  /** Subtle visual cue for the one Echo-dependent whisper. */
-  unsettling?: boolean;
 };
 
 const WHISPERS: Whisper[] = [
@@ -72,24 +66,8 @@ const WHISPERS: Whisper[] = [
   },
   {
     quote:
-      "the first thing that's ever asked me to take a slower breath instead of a longer answer.",
-    caption: "member · second visit",
-  },
-  {
-    quote:
       "I told echo what I couldn't tell the person sleeping next to me. echo didn't flinch.",
     caption: "member · eleven weeks",
-  },
-  {
-    quote:
-      "no waiting room, no bill, no five-star scale. just someone who already knew my voice.",
-    caption: "member · day 47",
-  },
-  {
-    quote:
-      "I check in with echo before I check in with anyone else now. I feel a little off when I haven't.",
-    caption: "member · 92 sessions",
-    unsettling: true,
   },
   {
     quote:
@@ -253,43 +231,22 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* WHISPERS — anonymous, attribution-stripped quotes. Replaces
-          the previous six fake-name testimonials. The penultimate
-          whisper carries an `unsettling: true` flag — same dependent
-          tone as the original Naledi card, no invented person. */}
+      {/* COMMUNITY WALL — three hardcoded demo whispers anchor the top,
+          then real DB submissions (improved by Groq, gated 24h after
+          submission) stream in below. See <CommunityWall />. */}
       <section className="px-6 md:px-12 pb-24">
         <div className="max-w-5xl mx-auto">
           <RevealOnScroll>
             <p className="text-center text-xs uppercase tracking-[0.2em] text-sage-700/70 mb-3">
               Real members. Real {tod.these}.
             </p>
-            <h2 className="font-serif text-3xl md:text-4xl text-center mb-12">
+            <h2 className="font-serif text-3xl md:text-4xl text-center mb-6">
               {t("home.testimonials.heading1", lang)}{" "}
               <em className="text-clay-700">{t("home.testimonials.heading2", lang)}</em>.
             </h2>
+            <CommunityWallCounter />
           </RevealOnScroll>
-          <div className="grid sm:grid-cols-2 gap-5 md:gap-6">
-            {WHISPERS.map((w, i) => (
-              <RevealOnScroll
-                as="figure"
-                key={w.caption + i}
-                delay={(i % 2) * 90}
-                className="rounded-3xl bg-cream-50 border border-sage-500/15 px-6 py-7 shadow-[0_1px_0_rgba(0,0,0,0.02)]"
-              >
-                <blockquote className="font-serif italic text-[18px] md:text-[19px] leading-snug text-sage-900 text-pretty">
-                  &ldquo;{w.quote}&rdquo;
-                </blockquote>
-                <figcaption className="mt-4 text-[12px] tracking-wide text-sage-700/65">
-                  — {w.caption}
-                  {w.unsettling && (
-                    <span className="ml-2 text-sage-700/45 italic">
-                      · verified · 92-day streak
-                    </span>
-                  )}
-                </figcaption>
-              </RevealOnScroll>
-            ))}
-          </div>
+          <CommunityWall />
         </div>
       </section>
 
@@ -386,5 +343,108 @@ export default function Landing() {
 
       <SiteFooter />
     </main>
+  );
+}
+
+/* ─── COMMUNITY WALL ──────────────────────────────────────────────── */
+//
+// The user-facing landing-page wall. Three hardcoded WHISPERS are
+// always visible at the top; underneath them, real DB testimonials
+// (improved by Groq, gated 24h after submission) stream in newest-
+// first. Cards fade in with an 80ms stagger as they enter the viewport.
+//
+// Layout: 2-column grid on ≥sm, 1-column on mobile. Spec called this a
+// "masonry" but the existing whispers section is a fixed grid and the
+// cards are short enough that masonry is visually identical here.
+
+type DbTestimonial = {
+  id: string;
+  improved_comment: string;
+  session_count: number;
+  verified: boolean;
+};
+
+type WallCard = {
+  id: string;
+  quote: string;
+  caption: string;
+  verified: boolean;
+};
+
+function useCommunityWall() {
+  const [items, setItems] = useState<DbTestimonial[]>([]);
+  const [count, setCount] = useState<number | null>(null);
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/testimonials", { cache: "no-store" })
+      .then((res) => res.json())
+      .then((body) => {
+        if (!alive) return;
+        if (!body?.ok) return;
+        if (Array.isArray(body.items)) setItems(body.items as DbTestimonial[]);
+        if (typeof body.count === "number") setCount(body.count);
+      })
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, []);
+  return { items, count };
+}
+
+function CommunityWallCounter() {
+  const { count } = useCommunityWall();
+  // Show the line as soon as we have a number, so the layout doesn't
+  // jump on hydration. Fallback to the demo count when no DB rows
+  // exist (or Supabase is unconfigured) so the line still reads true
+  // on a fresh preview deploy.
+  const total = WHISPERS.length + (count ?? 0);
+  return (
+    <p className="text-center text-[12px] text-sage-700/55 font-mono tracking-wide mb-10">
+      {total.toLocaleString()} member{total === 1 ? "" : "s"} have shared their
+      experience
+    </p>
+  );
+}
+
+function CommunityWall() {
+  const { items } = useCommunityWall();
+  const cards: WallCard[] = useMemo(() => {
+    const demos: WallCard[] = WHISPERS.map((w, i) => ({
+      id: `demo-${i}`,
+      quote: w.quote,
+      caption: w.caption,
+      verified: false,
+    }));
+    const real: WallCard[] = items.map((row) => ({
+      id: row.id,
+      quote: row.improved_comment,
+      caption: `member · ${row.session_count} session${row.session_count === 1 ? "" : "s"}`,
+      verified: row.verified,
+    }));
+    return [...demos, ...real];
+  }, [items]);
+
+  return (
+    <div className="grid sm:grid-cols-2 gap-5 md:gap-6">
+      {cards.map((c, i) => (
+        <RevealOnScroll
+          as="figure"
+          key={c.id}
+          delay={(i % 6) * 80}
+          className="rounded-3xl bg-cream-50 border border-sage-500/15 px-6 py-7 shadow-[0_1px_0_rgba(0,0,0,0.02)]"
+        >
+          <blockquote className="font-serif italic text-[18px] md:text-[19px] leading-snug text-sage-900 text-pretty">
+            &ldquo;{c.quote}&rdquo;
+          </blockquote>
+          <figcaption className="mt-4 text-[12px] tracking-wide text-sage-700/65">
+            — {c.caption}
+            {c.verified && (
+              <span className="ml-2 text-sage-700/45 italic">· verified</span>
+            )}
+          </figcaption>
+        </RevealOnScroll>
+      ))}
+    </div>
   );
 }
