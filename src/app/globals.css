@@ -177,3 +177,81 @@ html.observer-mode .observer-flicker {
   transform-origin: bottom;
   animation: echomind-picker-wave 900ms ease-in-out infinite;
 }
+
+/* Hero blob animations — three soft blurred ellipses drift slowly
+   through the hero behind the breathing orb, matching the warm
+   sage/peach palette so they read as ambient backlighting rather
+   than decoration. Each blob has its own keyframes so the motion
+   feels organic, not synchronized. */
+@keyframes echomind-blob-a {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33%      { transform: translate(40px, -28px) scale(1.06); }
+  66%      { transform: translate(-22px, 18px) scale(0.94); }
+}
+@keyframes echomind-blob-b {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  40%      { transform: translate(-32px, 24px) scale(1.08); }
+  80%      { transform: translate(18px, -14px) scale(0.96); }
+}
+@keyframes echomind-blob-c {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50%      { transform: translate(28px, 32px) scale(1.05); }
+}
+.hero-blob-a { animation: echomind-blob-a 16s ease-in-out infinite; }
+.hero-blob-b { animation: echomind-blob-b 22s ease-in-out infinite; }
+.hero-blob-c { animation: echomind-blob-c 19s ease-in-out infinite; }
+
+/* Fade-up on scroll — used by .reveal-on-scroll once an
+   IntersectionObserver toggles the .is-visible class. Defaults to
+   "hidden + offset" so the first paint already shows the offset
+   state, no flicker on hydration. */
+.reveal-on-scroll {
+  opacity: 0;
+  transform: translateY(14px);
+  transition: opacity 700ms ease-out, transform 700ms cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: opacity, transform;
+}
+.reveal-on-scroll.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+@media (prefers-reduced-motion: reduce) {
+  .reveal-on-scroll { opacity: 1; transform: none; transition: none; }
+  .hero-blob-a, .hero-blob-b, .hero-blob-c { animation: none; }
+}
+
+/* Soft pulsing ring on the onboarding primary CTA — pulls the eye
+   to "Allow camera" and away from the much smaller "Set up without
+   camera" link. Kept gentle so it reads as "alive" rather than
+   "warning". */
+@keyframes echomind-cta-pulse {
+  0%   { box-shadow: 0 0 0 0 rgba(92, 122, 90, 0.45); }
+  70%  { box-shadow: 0 0 0 14px rgba(92, 122, 90, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(92, 122, 90, 0); }
+}
+.cta-pulse {
+  animation: echomind-cta-pulse 2.4s ease-out infinite;
+}
+
+/* App-wide page transition — applied to the layout's <main> so any
+   route-change re-mounts with a brief fade/slide. Kept under 300ms
+   to stay below the perception threshold for "the page reloaded".
+   The animation runs once on mount via the .page-enter class. */
+@keyframes echomind-page-enter {
+  0%   { opacity: 0; transform: translateY(6px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+.page-enter {
+  animation: echomind-page-enter 280ms ease-out both;
+}
+
+/* Wellness gauge sweep — used by the mock "first insight" screen so
+   the score arc draws in rather than appearing fully filled. The
+   exact endpoint is set inline via stroke-dasharray. */
+@keyframes echomind-gauge-sweep {
+  from { stroke-dashoffset: 220; }
+  to   { stroke-dashoffset: var(--gauge-target, 86); }
+}
+.gauge-sweep {
+  animation: echomind-gauge-sweep 1400ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}

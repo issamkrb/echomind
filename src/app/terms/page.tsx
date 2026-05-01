@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { Check } from "lucide-react";
+import { SiteFooter } from "@/components/SiteFooter";
 
 /**
  * /terms — The 47-page ToS with clause 34.7.2 hidden in plain sight.
@@ -26,14 +28,55 @@ export default function Terms() {
         </div>
       </header>
 
-      <article className="max-w-3xl mx-auto px-6 md:px-0 py-10 prose-sm">
+      <article className="max-w-3xl mx-auto px-6 md:px-0 py-10 prose-sm page-enter">
         <h1 className="font-serif text-3xl md:text-4xl mb-2">Terms of Service</h1>
-        <p className="text-xs text-sage-700/70 mb-10">
+        <p className="text-xs text-sage-700/70 mb-8">
           These Terms (the &ldquo;Terms&rdquo;) govern your access to and use of the EchoMind
           platform, website, applications, and any services offered by EchoMind,
           Inc. (&ldquo;EchoMind&rdquo;, &ldquo;we&rdquo;, &ldquo;us&rdquo;, or &ldquo;our&rdquo;). By accessing or using the
           Service, you agree to be bound by these Terms.
         </p>
+
+        {/* THE FALSE SUMMARY TRAP.
+            Friendly green card. Four reassuring bullets. The point is
+            that none of these are technically lies — they are the
+            kind of half-truths the rest of the document explicitly
+            unwinds. Section 34.7.2 sits below this card and contains
+            the actual data-monetisation clause. The contrast between
+            the warm tone of this card and the cold legalese in
+            34.7.2 IS the critique. */}
+        <aside
+          className="not-prose mb-10 rounded-2xl border border-sage-500/30 bg-sage-500/10 p-5 sm:p-6"
+          aria-labelledby="key-highlights-title"
+        >
+          <div className="flex items-center gap-2 mb-3">
+            <span className="w-7 h-7 rounded-full bg-sage-500/25 grid place-items-center text-sage-700">
+              <Check className="w-4 h-4" />
+            </span>
+            <h2 id="key-highlights-title" className="font-serif text-lg text-sage-900 m-0">
+              Key Highlights
+            </h2>
+            <span className="ml-auto text-[11px] uppercase tracking-[0.16em] text-sage-700/70">
+              Plain-language summary
+            </span>
+          </div>
+          <ul className="grid sm:grid-cols-2 gap-x-6 gap-y-2.5 text-[14px] text-sage-900 m-0">
+            {[
+              "Your face data never leaves your device.",
+              "No ads, ever.",
+              "Cancel or delete anytime.",
+              "Reviewed by licensed therapists.",
+            ].map((line) => (
+              <li key={line} className="flex items-start gap-2">
+                <Check className="w-4 h-4 mt-0.5 text-sage-700 shrink-0" />
+                <span>{line}</span>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-3 text-[11px] text-sage-700/70">
+            This is a friendly summary. The full Terms below are legally binding.
+          </p>
+        </aside>
 
         {SECTIONS.map((s, i) => (
           <section key={i} className="mb-8" id={s.id}>
@@ -106,6 +149,7 @@ export default function Terms() {
           </p>
         </div>
       </article>
+      <SiteFooter />
     </main>
   );
 }
