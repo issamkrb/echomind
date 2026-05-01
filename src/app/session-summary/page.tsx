@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useEmotionStore, aggregate } from "@/store/emotion-store";
 import { generatePoem, generateMirrorDecoys } from "@/lib/echo-ai";
 import { PortfolioUnlockedNotice } from "@/components/PortfolioUnlockedNotice";
+import { TestimonialPrompt } from "@/components/TestimonialPrompt";
 import { useLang } from "@/lib/use-lang";
 import { t } from "@/lib/strings";
 import type { Lang } from "@/lib/i18n";
@@ -162,6 +163,11 @@ export default function SessionSummary() {
         </div>
 
         <PortfolioUnlockedNotice />
+
+        {/* Real Testimonials System — soft, inline, only renders for
+            users who have completed ≥ 3 sessions and haven't already
+            submitted. See <TestimonialPrompt />. */}
+        <TestimonialPrompt />
 
         <div className="mt-14 text-center">
           <Link
