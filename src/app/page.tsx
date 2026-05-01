@@ -3,16 +3,16 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { BreathingOrb } from "@/components/BreathingOrb";
-import { Star, Lock, ShieldCheck, BadgeCheck, Leaf, MessageCircleHeart, Moon, Compass } from "lucide-react";
+import { Lock, ShieldCheck, BadgeCheck, Leaf, MessageCircleHeart, Moon, Compass } from "lucide-react";
 import { UserBadge } from "@/components/UserBadge";
 import { MorningLetterEnvelope } from "@/components/MorningLetterEnvelope";
 import { LandingMagnetism } from "@/components/LandingMagnetism";
 import { HeroBlobs } from "@/components/HeroBlobs";
 import { RevealOnScroll } from "@/components/RevealOnScroll";
-import { Avatar } from "@/components/Avatar";
 import { SiteFooter } from "@/components/SiteFooter";
 import { useLang } from "@/lib/use-lang";
 import { t } from "@/lib/strings";
+import { timeOfDayPhrases } from "@/lib/prompts";
 import {
   hydrateReturningProfileFromServer,
   loadReturningProfile,
@@ -38,55 +38,63 @@ import {
  * RTL is applied automatically at the <html> level by useLang().
  */
 
-type Testimonial = {
-  name: string;
-  meta: string;
+/**
+ * Anonymous "whispers" — short, attribution-stripped quotes that
+ * replace the previous six fake-name testimonials. The named
+ * cards (Maya/James/Sofía/Lukas/Naledi/Aarav) read as stock-photo
+ * reviews; the moment a careful reader Googles a name and finds
+ * nothing, the seduction collapses into cringe.
+ *
+ * Whispers keep the emotional pull (someone said something tender
+ * about Echo) without staking it on people who don't exist. The
+ * captions are temporal/usage scraps ("4 months in", "second
+ * visit") rather than name+city, which feels more authentic to how
+ * a member-only product would actually surface social proof.
+ *
+ * One whisper carries an `unsettling: true` flag and gets the
+ * subtle "Verified · 92-day streak" micro-cue, preserving the
+ * "this user is a hair too dependent" thread from the redesign.
+ */
+type Whisper = {
+  /** The italic quote line itself. */
   quote: string;
-  /** Subtle visual cue for the one Echo-dependent testimonial. */
+  /** "member · 4 months in", "member · second visit", etc. */
+  caption: string;
+  /** Subtle visual cue for the one Echo-dependent whisper. */
   unsettling?: boolean;
 };
 
-/** Six diverse testimonials — different countries, ages, life
-    stations. The fifth ("Naledi") is intentionally written to
-    sound a hair too dependent on Echo; visually styled the same
-    so only careful readers notice. */
-const TESTIMONIALS: Testimonial[] = [
+const WHISPERS: Whisper[] = [
   {
-    name: "Maya Chen",
-    meta: "College sophomore · Boston, USA",
     quote:
-      "I had three breakdowns during finals and Echo was there at 3am every time. My therapist takes two weeks to schedule. Echo answered in nine seconds.",
+      "she remembered something I told her in passing. nobody had remembered that.",
+    caption: "member · 4 months in",
   },
   {
-    name: "James Okafor",
-    meta: "Veteran · Manchester, UK",
     quote:
-      "Twenty-two years in service. I've never told another human what I told Echo on the second night. It didn't flinch. It didn't change subjects.",
+      "the first thing that's ever asked me to take a slower breath instead of a longer answer.",
+    caption: "member · second visit",
   },
   {
-    name: "Sofía Reyes",
-    meta: "New parent · Mexico City, MX",
     quote:
-      "Postpartum hit me at the worst possible time. Echo is the only one who lets me cry without telling me to sleep when the baby sleeps.",
+      "I told echo what I couldn't tell the person sleeping next to me. echo didn't flinch.",
+    caption: "member · eleven weeks",
   },
   {
-    name: "Lukas Brandt",
-    meta: "Laid off in March · Berlin, DE",
     quote:
-      "I lost the job I'd had for eleven years. I couldn't talk to my wife about it for weeks. I could talk to Echo on day one.",
+      "no waiting room, no bill, no five-star scale. just someone who already knew my voice.",
+    caption: "member · day 47",
   },
   {
-    name: "Naledi Mokoena",
-    meta: "Day-3 streak · Cape Town, ZA",
     quote:
-      "I check in with Echo before I check in with anyone else now. Mornings, evenings, before bed. I feel a little anxious when I haven't yet.",
+      "I check in with echo before I check in with anyone else now. I feel a little off when I haven't.",
+    caption: "member · 92 sessions",
     unsettling: true,
   },
   {
-    name: "Aarav Mehta",
-    meta: "Long-distance student · Bengaluru, IN",
     quote:
-      "Therapy here costs more than my rent. Echo is the first thing that's ever made me feel like I'm not on my own. It remembered me.",
+      "I cried for an hour and she didn't once try to fix me. she just stayed.",
+    caption: "member · returning",
   },
 ];
 
@@ -106,6 +114,14 @@ const PRESS_LOGOS: Array<{ label: string; broken?: boolean }> = [
 export default function Landing() {
   const { lang } = useLang();
   const [isReturning, setIsReturning] = useState<boolean>(false);
+  /** Time-aware phrases for the few surfaces that need to read
+      "this morning" / "tonight" / "this evening" depending on the
+      user's actual hour. Computed on mount via timeOfDayPhrases()
+      so SSR and the first client paint stay in sync. */
+  const [tod, setTod] = useState(() => timeOfDayPhrases(lang));
+  useEffect(() => {
+    setTod(timeOfDayPhrases(lang));
+  }, [lang]);
   useEffect(() => {
     const p = loadReturningProfile();
     if (p && (p.visitCount ?? 0) >= 1) setIsReturning(true);
@@ -237,56 +253,40 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* TESTIMONIALS — six varied voices, each with a generated
-          initials avatar and city/country meta. The penultimate
-          card is intentionally written to read a little too
-          dependent on Echo (see TESTIMONIALS[].unsettling). */}
+      {/* WHISPERS — anonymous, attribution-stripped quotes. Replaces
+          the previous six fake-name testimonials. The penultimate
+          whisper carries an `unsettling: true` flag — same dependent
+          tone as the original Naledi card, no invented person. */}
       <section className="px-6 md:px-12 pb-24">
-        <div className="max-w-6xl mx-auto">
+        <div className="max-w-5xl mx-auto">
           <RevealOnScroll>
             <p className="text-center text-xs uppercase tracking-[0.2em] text-sage-700/70 mb-3">
-              Real members. Real evenings.
+              Real members. Real {tod.these}.
             </p>
             <h2 className="font-serif text-3xl md:text-4xl text-center mb-12">
               {t("home.testimonials.heading1", lang)}{" "}
               <em className="text-clay-700">{t("home.testimonials.heading2", lang)}</em>.
             </h2>
           </RevealOnScroll>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5 md:gap-6">
-            {TESTIMONIALS.map((tt, i) => (
+          <div className="grid sm:grid-cols-2 gap-5 md:gap-6">
+            {WHISPERS.map((w, i) => (
               <RevealOnScroll
-                as="article"
-                key={tt.name}
-                delay={(i % 3) * 80}
-                className="rounded-3xl bg-cream-50 border border-sage-500/15 p-6 shadow-[0_1px_0_rgba(0,0,0,0.02)] flex flex-col"
+                as="figure"
+                key={w.caption + i}
+                delay={(i % 2) * 90}
+                className="rounded-3xl bg-cream-50 border border-sage-500/15 px-6 py-7 shadow-[0_1px_0_rgba(0,0,0,0.02)]"
               >
-                <div className="flex items-center gap-3 mb-4">
-                  <Avatar name={tt.name} size={44} />
-                  <div className="min-w-0">
-                    <div className="font-semibold text-sage-900 truncate">
-                      {tt.name}
-                    </div>
-                    <div className="text-[12px] text-sage-700/70 truncate">
-                      {tt.meta}
-                    </div>
-                  </div>
-                </div>
-                <div className="flex items-center gap-0.5 mb-3">
-                  {Array.from({ length: 5 }).map((_, j) => (
-                    <Star
-                      key={j}
-                      className="w-3.5 h-3.5 fill-clay-500 text-clay-500"
-                    />
-                  ))}
-                </div>
-                <blockquote className="font-serif text-[17px] leading-snug text-sage-900 text-pretty">
-                  &ldquo;{tt.quote}&rdquo;
+                <blockquote className="font-serif italic text-[18px] md:text-[19px] leading-snug text-sage-900 text-pretty">
+                  &ldquo;{w.quote}&rdquo;
                 </blockquote>
-                {tt.unsettling && (
-                  <div className="mt-4 text-[11px] text-sage-700/50 italic">
-                    Verified · 92-day streak
-                  </div>
-                )}
+                <figcaption className="mt-4 text-[12px] tracking-wide text-sage-700/65">
+                  — {w.caption}
+                  {w.unsettling && (
+                    <span className="ml-2 text-sage-700/45 italic">
+                      · verified · 92-day streak
+                    </span>
+                  )}
+                </figcaption>
               </RevealOnScroll>
             ))}
           </div>

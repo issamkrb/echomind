@@ -5,6 +5,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useEmotionStore } from "@/store/emotion-store";
 import { ArrowRight, Activity, Sparkles, ShieldCheck } from "lucide-react";
+import { timeOfDayPhrases } from "@/lib/prompts";
+import { useLang } from "@/lib/use-lang";
 
 /**
  * /onboarding/insight — "YOUR FIRST INSIGHT"
@@ -50,6 +52,13 @@ const WELLNESS_SCORE = 61;
 export default function FirstInsight() {
   const router = useRouter();
   const firstName = useEmotionStore((s) => s.firstName);
+  const { lang } = useLang();
+  /** Time-of-day phrases — "this morning" / "this evening" / "tonight".
+      Computed on mount so a 9am visitor doesn't see "Tonight's reading". */
+  const [tod, setTod] = useState(() => timeOfDayPhrases(lang));
+  useEffect(() => {
+    setTod(timeOfDayPhrases(lang));
+  }, [lang]);
 
   // Build the polyline path once on mount. Coordinates are in a
   // 0..1 unit space; the SVG itself sets viewBox for scaling.
@@ -120,7 +129,7 @@ export default function FirstInsight() {
           <div className="text-[14px] sm:text-[15px] leading-snug text-clay-900">
             <strong className="font-semibold">Echo noticed you seemed tense today.</strong>{" "}
             <span className="text-clay-700">
-              You&rsquo;re not alone. {friendly === "you" ? "Most evenings on Echo start here." : `Most of ${friendly}'s evenings start here.`}
+              You&rsquo;re not alone. {friendly === "you" ? `Most ${tod.these} on Echo start here.` : `Most of ${friendly}'s ${tod.these} start here.`}
             </span>
           </div>
         </div>
@@ -239,7 +248,7 @@ export default function FirstInsight() {
             <div className="text-[11px] uppercase tracking-[0.18em] text-sage-700/70">
               Wellness score
             </div>
-            <div className="font-serif text-xl mt-0.5">Tonight&rsquo;s reading</div>
+            <div className="font-serif text-xl mt-0.5">{tod.nowCap}&rsquo;s reading</div>
 
             <div className="mt-3 flex-1 grid place-items-center">
               <div className="relative w-44 h-24">

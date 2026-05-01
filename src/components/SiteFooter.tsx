@@ -43,11 +43,13 @@ export function SiteFooter() {
           <Link href="/ethics" className="hover:text-sage-900">
             About this project
           </Link>
-          <a href="#" className="hover:text-sage-900">
+          <a
+            href="https://findahelpline.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hover:text-sage-900"
+          >
             {t("home.footer.crisis", lang)}
-          </a>
-          <a href="#" className="hover:text-sage-900">
-            {t("home.footer.contact", lang)}
           </a>
           <a
             href={ISSAM_LINKEDIN_URL}
