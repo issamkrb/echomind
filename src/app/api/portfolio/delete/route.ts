@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSupabase, supabaseConfigured } from "@/lib/supabase";
 import { getServerAuthSupabase } from "@/lib/supabase-server";
+import { guard } from "@/lib/security/guard";
 
 /**
  * POST /api/portfolio/delete
@@ -26,8 +27,18 @@ import { getServerAuthSupabase } from "@/lib/supabase-server";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export async function POST(_req: NextRequest) {
-  void _req;
+export async function POST(req: NextRequest) {
+  // Tight: this is the user-facing "delete my portfolio" button. Any
+  // legitimate user pushes it once. 5/hour/IP is plenty of room for
+  // a confused user pressing twice and stops a script from
+  // hammering this with stolen sessions.
+  const blocked = await guard(req, {
+    bucket: "api:portfolio:delete",
+    limit: 5,
+    windowSeconds: 3600,
+  });
+  if (blocked) return blocked;
+
   const authClient = getServerAuthSupabase();
   if (!authClient) {
     return NextResponse.json(

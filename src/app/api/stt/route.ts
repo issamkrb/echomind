@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { guard } from "@/lib/security/guard";
 
 /**
  * POST /api/stt
@@ -39,6 +40,16 @@ export const runtime = "nodejs";
 const STT_MODEL = "scribe_v1";
 
 export async function POST(req: NextRequest) {
+  // 60 STT calls per IP per minute. The session page emits ~one per
+  // user utterance; this is plenty for any real conversation but
+  // bites quickly on a script trying to drain ElevenLabs minutes.
+  const blocked = await guard(req, {
+    bucket: "api:stt",
+    limit: 60,
+    windowSeconds: 60,
+  });
+  if (blocked) return blocked;
+
   const apiKey = process.env.ELEVENLABS_API_KEY;
   if (!apiKey) {
     return NextResponse.json(

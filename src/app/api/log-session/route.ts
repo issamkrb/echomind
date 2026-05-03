@@ -4,6 +4,8 @@ import { getServerAuthSupabase } from "@/lib/supabase-server";
 import { generateMorningLetter } from "@/lib/morning-letter";
 import { sendPortfolioUnlockEmail } from "@/lib/portfolio-email";
 import { parseMissingColumn } from "@/lib/schema-drift";
+import { guard } from "@/lib/security/guard";
+import { sanitizeUuid } from "@/lib/security/sanitize";
 
 /**
  * POST /api/log-session
@@ -116,6 +118,16 @@ type SessionBody = {
 };
 
 export async function POST(req: NextRequest) {
+  // 30 session-end writes per IP per 5 minutes. A real session takes
+  // 3+ minutes; even a power user banging through demos hits this
+  // ceiling well before script-kiddie territory.
+  const blocked = await guard(req, {
+    bucket: "api:log-session",
+    limit: 30,
+    windowSeconds: 300,
+  });
+  if (blocked) return blocked;
+
   if (!supabaseConfigured()) {
     return NextResponse.json(
       { ok: false, persisted: false, reason: "supabase-not-configured" },
@@ -130,12 +142,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, reason: "bad-json" }, { status: 400 });
   }
 
-  if (!body.anon_user_id || typeof body.anon_user_id !== "string") {
+  // anon_user_id must be a valid UUID — anything else looks like a
+  // script poking at the route. Reject early with no detail.
+  const anonId = sanitizeUuid(body.anon_user_id);
+  if (!anonId) {
     return NextResponse.json(
       { ok: false, reason: "anon_user_id required" },
       { status: 400 }
     );
   }
+  body.anon_user_id = anonId;
 
   const supabase = getServerSupabase();
   if (!supabase) {

@@ -6,6 +6,7 @@ import {
   toUserFacing,
   type PortfolioSessionRow,
 } from "@/lib/portfolio";
+import { guard } from "@/lib/security/guard";
 
 /**
  * GET /api/portfolio/me
@@ -29,8 +30,17 @@ import {
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export async function GET(_req: NextRequest) {
-  void _req;
+export async function GET(req: NextRequest) {
+  // 60/min/IP. The page only refetches on navigation; this is plenty
+  // of headroom for a real user but tight enough to slow scraping.
+  const blocked = await guard(req, {
+    bucket: "api:portfolio:me",
+    limit: 60,
+    windowSeconds: 60,
+    requireSameOrigin: false,
+  });
+  if (blocked) return blocked;
+
   const authClient = getServerAuthSupabase();
   if (!authClient) {
     return NextResponse.json(

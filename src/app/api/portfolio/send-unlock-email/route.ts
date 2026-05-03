@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSupabase, supabaseConfigured } from "@/lib/supabase";
 import { sendPortfolioUnlockEmail } from "@/lib/portfolio-email";
+import { guard } from "@/lib/security/guard";
 
 /**
  * POST /api/portfolio/send-unlock-email
@@ -29,6 +30,17 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
+  // Tight: an unlock email is something the user does once, maybe
+  // twice if the first one didn't arrive. 5/hour/IP turns this into
+  // a no-op for legitimate use and a hard wall against email-bomb
+  // scripts that try to pummel a victim's inbox via this proxy.
+  const blocked = await guard(req, {
+    bucket: "api:portfolio:send-unlock-email",
+    limit: 5,
+    windowSeconds: 3600,
+  });
+  if (blocked) return blocked;
+
   let body: { anon?: string; email?: string; lang?: string };
   try {
     body = await req.json();

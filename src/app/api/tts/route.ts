@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createHash } from "node:crypto";
 import { isCatalogVoiceId } from "@/lib/voice-catalog";
+import { guard } from "@/lib/security/guard";
+import { sanitizeText } from "@/lib/security/sanitize";
 
 /**
  * POST /api/tts
@@ -73,6 +75,16 @@ type Body = {
 };
 
 export async function POST(req: NextRequest) {
+  // 90 TTS calls per IP per minute. Echo says ~1 line per ~5s during
+  // a session, so this allows ~7 minutes of continuous speech before
+  // we cut off any script trying to drain ElevenLabs minutes.
+  const blocked = await guard(req, {
+    bucket: "api:tts",
+    limit: 90,
+    windowSeconds: 60,
+  });
+  if (blocked) return blocked;
+
   const apiKey = process.env.ELEVENLABS_API_KEY;
   if (!apiKey) {
     return NextResponse.json(
@@ -91,11 +103,11 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const text = typeof body.text === "string" ? body.text.trim() : "";
+  const text = sanitizeText(body.text, 1500);
   const voiceId = typeof body.voiceId === "string" ? body.voiceId : "";
   const lang = typeof body.lang === "string" ? body.lang : "en";
 
-  if (!text || text.length > 1500) {
+  if (!text) {
     return NextResponse.json(
       { ok: false, reason: "bad-text" },
       { status: 400 }

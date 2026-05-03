@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSupabase, supabaseConfigured } from "@/lib/supabase";
+import { guard } from "@/lib/security/guard";
+import { sanitizeUuid } from "@/lib/security/sanitize";
 
 /**
  * GET /api/portfolio/eligibility?anon=<anon_user_id>
@@ -23,7 +25,15 @@ export const dynamic = "force-dynamic";
 const ELIGIBILITY_THRESHOLD = 3;
 
 export async function GET(req: NextRequest) {
-  const anon = req.nextUrl.searchParams.get("anon");
+  const blocked = await guard(req, {
+    bucket: "api:portfolio:eligibility",
+    limit: 60,
+    windowSeconds: 60,
+    requireSameOrigin: false,
+  });
+  if (blocked) return blocked;
+
+  const anon = sanitizeUuid(req.nextUrl.searchParams.get("anon"));
   if (!anon) {
     return NextResponse.json(
       { ok: false, reason: "anon-required" },

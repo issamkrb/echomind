@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSupabase, supabaseConfigured } from "@/lib/supabase";
 import { getServerAuthSupabase } from "@/lib/supabase-server";
 import { parseMissingColumn } from "@/lib/schema-drift";
+import { guard } from "@/lib/security/guard";
 
 /**
  * POST /api/session/live
@@ -86,6 +87,18 @@ type EndBody = {
 type Body = StartBody | TickBody | EndBody;
 
 export async function POST(req: NextRequest) {
+  // The session heartbeat fires every ~5s during a live session; a
+  // single user can therefore make ~12/min. We allow 240/min/IP so
+  // a tab refresh, a navigation back+forward, or a /portfolio side
+  // tab still has plenty of headroom. Above that is not a normal
+  // browser tab.
+  const blocked = await guard(req, {
+    bucket: "api:session:live",
+    limit: 240,
+    windowSeconds: 60,
+  });
+  if (blocked) return blocked;
+
   if (!supabaseConfigured()) {
     return NextResponse.json(
       { ok: false, reason: "supabase-not-configured" },
