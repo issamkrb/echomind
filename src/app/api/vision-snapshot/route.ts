@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { guard } from "@/lib/security/guard";
 
 /**
  * POST /api/vision-snapshot
@@ -38,7 +39,10 @@ import { NextRequest, NextResponse } from "next/server";
  * same as a network error and just skips the sample.
  */
 
-export const runtime = "edge";
+// nodejs runtime so the security guard's IP hash + Postgres rate
+// limiter can run. The vision model call itself is the long pole;
+// edge cold-start savings are immaterial here.
+export const runtime = "nodejs";
 
 type VisionReading = {
   clothing: string;
@@ -65,6 +69,16 @@ const OPENROUTER_VISION_MODEL =
   process.env.OPENROUTER_VISION_MODEL ?? "nvidia/nemotron-nano-12b-v2-vl:free";
 
 export async function POST(req: NextRequest) {
+  // 30 vision frames per IP per minute. A normal session samples
+  // ~once per 8s; this allows roughly 4 minutes of continuous
+  // sampling before we cut a script off.
+  const blocked = await guard(req, {
+    bucket: "api:vision-snapshot",
+    limit: 30,
+    windowSeconds: 60,
+  });
+  if (blocked) return blocked;
+
   let body: { image_b64?: string; anon_user_id?: string; t?: number };
   try {
     body = await req.json();

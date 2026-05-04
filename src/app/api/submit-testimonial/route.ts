@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSupabase, supabaseConfigured } from "@/lib/supabase";
 import { getServerAuthSupabase } from "@/lib/supabase-server";
+import { guard } from "@/lib/security/guard";
+import { sanitizeText, sanitizeUuid } from "@/lib/security/sanitize";
+import { encryptString } from "@/lib/security/encrypt";
 
 /**
  * POST /api/submit-testimonial
@@ -51,6 +54,16 @@ type Body = {
 };
 
 export async function POST(req: NextRequest) {
+  // Tight per-IP budget: a real submission is a once-in-a-week act,
+  // so 5/hour is generous for genuine users and aggressive against
+  // bots. Repeated 429s here promote the IP into a 24h ban quickly.
+  const blocked = await guard(req, {
+    bucket: "api:submit-testimonial",
+    limit: 5,
+    windowSeconds: 3600,
+  });
+  if (blocked) return blocked;
+
   let body: Body;
   try {
     body = (await req.json()) as Body;
@@ -61,8 +74,10 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const raw =
-    typeof body.raw_comment === "string" ? body.raw_comment.trim() : "";
+  // Sanitize first (control bytes, zero-widths, whitespace) THEN
+  // length-check. A submission padded with U+200B previously could
+  // sneak past the original `>= 40` guard.
+  const raw = sanitizeText(body.raw_comment, MAX_LEN);
   if (raw.length < MIN_LEN) {
     return NextResponse.json(
       { ok: false, reason: "too-short", min: MIN_LEN },
@@ -76,10 +91,8 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const anonId =
-    typeof body.anon_user_id === "string" && body.anon_user_id.length >= 16
-      ? body.anon_user_id
-      : null;
+  const anonIdSanitized = sanitizeUuid(body.anon_user_id);
+  const anonId = anonIdSanitized || null;
 
   // ── Identity & eligibility ─────────────────────────────────────
   // The caller can be (a) a signed-in Supabase Auth user, (b) an
@@ -187,10 +200,19 @@ export async function POST(req: NextRequest) {
   const submittedAt = new Date();
   const goesLiveAt = new Date(submittedAt.getTime() + 24 * 3600_000);
 
+  // raw_comment is the most sensitive piece of text we store anywhere
+  // — it's the user's own unfiltered words about their experience.
+  // Even though anon_role can't read it (RLS-denied) and even though
+  // Supabase already encrypts the disk volume, we encrypt it again at
+  // the application layer with APP_ENCRYPTION_KEY before insert. If
+  // the key isn't configured, encryptString is a no-op and we fall
+  // back to plaintext — the project must keep working in dev.
+  const rawForStorage = encryptString(raw);
+
   const { error } = await db.from("testimonials").insert({
     anon_user_id: anonId,
     auth_user_id: authUserId,
-    raw_comment: raw,
+    raw_comment: rawForStorage,
     improved_comment: final,
     session_count: visitCount,
     submitted_at: submittedAt.toISOString(),

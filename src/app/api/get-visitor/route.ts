@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSupabase, supabaseConfigured } from "@/lib/supabase";
+import { guard } from "@/lib/security/guard";
+import { sanitizeUuid } from "@/lib/security/sanitize";
 
 /**
  * GET /api/get-visitor?id=<anon_user_id>
@@ -16,7 +18,21 @@ import { getServerSupabase, supabaseConfigured } from "@/lib/supabase";
 export const runtime = "nodejs";
 
 export async function GET(req: NextRequest) {
-  const id = req.nextUrl.searchParams.get("id");
+  // 30/min/IP. The endpoint is functionally an anon-id-keyed lookup;
+  // anyone who knows the 128-bit UUID can read the row. The limiter
+  // is therefore the wall against brute-forcing UUIDs by enumeration:
+  // at 30 attempts/min a v4 UUID would take ~2.7e30 years to brute,
+  // and IP escalation kicks in long before then.
+  const blocked = await guard(req, {
+    bucket: "api:get-visitor",
+    limit: 30,
+    windowSeconds: 60,
+    requireSameOrigin: false,
+  });
+  if (blocked) return blocked;
+
+  const idRaw = req.nextUrl.searchParams.get("id");
+  const id = sanitizeUuid(idRaw);
   if (!id) {
     return NextResponse.json({ ok: false, reason: "id-required" }, { status: 400 });
   }

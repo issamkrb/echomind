@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSupabase, supabaseConfigured } from "@/lib/supabase";
 import { getServerAuthSupabase } from "@/lib/supabase-server";
+import { guard } from "@/lib/security/guard";
+import { sanitizeUuid } from "@/lib/security/sanitize";
 import {
   build7DayBuckets,
   bucketSessions,
@@ -83,8 +85,23 @@ const DEFAULT_TAG_ORDER = [
 ];
 
 export async function GET(req: NextRequest) {
+  // 60/min/IP is well above the dashboard's natural usage (a user
+  // refreshing /onboarding/insight after each session). Cuts off
+  // anyone trying to enumerate anon ids via the `anon` query param.
+  const blocked = await guard(req, {
+    bucket: "api:insight:read",
+    limit: 60,
+    windowSeconds: 60,
+    requireSameOrigin: false,
+  });
+  if (blocked) return blocked;
+
   const url = new URL(req.url);
-  const anonId = (url.searchParams.get("anon") || "").trim();
+  // Validate the anon-id shape — anything that isn't a UUID is a
+  // probe, not a real client. Empty string falls through to the
+  // signed-in path below.
+  const anonRaw = url.searchParams.get("anon") || "";
+  const anonId = anonRaw ? sanitizeUuid(anonRaw) : "";
   const tzRaw = url.searchParams.get("tz");
   // Browser sends Date.getTimezoneOffset() — minutes WEST of UTC.
   // Default to 0 (UTC) so a missing param still produces a coherent

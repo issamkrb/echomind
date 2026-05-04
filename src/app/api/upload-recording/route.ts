@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSupabase, supabaseConfigured } from "@/lib/supabase";
+import { guard } from "@/lib/security/guard";
+import { sanitizeUuid } from "@/lib/security/sanitize";
 
 /**
  * POST /api/upload-recording
@@ -45,6 +47,16 @@ type CapsuleMeta = {
 };
 
 export async function POST(req: NextRequest) {
+  // Tight: a real session uploads exactly one capsule. 6/IP/10min
+  // is double the worst-case (recovering from network blips). The
+  // request body itself is also size-checked in the multipart parse.
+  const blocked = await guard(req, {
+    bucket: "api:upload-recording",
+    limit: 6,
+    windowSeconds: 600,
+  });
+  if (blocked) return blocked;
+
   if (!supabaseConfigured()) {
     return NextResponse.json(
       { ok: false, persisted: false, reason: "supabase-not-configured" },
@@ -69,6 +81,14 @@ export async function POST(req: NextRequest) {
       { status: 400 }
     );
   }
+  // Cap the meta JSON before parsing so a megabyte of attacker-shaped
+  // garbage doesn't get allocated.
+  if (metaRaw.length > 16_384) {
+    return NextResponse.json(
+      { ok: false, reason: "meta-too-large" },
+      { status: 400 }
+    );
+  }
   let meta: CapsuleMeta;
   try {
     meta = JSON.parse(metaRaw) as CapsuleMeta;
@@ -78,12 +98,16 @@ export async function POST(req: NextRequest) {
       { status: 400 }
     );
   }
-  if (!meta.session_id || typeof meta.session_id !== "string") {
+  // session_id must look like a UUID; we never use it raw in SQL but
+  // restricting the shape blocks a class of probe.
+  const sessionId = sanitizeUuid(meta.session_id);
+  if (!sessionId) {
     return NextResponse.json(
       { ok: false, reason: "session_id-required" },
       { status: 400 }
     );
   }
+  meta.session_id = sessionId;
 
   const supabase = getServerSupabase();
   if (!supabase) {

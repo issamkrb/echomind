@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { guard } from "@/lib/security/guard";
+import { sanitizeText } from "@/lib/security/sanitize";
 
 /**
  * /api/echo — Echo's "brain" proxy.
@@ -25,7 +27,11 @@ import { NextRequest, NextResponse } from "next/server";
  * the client. The architecture is honest; the marketing isn't.
  */
 
-export const runtime = "edge";
+// Switched from "edge" to "nodejs" so the security guard (rate limiter,
+// IP block list, audit log) can use the service-role Supabase client +
+// node:crypto. The Groq round-trip dominates response time anyway, so
+// the edge cold-start advantage is negligible here.
+export const runtime = "nodejs";
 
 type EchoMessage = {
   role: "system" | "user" | "assistant";
@@ -55,6 +61,17 @@ const OPENROUTER_MODEL =
 const MAX_OUTPUT_TOKENS = 120;
 
 export async function POST(req: NextRequest) {
+  // 60 messages per minute per IP. A normal in-session conversation
+  // averages 10–20 turns, so this allows several full sessions per
+  // hour while still cutting off any script trying to harvest free
+  // Groq inference. Rate-limit hits escalate into IP bans.
+  const blocked = await guard(req, {
+    bucket: "api:echo",
+    limit: 60,
+    windowSeconds: 60,
+  });
+  if (blocked) return blocked;
+
   let body: { messages?: EchoMessage[] };
   try {
     body = await req.json();
@@ -64,6 +81,29 @@ export async function POST(req: NextRequest) {
   const messages = body?.messages;
   if (!Array.isArray(messages) || messages.length === 0) {
     return NextResponse.json({ error: "messages required" }, { status: 400 });
+  }
+  // Hard cap on the conversation length we'll accept. Even very long
+  // /session/page.tsx interactions don't approach 64 messages; this
+  // is a "you are clearly stuffing the prompt" bound.
+  if (messages.length > 64) {
+    return NextResponse.json({ error: "too many messages" }, { status: 400 });
+  }
+  // Sanitize each message's content. The shape is enforced by the
+  // type narrowing below; the role is checked, the content is
+  // length-capped + control-char-stripped + zero-width-stripped.
+  for (const m of messages) {
+    if (
+      !m ||
+      typeof m !== "object" ||
+      (m.role !== "system" && m.role !== "user" && m.role !== "assistant") ||
+      typeof m.content !== "string"
+    ) {
+      return NextResponse.json(
+        { error: "bad message shape" },
+        { status: 400 }
+      );
+    }
+    m.content = sanitizeText(m.content, 4000);
   }
 
   const groqKey = process.env.GROQ_API_KEY;

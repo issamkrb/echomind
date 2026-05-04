@@ -1,5 +1,6 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getServerSupabase, supabaseConfigured } from "@/lib/supabase";
+import { guard } from "@/lib/security/guard";
 
 /**
  * GET /api/testimonials
@@ -32,7 +33,17 @@ export type PublicTestimonial = {
   goes_live_at: string;
 };
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  // Generous: this is a public read for the landing page. 120/min is
+  // well above any normal browser session even with hot-reload.
+  const blocked = await guard(req, {
+    bucket: "api:testimonials:read",
+    limit: 120,
+    windowSeconds: 60,
+    requireSameOrigin: false,
+  });
+  if (blocked) return blocked;
+
   if (!supabaseConfigured()) {
     return NextResponse.json({ ok: true, items: [], count: 0 });
   }

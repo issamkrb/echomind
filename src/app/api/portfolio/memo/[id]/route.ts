@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSupabase, supabaseConfigured } from "@/lib/supabase";
 import { getServerAuthSupabase } from "@/lib/supabase-server";
+import { guard } from "@/lib/security/guard";
 
 /**
  * GET /api/portfolio/memo/[id]
@@ -29,9 +30,19 @@ const BUCKET = "session-recordings";
 const SIGNED_URL_TTL_S = 5 * 60;
 
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  // 30/min/IP. A user playing several memos in a row stays under
+  // this; a script enumerating session ids hits the limiter fast.
+  const blocked = await guard(req, {
+    bucket: "api:portfolio:memo",
+    limit: 30,
+    windowSeconds: 60,
+    requireSameOrigin: false,
+  });
+  if (blocked) return blocked;
+
   const authClient = getServerAuthSupabase();
   if (!authClient) {
     return NextResponse.json(

@@ -3,6 +3,7 @@ import { getServerSupabase, supabaseConfigured } from "@/lib/supabase";
 import { getServerAuthSupabase } from "@/lib/supabase-server";
 import { parseMissingColumn } from "@/lib/schema-drift";
 import { parseUserAgent } from "@/lib/user-agent";
+import { guard } from "@/lib/security/guard";
 
 /**
  * POST /api/log-visit
@@ -80,6 +81,16 @@ function geoFromHeaders(req: NextRequest): {
 }
 
 export async function POST(req: NextRequest) {
+  // Generous: 120/min. /api/log-visit fires on every page load and a
+  // user clicking through 5 pages in 30s is normal. Below this is
+  // not a normal browser.
+  const blocked = await guard(req, {
+    bucket: "api:log-visit",
+    limit: 120,
+    windowSeconds: 60,
+  });
+  if (blocked) return blocked;
+
   if (!supabaseConfigured()) {
     return NextResponse.json(
       { ok: false, reason: "supabase-not-configured" },

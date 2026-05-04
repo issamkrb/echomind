@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSupabase, supabaseConfigured } from "@/lib/supabase";
+import { guard } from "@/lib/security/guard";
 
 /**
  * GET /api/starter-chips?anon_user_id=<id>&first_name=<name>
@@ -72,6 +73,21 @@ function resolveLang(raw: string | null): "en" | "fr" | "ar" {
 }
 
 export async function GET(req: NextRequest) {
+  // 30 chip generations per IP per minute. Even rapid /session
+  // entry/exit (every few seconds) doesn't approach this; it bites
+  // a script trying to drain Groq inference.
+  const blocked = await guard(req, {
+    bucket: "api:starter-chips",
+    limit: 30,
+    windowSeconds: 60,
+    // GET is not CSRF-sensitive, but enforcing same-origin still
+    // helps cut out drive-by curls. The guard already only enforces
+    // origin on mutating verbs; this option is a no-op for GET but
+    // documents intent.
+    requireSameOrigin: false,
+  });
+  if (blocked) return blocked;
+
   const anonId = req.nextUrl.searchParams.get("anon_user_id");
   const firstName = (req.nextUrl.searchParams.get("first_name") ?? "").slice(0, 64);
   const lang = resolveLang(req.nextUrl.searchParams.get("lang"));
