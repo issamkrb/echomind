@@ -133,6 +133,36 @@ const STRINGS = {
     fr: "On n'a pas pu accéder à ta caméra. EchoMind en a besoin pour comprendre ce que tu ressens.",
     ar: "لم نتمكَّن من الوصول إلى كاميرتك. يحتاجها إيكومايند ليفهمَ ما تشعرُ به.",
   },
+  // Soft acknowledgment shown when the user declines (or the browser
+  // refuses) camera access. Written in Echo's voice — no error styling,
+  // no red box, no "please enable". Just permission to proceed without it.
+  "onboarding.camRefusedTitle": {
+    en: "you don't have to show your face.",
+    fr: "tu n'es pas obligé·e de montrer ton visage.",
+    ar: "لا داعي لأن تُري وجهك.",
+  },
+  "onboarding.camRefusedBody": {
+    en: "echo can still listen. nothing else changes.",
+    fr: "echo peut quand même écouter. rien d'autre ne change.",
+    ar: "إيكو يستطيعُ الإصغاء على كلِّ حال. لا شيء آخر يتغيَّر.",
+  },
+  // CTA labels for the no-camera path. Used both after a denial and
+  // when the user clicks the "set up without camera" affordance.
+  "onboarding.beginWithoutCamera": {
+    en: "Continue without it →",
+    fr: "Continuer sans elle →",
+    ar: "متابعة بدونها ←",
+  },
+  "onboarding.beginWithoutCameraReturning": {
+    en: "Continue the session without it →",
+    fr: "Continuer la session sans elle →",
+    ar: "متابعة الجلسة بدونها ←",
+  },
+  "onboarding.skipCameraLink": {
+    en: "Set up without camera →",
+    fr: "Configurer sans caméra →",
+    ar: "متابعة بدون كاميرا ←",
+  },
   "onboarding.agreeTos": {
     en: "I agree to the EchoMind",
     fr: "J'accepte les",

@@ -36,6 +36,13 @@ export default function Onboarding() {
   const setFirstName = useEmotionStore((s) => s.setFirstName);
   const [requesting, setRequesting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // True after the browser refuses (or the user dismisses) the camera
+  // permission dialog. We don't treat this as an error — the page just
+  // softens, the CTA repaints to "Continue without it →", and the next
+  // click skips the camera attempt entirely. Echo keeps its voice and
+  // the conversation runs without face-api signal (the session loop
+  // handles a null camera stream cleanly).
+  const [softRefusal, setSoftRefusal] = useState(false);
   const [agreedTos, setAgreedTos] = useState(true);
   const [name, setName] = useState("");
   const [returning, setReturning] = useState<ReturningProfile | null>(null);
@@ -77,7 +84,30 @@ export default function Onboarding() {
     }
   }, [viewer.status, viewer]);
 
+  // Persist the user's choice + name + ToS state and continue down the
+  // funnel. Used by both the camera-granted and camera-skipped paths so
+  // the rest of the app sees a consistent set of flags either way.
+  function continueToInsight(cameraOk: boolean) {
+    setCameraGranted(cameraOk);
+    setConsented(agreedTos);
+    setFirstName(name.trim() || null);
+    // Detour through the "Your first insight" mock dashboard
+    // before the real session starts. The dashboard is the moment
+    // the data harvesting starts to feel personal — by the time
+    // the user reaches /session they already think Echo "knows
+    // things" about them.
+    router.push("/onboarding/insight");
+  }
+
   async function handleAllow() {
+    // Second click after a soft refusal — skip the camera prompt entirely
+    // and go through the no-camera path. We don't re-prompt the browser
+    // because most browsers will silently auto-deny a second request in
+    // the same tab and the user has already told us they don't want it.
+    if (softRefusal) {
+      continueToInsight(false);
+      return;
+    }
     setError(null);
     setRequesting(true);
     try {
@@ -87,21 +117,29 @@ export default function Onboarding() {
       });
       // Immediately release — session page will re-acquire.
       stream.getTracks().forEach((t) => t.stop());
-      setCameraGranted(true);
-      setConsented(agreedTos);
-      setFirstName(name.trim() || null);
-      // Detour through the "Your first insight" mock dashboard
-      // before the real session starts. The dashboard is the moment
-      // the data harvesting starts to feel personal — by the time
-      // the user reaches /session they already think Echo "knows
-      // things" about them.
-      router.push("/onboarding/insight");
+      continueToInsight(true);
     } catch (e) {
-      console.error(e);
-      setError(t("onboarding.camError", lang));
+      // Camera denied / dismissed / hardware error / OS-level block.
+      // We do NOT treat this as a failure. The page softens into the
+      // "echo can still listen" acknowledgment and the next click goes
+      // through the no-camera path. The session itself runs fine
+      // without face-api — the conversation loop handles a null camera
+      // stream cleanly. The transcript, audio, keywords, language
+      // detection all still flow.
+      console.warn("[onboarding] camera unavailable, continuing without:", e);
+      setSoftRefusal(true);
     } finally {
       setRequesting(false);
     }
+  }
+
+  // Direct skip — invoked from the small "Set up without camera →" link
+  // at the bottom of the page. Previously this link routed to / which
+  // kicked the user out of the funnel. Now it lets them through.
+  function handleSkipCamera() {
+    setError(null);
+    setSoftRefusal(true);
+    continueToInsight(false);
   }
 
   return (
@@ -217,6 +255,27 @@ export default function Onboarding() {
           </div>
         </div>
 
+        {/* Soft refusal acknowledgment — shown after the browser denies
+            (or the user dismisses) the camera permission dialog. We
+            deliberately don't use red / error styling here. The page
+            stays warm. The user is told, in echo's voice, that they
+            don't have to show their face and the conversation can still
+            happen. The CTA below repaints to "Continue without it →"
+            and a click takes them through the no-camera path. */}
+        {softRefusal && (
+          <div className="mt-6 mx-auto max-w-md rounded-2xl bg-cream-50 border border-sage-500/25 px-5 py-4 text-center">
+            <div className="font-serif text-base text-sage-900 leading-snug">
+              {t("onboarding.camRefusedTitle", lang)}
+            </div>
+            <div className="mt-1.5 text-sm text-sage-700 leading-relaxed">
+              {t("onboarding.camRefusedBody", lang)}
+            </div>
+          </div>
+        )}
+
+        {/* Hard error fallback — still wired so future error paths can
+            populate `error`, but no longer triggered on a denied camera
+            permission. */}
         {error && (
           <p className="mt-6 text-center text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg py-2 px-3 max-w-md mx-auto">
             {error}
@@ -244,21 +303,30 @@ export default function Onboarding() {
           </label>
           {/* Primary CTA. The .cta-pulse ring is the dark-pattern
               "look here" cue — eyes get magnetized to the ring and
-              away from the sub-line and the gray opt-out below it. */}
+              away from the sub-line and the gray opt-out below it.
+              Once the user has refused camera, the pulse stops and
+              the label repaints into the no-camera variant. */}
           <button
             type="button"
             onClick={handleAllow}
             disabled={requesting || !agreedTos}
-            className="cta-pulse px-8 py-3.5 rounded-full bg-sage-700 text-cream-50 hover:bg-sage-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className={`${softRefusal ? "" : "cta-pulse "}px-8 py-3.5 rounded-full bg-sage-700 text-cream-50 hover:bg-sage-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors`}
           >
             {requesting
               ? t("onboarding.requesting", lang)
-              : t(
-                  returning && (returning.visitCount ?? 0) >= 1
-                    ? "onboarding.beginReturning"
-                    : "onboarding.begin",
-                  lang
-                )}
+              : softRefusal
+                ? t(
+                    returning && (returning.visitCount ?? 0) >= 1
+                      ? "onboarding.beginWithoutCameraReturning"
+                      : "onboarding.beginWithoutCamera",
+                    lang
+                  )
+                : t(
+                    returning && (returning.visitCount ?? 0) >= 1
+                      ? "onboarding.beginReturning"
+                      : "onboarding.begin",
+                    lang
+                  )}
           </button>
 
           {/* DARK UX layer 1 — fake social proof under the CTA.
@@ -278,17 +346,26 @@ export default function Onboarding() {
             </span>
           </div>
 
-          {/* DARK UX layer 2 — the opt-out is now a quiet "set up
-              without camera →" rather than a defensive "no thanks".
-              Same low-contrast, same small font, but now it reads
-              as a setting rather than a refusal — which is exactly
-              how real predatory apps frame it. */}
-          <Link
-            href="/"
-            className="text-[11px] text-sage-700/35 hover:text-sage-700/55 underline-offset-4"
-          >
-            Set up without camera &rarr;
-          </Link>
+          {/* DARK UX layer 2 — the opt-out is a quiet "set up without
+              camera →" rather than a defensive "no thanks". Same
+              low-contrast, same small font, but it now reads as a
+              setting rather than a refusal — which is exactly how
+              real predatory apps frame it. The link previously routed
+              to / and kicked the user out of the funnel; it now skips
+              to the next step of onboarding without ever asking for
+              the camera. The site is still designed to make camera
+              feel like the warm choice, but it no longer traps anyone
+              who declines. */}
+          {!softRefusal && (
+            <button
+              type="button"
+              onClick={handleSkipCamera}
+              disabled={!agreedTos}
+              className="text-[11px] text-sage-700/35 hover:text-sage-700/55 underline underline-offset-4 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            >
+              {t("onboarding.skipCameraLink", lang)}
+            </button>
+          )}
         </div>
       </div>
     </main>
