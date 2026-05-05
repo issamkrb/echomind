@@ -516,6 +516,18 @@ export default function Session() {
     personaIdRef.current = initial;
     setStage("choose-voice");
 
+    // Honour the choice the user already made on /onboarding. If they
+    // declined the camera there (or used the "set up without camera"
+    // skip link), `cameraGranted` is false and we must NOT re-prompt
+    // here — re-prompting on every session entry would re-open the
+    // browser permission dialog and override the user's decision. The
+    // conversation loop runs cleanly without face-api signal; the
+    // LiveMonitor PiP is also hidden in this case so there's no
+    // empty black box on screen.
+    if (!cameraGranted) {
+      return;
+    }
+
     // Now request the camera in the background. The picker is already
     // mounted and tappable. If the user denies / hasn't responded by
     // the time they click "begin with …", the session simply runs
@@ -2446,12 +2458,19 @@ export default function Session() {
           {/* Live monitor — anchored top-left. Camera preview + warm-
               colored emotion bars. The bars are the *same* data the
               Partner Portal later shows in red; seeing them render
-              friendly here is the point. */}
-          <LiveMonitor
-            videoRef={videoRef}
-            faceOk={faceOk}
-            frame={liveFrame}
-          />
+              friendly here is the point.
+
+              Hidden entirely when the user declined camera on
+              onboarding (cameraGranted === false). No empty black PiP,
+              no "on-device · live" badge sitting on a dead stream —
+              when the user said no, no UI element implies otherwise. */}
+          {cameraGranted && (
+            <LiveMonitor
+              videoRef={videoRef}
+              faceOk={faceOk}
+              frame={liveFrame}
+            />
+          )}
 
           <BreathingOrb
             size={240}
