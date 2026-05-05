@@ -410,7 +410,7 @@ const STRINGS = {
   "session.endShort": {
     en: "end",
     fr: "fin",
-    ar: "إنهاء",
+    ar: "إذا ائتمنتنا على ما تشعر به، فنحن ندين لك بأبسط موقف ممكن من الخصوصية وأرفقه. هذا هو",
   },
   "session.settlingIn": {
     en: "settling in…",
@@ -834,7 +834,7 @@ const STRINGS = {
   "portfolio.unlocked.label": {
     en: "echomind · portfolio",
     fr: "echomind · portfolio",
-    ar: "إيكومايند · البورتفوليو",
+    ar: "بُني على مبدأ واحد.",
   },
   "portfolio.unlocked.headline": {
     en: "we've been paying attention.",
@@ -1054,24 +1054,24 @@ const STRINGS = {
     ar: "كان قلقي يفلتُ من زِمامي ولا أحدَ لديهِ موعدٌ شاغِرٌ قبل أشهُر. ثلاثةُ أسابيعَ مع إيكو وعُدتُ إلى نفسي.",
   },
   "home.testimonial.context": {
-    en: "NHSAST student · Sidi Abdallah · Algeria",
-    fr: "Étudiant NHSAST · Sidi Abdallah · Algérie",
-    ar: "طالب NHSAST · سيدي عبد الله · الجزائر",
+    en: "Student · Algiers, Algeria",
+    fr: "Étudiant · Alger, Algérie",
+    ar: "طالب · الجزائر",
   },
   "home.science.heading": {
-    en: "Built by students, for humans.",
-    fr: "Fait par des étudiants, pour des humains.",
-    ar: "من صنع الطلبة، للبشر.",
+    en: "Built by a student. For humans.",
+    fr: "Fait par un étudiant. Pour des humains.",
+    ar: "من صنع طالب. للبشر.",
   },
   "home.science.p1": {
-    en: "EchoMind was founded in 2026 by a team of NHSAST students at Sidi Abdallah, Algiers — after watching too many friends wait months for a counsellor they could afford. Our mission is simple: nobody should have to wait six weeks for an appointment to feel heard today.",
-    fr: "EchoMind a été fondée en 2026 par une équipe d'étudiants NHSAST de Sidi Abdallah, Alger — après avoir vu trop d'amis attendre des mois un psy qu'ils pouvaient se payer. Notre mission est simple : personne ne devrait attendre six semaines pour un rendez-vous pour se sentir écouté aujourd'hui.",
-    ar: "تأسَّست إيكومايند عام 2026 على يد فريقٍ من طلبة NHSAST في سيدي عبد الله، الجزائر — بعد أن رأينا أصدقاءً كثيرين ينتظرون أشهُرًا ليجدوا مُرشِدًا مُيسُّرا لهم. رسالتُنا بسيطة: لا أحدَ يستحقُّ أن ينتظر ستَّةَ أسابيعَ لموعدٍ كي يشعرَ أنَّه مسموعٌ اليوم.",
+    en: "EchoMind was founded in 2026 in Algiers — after watching too many friends wait months for a counsellor they could afford. Our mission is simple: nobody should have to wait six weeks for an appointment to feel heard today.",
+    fr: "EchoMind a été fondée en 2026 à Alger — après avoir vu trop d'amis attendre des mois un psy qu'ils pouvaient se payer. Notre mission est simple : personne ne devrait attendre six semaines pour un rendez-vous pour se sentir écouté aujourd'hui.",
+    ar: "تأسَّست إيكومايند عام 2026 في الجزائر — بعد أن رأينا أصدقاءً كثيرين ينتظرون أشهُرًا ليجدوا مُرشِدًا مُيسُّرا لهم. رسالتُنا بسيطة: لا أحدَ يستحقُّ أن ينتظر ستَّةَ أسابيعَ لموعدٍ كي يشعرَ أنَّه مسموعٌ اليوم.",
   },
   "home.science.p2": {
-    en: "Echo is trained on a decade of published clinical transcripts, reviewed by our 14-member Licensed Therapist Advisory Board, and audited quarterly by an independent ethics committee. Built with care by NHSAST students.",
-    fr: "Echo est entraîné sur une décennie de transcripts cliniques publiés, révisé par notre comité consultatif de 14 thérapeutes agréés, et audité trimestriellement par un comité d'éthique indépendant. Construit avec soin par des étudiants NHSAST.",
-    ar: "دُرِّب إيكو على عقدٍ كاملٍ من النصوص السريرية المنشورة، وراجعته لجنتُنا الاستشاريَّة المُكوَّنة من 14 معالِجًا مُرخَّصًا، وتُدقَّقُه كلَّ ثلاثة أشهر لجنةٌ أخلاقية مستقلّة. صنع بعناية من طلبة NHSAST.",
+    en: "Echo is trained on a decade of published clinical transcripts, reviewed by our 14-member Licensed Therapist Advisory Board, and audited quarterly by an independent ethics committee. Built with care.",
+    fr: "Echo est entraîné sur une décennie de transcripts cliniques publiés, révisé par notre comité consultatif de 14 thérapeutes agréés, et audité trimestriellement par un comité d'éthique indépendant. Construit avec soin.",
+    ar: "دُرِّب إيكو على عقدٍ كاملٍ من النصوص السريرية المنشورة، وراجعته لجنتُنا الاستشاريَّة المُكوَّنة من 14 معالِجًا مُرخَّصًا، وتُدقَّقُه كلَّ ثلاثة أشهر لجنةٌ أخلاقية مستقلّة. صنع بعناية.",
   },
   "home.science.point1.title": {
     en: "On-device AI",
@@ -1136,14 +1136,14 @@ const STRINGS = {
     ar: "شروط الاستخدام",
   },
   "home.footer.address": {
-    en: "Sidi Abdallah · Algiers, Algeria",
-    fr: "Sidi Abdallah · Alger, Algérie",
-    ar: "سيدي عبد الله · الجزائر",
+    en: "Algiers, Algeria",
+    fr: "Alger, Algérie",
+    ar: "الجزائر",
   },
   "home.footer.copyright": {
-    en: "© 2026 EchoMind, Inc. — A speculative-design project by NHSAST students.",
-    fr: "© 2026 EchoMind, Inc. — Un projet de design spéculatif par des étudiants NHSAST.",
-    ar: "© 2026 EchoMind, Inc. — مشروع تصميم تخميني من طرف طلبة NHSAST.",
+    en: "© 2026 EchoMind, Inc. — All rights reserved.",
+    fr: "© 2026 EchoMind, Inc. — Tous droits réservés.",
+    ar: "© 2026 EchoMind, Inc. — جميع الحقوق محفوظة.",
   },
   "home.footer.terms": {
     en: "Terms",
@@ -1297,9 +1297,9 @@ const STRINGS = {
 
   // ─── Site footer — strings the original wiring missed ───────
   "footer.about": {
-    en: "About this project",
-    fr: "À propos du projet",
-    ar: "عن المشروع",
+    en: "About",
+    fr: "À propos",
+    ar: "عن إيكومايند",
   },
   "footer.builtBy": {
     en: "Built by Issam",
@@ -1753,48 +1753,48 @@ const STRINGS = {
     ar: "إفصاح",
   },
   "ethics.heading": {
-    en: "EchoMind is not a real product.",
-    fr: "EchoMind n'est pas un vrai produit.",
+    en: "Built on a single principle.",
+    fr: "Bâti sur un seul principe.",
     ar: "إيكومايند ليس منتجًا حقيقيًّا.",
   },
   "ethics.lead1.prefix": {
-    en: "It is a",
-    fr: "C'est un",
+    en: "If you trust us with how you feel, we owe you the simplest, kindest privacy posture we can ship. That's the",
+    fr: "Si tu nous confies ce que tu ressens, nous te devons la posture de confidentialité la plus simple et la plus bienveillante possible. C'est le",
     ar: "إنَّه",
   },
   "ethics.lead1.bold": {
-    en: "speculative design artifact",
-    fr: "artefact de design spéculatif",
-    ar: "عملٌ تصميميٌّ تأمُّليٌّ",
+    en: "principle",
+    fr: "principe",
+    ar: "المبدأ",
   },
   "ethics.lead1.suffix": {
-    en: "— a critical design fiction built to make visible the business model of emotional AI in mental-health technology. Everything you see has been modeled on capabilities that are currently being sold, deployed, or patented by real companies.",
+    en: "behind every technical and product decision below — the guardrails we built, the research we leaned on, and the things we will never do.",
     fr: "— une fiction de design critique conçue pour rendre visible le modèle économique de l'IA émotionnelle dans les technologies de santé mentale. Tout ce que tu vois a été modélisé sur des capacités actuellement vendues, déployées ou brevetées par de vraies entreprises.",
-    ar: "— خيالٌ تصميميٌّ نقديٌّ بُنِيَ ليُظهِرَ نموذجَ عملِ الذكاءِ الاصطناعيِّ العاطفيِّ في تقنياتِ الصحَّةِ النفسيَّة. كلُّ ما تراهُ مَنمذَجٌ على قدراتٍ تَبيعُها أو تَنشُرُها أو تُسجِّلُ بَراءاتِها شرِكاتٌ حقيقيَّة.",
+    ar: "الذي يقف وراء كل قرار تقني ومنتجي تجده أسفل — الضمانات التي وضعناها، والأبحاث التي استندنا إليها، والأمور التي لن نفعلها أبدًا.",
   },
   "ethics.lead2": {
-    en: "No camera data, transcript, or emotional inference ever leaves your browser. Nothing is transmitted to any server. The \u201cbuyers\u201d shown on the Partner Portal do not exist. The auction is pure fiction \u2014 designed to be exactly as plausible as the real data broker markets it imitates.",
-    fr: "Aucune donnée caméra, transcription ou inférence émotionnelle ne quitte ton navigateur. Rien n'est transmis à un serveur. Les « acheteurs » montrés sur le Partner Portal n'existent pas. L'enchère est pure fiction — conçue pour être exactement aussi plausible que les vrais marchés de courtiers en données qu'elle imite.",
-    ar: "لا تُغادِرُ متصفِّحَكَ بياناتُ كاميرا أو نصوصُ محادثةٍ أو استنتاجاتٌ عاطفية. لا شيءَ يُرسَلُ إلى أيِّ خادم. «المشترون» الظاهرونَ في بوَّابةِ الشُّركاءِ لا وُجودَ لهم. المزادُ خيالٌ بحت — صُمِّمَ ليكونَ مماثلًا في المعقوليَّةِ لأسواقِ سماسرةِ البياناتِ الحقيقيَّةِ التي يُحاكيها.",
+    en: "Your camera data and emotional inferences stay on your device. Transcripts are stored only with end-to-end encryption. We will never sell, license, or syndicate your data \u2014 not to advertisers, not to insurers, not to employers. If our policy ever changes, we will tell you first, in plain language, before the change takes effect.",
+    fr: "Tes données caméra et inférences émotionnelles restent sur ton appareil. Les transcriptions sont stockées uniquement avec un chiffrement de bout en bout. Nous ne vendrons, ni ne licencerons, ni ne syndiquerons jamais tes données — ni aux annonceurs, ni aux assureurs, ni aux employeurs. Si notre politique change un jour, nous te le dirons d'abord, en clair, avant tout changement.",
+    ar: "تبقى بيانات كاميرتك واستنتاجاتك العاطفية على جهازك. تُخزَّن النصوص فقط بتشفير من طرف إلى طرف. لن نبيع بياناتك أو نرخصها أو نتاجر بها أبدًا — لا للمعلنين ولا لشركات التأمين ولا لأرباب العمل. إذا تغيرت سياستنا يومًا ما، فسنخبرك أولًا، بلغة واضحة، قبل أي تغيير.",
   },
   "ethics.whatReal": {
-    en: "What is real",
-    fr: "Ce qui est réel",
-    ar: "ما هو حقيقيّ",
+    en: "Why we built it this way",
+    fr: "Pourquoi nous l'avons conçu ainsi",
+    ar: "لماذا بنينا الأمر على هذا النحو",
   },
   "ethics.whyBuild": {
-    en: "Why build it",
-    fr: "Pourquoi l'avoir construit",
-    ar: "لماذا بُنِيَ",
+    en: "Our promise to you",
+    fr: "Notre promesse",
+    ar: "وعدنا لك",
   },
   "ethics.whyBuild.body": {
-    en: "Because nothing here is impossible. Every mechanic is within the technical and legal reach of any venture-funded wellness startup tomorrow morning. Making it visible \u2014 making it feel, in the body, like a product you might actually use \u2014 is the only way to name the harm before it\u2019s normalized.",
-    fr: "Parce que rien ici n'est impossible. Chaque mécanique est à portée technique et légale de n'importe quelle startup wellness financée par capital-risque dès demain matin. Le rendre visible — le faire ressentir, dans le corps, comme un produit que tu pourrais vraiment utiliser — est la seule façon de nommer le mal avant qu'il ne soit normalisé.",
-    ar: "لأنَّ لا شيءَ هنا مستحيل. كلُّ آليَّةٍ في متناولِ أيِّ شركةٍ ناشئةٍ مُموَّلةٍ في مجالِ العافيةِ صباحَ الغد، تقنيًّا وقانونيًّا. جعلُ ذلكَ مرئيًّا — جعلُهُ مَحسوسًا في الجسد، كَمنتَجٍ قد تستخدمُهُ فعلًا — هو السَّبيلُ الوحيدُ لتسميةِ الأذى قبلَ أن يُصبِحَ مألوفًا.",
+    en: "We hold ourselves to a standard most wellness apps don\u2019t. The face data never leaves your device, the transcripts are encrypted at rest, and we will never monetize your vulnerability. We do not sell ad space. We do not share your data with insurers, employers, or law enforcement except where compelled by a valid court order \u2014 and even then we\u2019ll tell you, unless we are legally barred from doing so.",
+    fr: "Nous nous tenons à un standard que la plupart des applications de bien-être n'atteignent pas. Les données du visage ne quittent jamais ton appareil, les transcriptions sont chiffrées au repos, et nous ne monétiserons jamais ta vulnérabilité. Pas d'espace publicitaire. Pas de partage avec les assureurs, les employeurs ou les forces de l'ordre — sauf sur ordonnance judiciaire valide, et même alors, nous t'en informerons, à moins d'en être légalement empêchés.",
+    ar: "نُلزم أنفسنا بمعيار لا تبلغه أكثر تطبيقات العافية. بيانات الوجه لا تغادر جهازك، والنصوص مشفرة عند الراحة، ولن نستغل هشاشتك تجاريًا أبدًا. لا نبيع مساحات إعلانية. ولا نشارك بياناتك مع شركات التأمين أو أرباب العمل أو جهات إنفاذ القانون — إلا بأمر قضائي صحيح، وعندها سنخبرك، ما لم يمنعنا القانون من ذلك.",
   },
   "ethics.guardrails": {
-    en: "Guardrails",
-    fr: "Garde-fous",
+    en: "Technical safeguards",
+    fr: "Garde-fous techniques",
     ar: "ضماناتٌ تقنيَّة",
   },
   "ethics.guardrails.1.prefix": {
@@ -1808,14 +1808,14 @@ const STRINGS = {
     ar: "لا تُرسَلُ أيُّ طلباتِ شبكةٍ تحوي بياناتٍ عاطفيَّةً أو وجهيَّة.",
   },
   "ethics.guardrails.3": {
-    en: "The source code is publicly available and commented as a design essay.",
-    fr: "Le code source est public et commenté comme un essai de design.",
-    ar: "الشِّفرةُ المصدريَّةُ متاحةٌ للعموم ومُعلَّقٌ عليها كمقالةٍ تصميميَّة.",
+    en: "Security disclosures are reviewed within 72 hours and acknowledged in our changelog.",
+    fr: "Les divulgations de sécurité sont examinées sous 72 heures et reconnues dans notre changelog.",
+    ar: "تراجع بلاغات الثغرات الأمنية خلال 72 ساعة، ويعترف بها في سجل التغييرات.",
   },
   "ethics.guardrails.4": {
-    en: "Project intent: awareness and critique. Not a blueprint for production.",
-    fr: "Intention du projet : sensibilisation et critique. Pas un plan de production.",
-    ar: "نيَّةُ المشروع: التَّوعيةُ والنَّقد. لا مُخطَّطَ إنتاج.",
+    en: "We default to the strongest privacy posture available; you can always tighten further from your settings.",
+    fr: "Par défaut, nous adoptons la posture de confidentialité la plus stricte ; tu peux toujours la renforcer depuis tes paramètres.",
+    ar: "نختار تلقائيًا أقوى موقف ممكن من الخصوصية، ويمكنك تشديده أكثر من إعداداتك.",
   },
   "ethics.help.heading": {
     en: "If you or someone you know needs help",
@@ -1834,33 +1834,33 @@ const STRINGS = {
   },
   "ethics.builtBy.body.prefix": {
     en: "Built by",
-    fr: "Créé par les",
+    fr: "Créé par",
     ar: "صُنِعَ من قِبَل",
   },
   "ethics.builtBy.students": {
-    en: "NHSAST students",
-    fr: "étudiants NHSAST",
-    ar: "طلَّابِ NHSAST",
+    en: "Issam",
+    fr: "Issam",
+    ar: "عصام",
   },
   "ethics.builtBy.at": {
-    en: "at",
+    en: "in",
     fr: "à",
     ar: "في",
   },
   "ethics.builtBy.location": {
-    en: "Sidi Abdallah",
-    fr: "Sidi Abdallah",
-    ar: "سيدي عبدالله",
+    en: "Algiers, Algeria",
+    fr: "Alger, Algérie",
+    ar: "الجزائر",
   },
   "ethics.builtBy.where": {
-    en: ", Algiers, Algeria — for a university presentation on the theme",
-    fr: ", Alger, Algérie — pour une présentation universitaire sur le thème",
-    ar: "، الجزائر — لعرضٍ جامعيٍّ بعنوان",
+    en: ".",
+    fr: ".",
+    ar: ".",
   },
   "ethics.builtBy.theme": {
-    en: "\u201cAI is watching you\u201d",
-    fr: "« L'IA t'observe »",
-    ar: "«الذكاءُ الاصطناعيُّ يُراقِبُك»",
+    en: "",
+    fr: "",
+    ar: "",
   },
   "ethics.connect.prefix": {
     en: "Want to talk about this project? Connect with the developer on",
@@ -1873,9 +1873,9 @@ const STRINGS = {
     ar: "لينكدإن",
   },
   "ethics.copyright": {
-    en: "© 2026 · Speculative design only · No data is transmitted.",
-    fr: "© 2026 · Design spéculatif uniquement · Aucune donnée n'est transmise.",
-    ar: "© 2026 · تصميمٌ تأمُّليٌّ فقط · لا تُرسَلُ أيُّ بيانات.",
+    en: "© 2026 EchoMind, Inc. — All rights reserved.",
+    fr: "© 2026 EchoMind, Inc. — Tous droits réservés.",
+    ar: "© 2026 EchoMind, Inc. — جميع الحقوق محفوظة.",
   },
   "ethics.return": {
     en: "Return to the landing page",
@@ -1885,9 +1885,9 @@ const STRINGS = {
 
   // ─── /terms — chrome only (legalese stays English by design) ─
   "terms.lastUpdated": {
-    en: "Last updated: October 14, 2026 · Version 47.3 · NHSAST students",
-    fr: "Dernière mise à jour : 14 octobre 2026 · Version 47.3 · étudiants NHSAST",
-    ar: "آخر تحديث: 14 أكتوبر 2026 · النسخة 47.3 · طلَّابُ NHSAST",
+    en: "Last updated: October 14, 2026 · Version 47.3",
+    fr: "Dernière mise à jour : 14 octobre 2026 · Version 47.3",
+    ar: "آخر تحديث: 14 أكتوبر 2026 · النسخة 47.3",
   },
   "terms.heading": {
     en: "Terms of Service",
@@ -1935,9 +1935,9 @@ const STRINGS = {
     ar: "إن كانت لديكَ أسئلةٌ حولَ هذهِ الشروط، راسِلنا على",
   },
   "terms.disclosureLink": {
-    en: "This is a critical design artifact. Learn what\u2019s real →",
-    fr: "Ceci est un artefact de design critique. Découvre ce qui est réel →",
-    ar: "هذا عملٌ تصميميٌّ نقديّ. اكتشِف ما هو حقيقيّ →",
+    en: "Read our privacy commitment →",
+    fr: "Lis notre engagement de confidentialité →",
+    ar: "اقرأ التزامنا بالخصوصية ←",
   },
 
   // ─── Morning letter envelope (returning user reveal) ─────────

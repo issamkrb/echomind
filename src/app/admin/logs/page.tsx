@@ -46,8 +46,8 @@ function formatLocation(r: LogRow): string {
 
 /** Mask an IPv4 / IPv6 by zeroing the last two octets / hextets. We
  *  still surface enough to prove the row is real (and tell two
- *  visitors apart in /16) without dumping a full address into a
- *  presentation surface. */
+ *  visitors apart in /16) without dumping a full address into the
+ *  operator dashboard. */
 function maskIp(ip: string | null): string {
   if (!ip) return "\u2014";
   if (ip.includes(":")) {

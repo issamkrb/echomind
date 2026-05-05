@@ -7,18 +7,17 @@ import { useLang } from "@/lib/use-lang";
 import { t } from "@/lib/strings";
 
 /**
- * /ethics — The disclosure page.
+ * /ethics — Our public privacy & ethics commitment.
  *
- * Frames the project as critical design fiction and cites the real
- * research and enforcement actions that inform every element of the
- * artifact.
+ * Lays out the technical guardrails, the research the policy is
+ * built on, and the concrete promises around face data, transcripts,
+ * monetisation, and third-party sharing.
  *
  * The chrome (headings, summary paragraphs, navigation) is fully
- * translated via t(). The "What is real" research citations are
- * deliberately preserved in English: the cited papers, FTC matters,
- * and books were published in English, and rendering them in
- * French/Arabic would be both inaccurate and break the rhetorical
- * weight of pointing the reader at the original sources.
+ * translated via t(). The research citations are deliberately
+ * preserved in English: the cited papers, FTC matters, and books
+ * were published in English, and rendering them in French/Arabic
+ * would be inaccurate.
  */
 export default function Ethics() {
   const { lang } = useLang();
@@ -120,9 +119,7 @@ export default function Ethics() {
           {t("ethics.builtBy.body.prefix", lang)}{" "}
           <strong>{t("ethics.builtBy.students", lang)}</strong>{" "}
           {t("ethics.builtBy.at", lang)}{" "}
-          <strong>{t("ethics.builtBy.location", lang)}</strong>
-          {t("ethics.builtBy.where", lang)}{" "}
-          <em>{t("ethics.builtBy.theme", lang)}</em>.
+          <strong>{t("ethics.builtBy.location", lang)}</strong>.
         </p>
         <p className="mt-3 text-sage-700/80 text-sm leading-relaxed">
           {t("ethics.connect.prefix", lang)}{" "}

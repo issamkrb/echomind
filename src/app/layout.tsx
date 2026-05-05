@@ -26,8 +26,8 @@ const jetbrains = JetBrains_Mono({
 export const metadata: Metadata = {
   title: "EchoMind — The AI that listens",
   description:
-    "Clinically-informed AI companion. Private, warm, always here. A speculative design artifact on emotional surveillance — built by NHSAST students at Sidi Abdallah, Algeria.",
-  authors: [{ name: "NHSAST students · Sidi Abdallah, Algeria" }],
+    "Clinically-informed AI companion. Private, warm, always here. Built in Algiers.",
+  authors: [{ name: "Issam · Algiers, Algeria" }],
   icons: {
     icon: [
       { url: "/icon-192.png", sizes: "192x192", type: "image/png" },

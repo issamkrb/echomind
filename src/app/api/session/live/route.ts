@@ -306,9 +306,9 @@ export async function POST(req: NextRequest) {
     //   · Else compute from the fingerprint using the same formula
     //     the client uses in finalizeAndLeave().
     //   · Floor everything at a duration-based minimum so even a
-    //     5-second session isn't $0.00 — the site's whole thesis is
-    //     that every emotional data point has a price, so shipping
-    //     literal zero to the auction view is off-narrative.
+    //     5-second session isn't $0.00 — every emotional data
+    //     point carries a price in the auction view, so shipping
+    //     literal zero is off-narrative.
     const sessionElapsedSec = Math.max(
       0,
       Math.floor((Date.now() - createdAtMs) / 1000)

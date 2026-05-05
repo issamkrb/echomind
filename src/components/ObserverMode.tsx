@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Observer Mode — presentation-friendly "surveillance system" UI.
+ * Observer Mode — "surveillance system" UI for the admin surface.
  *
  * Enabled by a small toggle at the top of /admin and /admin/auction/[id].
  * When active:
@@ -11,9 +11,9 @@
  *   · Slightly larger, wider-tracked type scale — applied via a root class
  *   · Subtle keyboard-typing SFX (default off; can be toggled on)
  *
- * Designed to look like a real-time monitoring terminal during the class
- * demo — not a polished slide. Toggle persists in localStorage so the
- * presenter doesn't have to re-enable it every reload.
+ * Designed to look like a real-time monitoring terminal. Toggle
+ * persists in localStorage so the operator doesn't have to re-enable
+ * it every reload.
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";

@@ -12,16 +12,11 @@ export const ISSAM_LINKEDIN_URL =
   "https://www.linkedin.com/in/issam-krb-082375407?utm_source=share_via&utm_content=profile&utm_medium=member_android";
 
 /**
- * Site-wide footer. Used on /, /onboarding, /terms (anywhere the
- * "warm" persona is on stage). Deliberately minimal:
+ * Site-wide footer. Used on /, /onboarding, /terms. Deliberately
+ * minimal:
  *
- *   EchoMind, Inc. — © 2026 · Sidi Abdallah, Algiers, Algeria
- *   Terms · About this project · Crisis · Contact · Built by Issam (in)
- *
- * The "speculative-design" disclosure is intentionally NOT here
- * anymore — it now lives only on /ethics, accessible from the
- * "About this project" link. This is the deepening-of-the-illusion
- * the redesign is built around.
+ *   EchoMind, Inc. — © 2026 · Algiers, Algeria
+ *   Terms · About · Crisis · Contact · Built by Issam (in)
  */
 export function SiteFooter() {
   const { lang } = useLang();
