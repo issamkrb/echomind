@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { isAdminEmail } from "@/lib/admin-auth";
+import { getFlag } from "@/lib/admin/flags";
 
 /**
  * Middleware that:
@@ -104,6 +105,34 @@ export async function middleware(req: NextRequest) {
           { status: 403, headers: { "content-type": "application/json" } }
         )
       );
+    }
+  }
+
+  // ── Maintenance mode kill-switch ───────────────────────────────
+  // When the operator flips `app_flags.maintenance_mode = true` in
+  // /admin/controls, we rewrite every non-admin GET to /maintenance.
+  // The /admin/* and /api/admin/* namespaces are exempt so the
+  // operator who flipped the switch can still flip it back. The
+  // /maintenance route itself is exempt to avoid an infinite
+  // rewrite loop. Static / API / sign-out paths fall through —
+  // they're not user-facing pages and shouldn't trip the rewrite.
+  const isMaintenanceCandidate =
+    !isAdminArea &&
+    !path.startsWith("/api/") &&
+    !path.startsWith("/auth/") &&
+    path !== "/maintenance" &&
+    method === "GET";
+  if (isMaintenanceCandidate) {
+    try {
+      const inMaintenance = await getFlag("maintenance_mode");
+      if (inMaintenance) {
+        const url = req.nextUrl.clone();
+        url.pathname = "/maintenance";
+        url.search = "";
+        return applySecurityHeaders(NextResponse.rewrite(url));
+      }
+    } catch {
+      /* fail-open — don't take the site down because the flag read failed */
     }
   }
 

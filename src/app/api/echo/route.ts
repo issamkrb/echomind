@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { guard } from "@/lib/security/guard";
 import { sanitizeText } from "@/lib/security/sanitize";
+import { FLAG_KEYS, getFlag } from "@/lib/admin/flags";
 
 /**
  * /api/echo — Echo's "brain" proxy.
@@ -71,6 +72,22 @@ export async function POST(req: NextRequest) {
     windowSeconds: 60,
   });
   if (blocked) return blocked;
+
+  // Operator kill-switch. When app_flags.pause_sessions is true, the
+  // /admin/controls toggle is the single touch-point — no redeploy
+  // required to pause new sessions globally. Existing transcripts
+  // and recordings are unaffected; this only blocks new turns of
+  // the conversation.
+  if (await getFlag(FLAG_KEYS.PAUSE_SESSIONS)) {
+    return NextResponse.json(
+      {
+        ok: false,
+        reason: "paused",
+        reply: "echo is resting. back shortly.",
+      },
+      { status: 503 }
+    );
+  }
 
   let body: { messages?: EchoMessage[] };
   try {

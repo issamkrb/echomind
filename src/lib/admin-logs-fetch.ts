@@ -37,11 +37,27 @@ export async function loadAdminLogs(): Promise<{
   const supabase = getServerSupabase();
   if (!supabase) return { rows: [], error: null };
 
-  const { data, error } = await supabase
+  // Hide soft-deleted rows by default. Same posture as
+  // admin-sessions-fetch — the trash page reads them via
+  // /api/admin/trash; the main logs view should not show rows the
+  // operator just moved to the trash. Schema-drift fallback below
+  // re-fetches without the filter if the column doesn't exist yet.
+  let { data, error } = await supabase
     .from("visitor_logs")
     .select(PROJECTION)
+    .is("deleted_at", null)
     .order("created_at", { ascending: false })
     .limit(200);
+
+  if (error && looksLikeMissingColumn(error)) {
+    const fallback = await supabase
+      .from("visitor_logs")
+      .select(PROJECTION)
+      .order("created_at", { ascending: false })
+      .limit(200);
+    data = fallback.data;
+    error = fallback.error;
+  }
 
   // If the visitor_logs table itself doesn't exist yet (migration
   // 0011 hasn't been applied), surface an empty list instead of an

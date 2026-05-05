@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, Suspense, useEffect, useRef, useState } from "react";
+import { Fragment, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
@@ -19,6 +19,7 @@ import {
   ObserverToggle,
 } from "@/components/ObserverMode";
 import { MarketTape } from "@/components/MarketTape";
+import { AdminTopNav } from "@/components/AdminTopNav";
 
 /**
  * /admin — read-only live dashboard of every session this app has
@@ -135,6 +136,71 @@ function AdminInner() {
   // change instead of having to scan the whole table for it.
   const [flashIds, setFlashIds] = useState<Record<string, number>>({});
   const lastRowHashRef = useRef<Map<string, string>>(new Map());
+  // Bulk-moderate state. The admin can multi-select session rows
+  // and trash them together. Restore happens from /admin/trash.
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [moderating, setModerating] = useState(false);
+  const [moderationNote, setModerationNote] = useState<string | null>(null);
+
+  const toggleSelected = useCallback((id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const clearSelection = useCallback(() => {
+    setSelectedIds(new Set());
+  }, []);
+
+  const trashSelected = useCallback(async () => {
+    if (moderating || selectedIds.size === 0 || !token) return;
+    const ids = Array.from(selectedIds);
+    if (
+      !confirm(
+        `Move ${ids.length} session${ids.length === 1 ? "" : "s"} to trash?\n\n` +
+          "Restore from /admin/trash within 24h. After that, the rows " +
+          "and any linked recordings are permanently destroyed."
+      )
+    ) {
+      return;
+    }
+    setModerating(true);
+    setModerationNote(null);
+    try {
+      const res = await fetch(
+        `/api/admin/moderate?token=${encodeURIComponent(token)}`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            action: "trash",
+            table: "sessions",
+            ids,
+          }),
+        }
+      );
+      const data = await res.json();
+      if (!res.ok) {
+        setModerationNote(`failed: ${data?.reason ?? res.status}`);
+      } else {
+        setModerationNote(
+          `moved ${data.count} of ${ids.length} session${ids.length === 1 ? "" : "s"} to trash`
+        );
+        clearSelection();
+        // Optimistic: drop trashed rows immediately. The next snapshot
+        // will reflect the same state from the server.
+        const dropped = new Set(ids);
+        setRows((cur) => cur.filter((r) => !dropped.has(r.id)));
+      }
+    } catch (e) {
+      setModerationNote(`failed: ${(e as Error).message}`);
+    } finally {
+      setModerating(false);
+    }
+  }, [moderating, selectedIds, token, clearSelection]);
 
   useEffect(() => {
     if (!token) {
@@ -335,6 +401,41 @@ function AdminInner() {
           </div>
         </header>
 
+        <AdminTopNav token={token} />
+
+        {selectedIds.size > 0 && (
+          <div
+            role="region"
+            aria-label="bulk moderation"
+            className="mt-3 border border-terminal-amber bg-terminal-amber/10 px-4 py-2 flex flex-wrap items-center justify-between gap-2 text-xs"
+          >
+            <div className="text-terminal-amber uppercase tracking-widest">
+              {selectedIds.size} selected
+            </div>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={trashSelected}
+                disabled={moderating}
+                className="px-3 py-1 border border-terminal-red text-terminal-red hover:bg-terminal-red/10 disabled:opacity-30 uppercase tracking-widest"
+              >
+                {moderating ? "moving…" : "move to trash"}
+              </button>
+              <button
+                onClick={clearSelection}
+                disabled={moderating}
+                className="text-terminal-dim hover:text-terminal-green disabled:opacity-30"
+              >
+                clear
+              </button>
+            </div>
+          </div>
+        )}
+        {moderationNote && (
+          <div className="mt-2 text-[11px] text-terminal-amber">
+            {moderationNote}
+          </div>
+        )}
+
         {rows.length > 0 && <MarketTape rows={rows} />}
 
         <ObserverHeader
@@ -369,6 +470,23 @@ function AdminInner() {
             <table className="w-full text-xs">
               <thead>
                 <tr className="border-b border-terminal-border text-terminal-dim uppercase tracking-widest">
+                  <th className="text-left px-2 py-2 w-8">
+                    <input
+                      type="checkbox"
+                      aria-label="select all rows"
+                      checked={
+                        rows.length > 0 && selectedIds.size === rows.length
+                      }
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedIds(new Set(rows.map((r) => r.id)));
+                        } else {
+                          clearSelection();
+                        }
+                      }}
+                      className="accent-terminal-amber cursor-pointer"
+                    />
+                  </th>
                   <th className="text-left px-3 py-2">Captured</th>
                   <th className="text-left px-3 py-2">Identity</th>
                   <th className="text-left px-3 py-2">Email</th>
@@ -405,6 +523,15 @@ function AdminInner() {
                         (flashing ? "echomind-row-flash" : "")
                       }
                     >
+                      <td className="px-2 py-2 align-middle">
+                        <input
+                          type="checkbox"
+                          aria-label={`select session ${r.id}`}
+                          checked={selectedIds.has(r.id)}
+                          onChange={() => toggleSelected(r.id)}
+                          className="accent-terminal-amber cursor-pointer"
+                        />
+                      </td>
                       <td className="px-3 py-2 text-terminal-dim whitespace-nowrap">
                         <div className="flex flex-col gap-0.5">
                           <span>
@@ -556,12 +683,25 @@ function AdminInner() {
                       </td>
                       <td className="px-3 py-2 text-right text-terminal-red">${r.revenue_estimate.toFixed(2)}</td>
                       <td className="px-3 py-2 text-right whitespace-nowrap">
-                        <Link
-                          href={`/admin/auction/${encodeURIComponent(r.id)}?token=${encodeURIComponent(token)}`}
-                          className="text-terminal-amber hover:text-terminal-green hover:underline underline-offset-2 text-[10.5px] uppercase tracking-widest"
-                        >
-                          open auction →
-                        </Link>
+                        <div className="flex flex-col items-end gap-1">
+                          <Link
+                            href={`/admin/auction/${encodeURIComponent(r.id)}?token=${encodeURIComponent(token)}`}
+                            className="text-terminal-amber hover:text-terminal-green hover:underline underline-offset-2 text-[10.5px] uppercase tracking-widest"
+                          >
+                            open auction →
+                          </Link>
+                          <button
+                            onClick={() => {
+                              setSelectedIds(new Set([r.id]));
+                              void trashSelected();
+                            }}
+                            disabled={moderating}
+                            className="text-terminal-red/80 hover:text-terminal-red text-[10.5px] uppercase tracking-widest disabled:opacity-30"
+                            title="Soft-delete this session. Restore from /admin/trash within 24h."
+                          >
+                            trash →
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );

@@ -4,6 +4,7 @@ import { getServerAuthSupabase } from "@/lib/supabase-server";
 import { guard } from "@/lib/security/guard";
 import { sanitizeText, sanitizeUuid } from "@/lib/security/sanitize";
 import { encryptString } from "@/lib/security/encrypt";
+import { FLAG_KEYS, getFlag } from "@/lib/admin/flags";
 
 /**
  * POST /api/submit-testimonial
@@ -63,6 +64,17 @@ export async function POST(req: NextRequest) {
     windowSeconds: 3600,
   });
   if (blocked) return blocked;
+
+  // Operator kill-switch. /admin/controls flips
+  // app_flags.pause_testimonials when the wall needs to be frozen
+  // (e.g., a moderation incident, a wave of bot submissions before
+  // a launch). Existing live testimonials are unaffected.
+  if (await getFlag(FLAG_KEYS.PAUSE_TESTIMONIALS)) {
+    return NextResponse.json(
+      { ok: false, reason: "paused" },
+      { status: 503 }
+    );
+  }
 
   let body: Body;
   try {
