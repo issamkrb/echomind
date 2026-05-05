@@ -7,9 +7,13 @@ import { recordAdminAction } from "@/lib/admin/audit";
  * Hard-delete soft-deleted rows whose `deleted_at` is older than
  * 24 hours. Two callers:
  *
- *   1. Vercel Cron — wired in `vercel.json` to fire hourly. The
- *      cron request carries `Authorization: Bearer <CRON_SECRET>`
- *      (per Vercel's contract). We accept that as auth.
+ *   1. Vercel Cron — wired in `vercel.json` to fire once a day.
+ *      (Hobby tier limits crons to daily granularity; on Pro the
+ *      schedule can be tightened to hourly without code changes.
+ *      Worst-case a trashed row lives up to ~48h before purge,
+ *      vs ~25h on hourly. Still well-bounded.) The cron request
+ *      carries `Authorization: Bearer <CRON_SECRET>` (per Vercel's
+ *      contract). We accept that as auth.
  *
  *   2. Manual operator click on /admin/controls or /admin/trash.
  *      This goes through the regular admin gate (token + email).
