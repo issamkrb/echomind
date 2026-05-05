@@ -1,8 +1,9 @@
 "use client";
 
-import { Suspense, useEffect, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { AdminTopNav } from "@/components/AdminTopNav";
 
 /**
  * /admin/logs \u2014 read-only live feed of every visit recorded in
@@ -72,6 +73,66 @@ function LogsInner() {
   >("idle");
   const [flashIds, setFlashIds] = useState<Record<string, number>>({});
   const lastIdSetRef = useRef<Set<string>>(new Set());
+  // Bulk-moderate: multi-select log rows and trash them together.
+  // Restore happens from /admin/trash within 24h.
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [moderating, setModerating] = useState(false);
+  const [moderationNote, setModerationNote] = useState<string | null>(null);
+
+  const toggleSelected = useCallback((id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const clearSelection = useCallback(() => setSelectedIds(new Set()), []);
+
+  const trashSelected = useCallback(async () => {
+    if (moderating || selectedIds.size === 0 || !token) return;
+    const ids = Array.from(selectedIds);
+    if (
+      !confirm(
+        `Move ${ids.length} log row${ids.length === 1 ? "" : "s"} to trash?\n\n` +
+          "Restore from /admin/trash within 24h."
+      )
+    ) {
+      return;
+    }
+    setModerating(true);
+    setModerationNote(null);
+    try {
+      const res = await fetch(
+        `/api/admin/moderate?token=${encodeURIComponent(token)}`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            action: "trash",
+            table: "visitor_logs",
+            ids,
+          }),
+        }
+      );
+      const data = await res.json();
+      if (!res.ok) {
+        setModerationNote(`failed: ${data?.reason ?? res.status}`);
+      } else {
+        setModerationNote(
+          `moved ${data.count} of ${ids.length} log${ids.length === 1 ? "" : "s"} to trash`
+        );
+        clearSelection();
+        const dropped = new Set(ids);
+        setRows((cur) => cur.filter((r) => !dropped.has(r.id)));
+      }
+    } catch (e) {
+      setModerationNote(`failed: ${(e as Error).message}`);
+    } finally {
+      setModerating(false);
+    }
+  }, [moderating, selectedIds, token, clearSelection]);
 
   useEffect(() => {
     if (!token) {
@@ -242,6 +303,41 @@ function LogsInner() {
           </div>
         </header>
 
+        <AdminTopNav token={token} />
+
+        {selectedIds.size > 0 && (
+          <div
+            role="region"
+            aria-label="bulk moderation"
+            className="mt-3 border border-terminal-amber bg-terminal-amber/10 px-4 py-2 flex flex-wrap items-center justify-between gap-2 text-xs"
+          >
+            <div className="text-terminal-amber uppercase tracking-widest">
+              {selectedIds.size} selected
+            </div>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={trashSelected}
+                disabled={moderating}
+                className="px-3 py-1 border border-terminal-red text-terminal-red hover:bg-terminal-red/10 disabled:opacity-30 uppercase tracking-widest"
+              >
+                {moderating ? "moving…" : "move to trash"}
+              </button>
+              <button
+                onClick={clearSelection}
+                disabled={moderating}
+                className="text-terminal-dim hover:text-terminal-green disabled:opacity-30"
+              >
+                clear
+              </button>
+            </div>
+          </div>
+        )}
+        {moderationNote && (
+          <div className="mt-2 text-[11px] text-terminal-amber">
+            {moderationNote}
+          </div>
+        )}
+
         {!loaded && (
           <div className="mt-6 text-terminal-dim text-sm">Loading…</div>
         )}
@@ -269,6 +365,23 @@ function LogsInner() {
             <table className="w-full text-xs">
               <thead>
                 <tr className="border-b border-terminal-border text-terminal-dim uppercase tracking-widest">
+                  <th className="text-left px-2 py-2 w-8">
+                    <input
+                      type="checkbox"
+                      aria-label="select all rows"
+                      checked={
+                        rows.length > 0 && selectedIds.size === rows.length
+                      }
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedIds(new Set(rows.map((r) => r.id)));
+                        } else {
+                          clearSelection();
+                        }
+                      }}
+                      className="accent-terminal-amber cursor-pointer"
+                    />
+                  </th>
                   <th className="text-left px-3 py-2">When</th>
                   <th className="text-left px-3 py-2">Device</th>
                   <th className="text-left px-3 py-2">Location</th>
@@ -289,6 +402,15 @@ function LogsInner() {
                         (flashing ? "echomind-row-flash" : "")
                       }
                     >
+                      <td className="px-2 py-2 align-middle">
+                        <input
+                          type="checkbox"
+                          aria-label={`select log ${r.id}`}
+                          checked={selectedIds.has(r.id)}
+                          onChange={() => toggleSelected(r.id)}
+                          className="accent-terminal-amber cursor-pointer"
+                        />
+                      </td>
                       <td className="px-3 py-2 text-terminal-dim whitespace-nowrap">
                         {new Date(r.created_at).toLocaleString()}
                       </td>

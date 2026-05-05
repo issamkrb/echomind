@@ -53,14 +53,33 @@ export async function GET(req: NextRequest) {
   }
 
   const nowIso = new Date().toISOString();
-  const { data, error, count } = await db
+  // .is("deleted_at", null) hides anything an admin moved to the
+  // trash. If migration 0014 hasn't run yet the column doesn't
+  // exist; the catch below treats that as "no rows hidden" and
+  // falls back to the unfiltered query so the wall keeps working.
+  let { data, error, count } = await db
     .from("testimonials")
     .select("id, improved_comment, session_count, goes_live_at", {
       count: "exact",
     })
     .lte("goes_live_at", nowIso)
+    .is("deleted_at", null)
     .order("goes_live_at", { ascending: false })
     .limit(PAGE_SIZE);
+
+  if (error && /column .* does not exist/i.test(error.message ?? "")) {
+    const fb = await db
+      .from("testimonials")
+      .select("id, improved_comment, session_count, goes_live_at", {
+        count: "exact",
+      })
+      .lte("goes_live_at", nowIso)
+      .order("goes_live_at", { ascending: false })
+      .limit(PAGE_SIZE);
+    data = fb.data;
+    error = fb.error;
+    count = fb.count;
+  }
 
   if (error) {
     console.warn("[testimonials] read failed:", error);

@@ -33,9 +33,16 @@ export async function loadAdminSessions(): Promise<{
   // without the pagehide beacon landing.
   await finishStaleLiveSessions();
 
+  // Hide soft-deleted rows by default. The /admin/trash page reads
+  // them via /api/admin/trash; the main dashboard and SSE stream
+  // should pretend they don't exist until they're either restored
+  // or hard-purged after 24h. The .is("deleted_at", null) is wrapped
+  // in the schema-drift fallback below so a database that hasn't
+  // had migration 0014 applied yet still returns rows.
   let { data, error } = await supabase
     .from("sessions")
     .select(PROJECTION)
+    .is("deleted_at", null)
     .order("created_at", { ascending: false })
     .limit(100);
 
