@@ -8,7 +8,7 @@ import { looksLikeMissingColumn } from "@/lib/schema-drift";
  *
  * Cap at 200 rows. The dashboard renders newest-first, and 200
  * gives the operator enough scrollback to spot patterns without
- * shipping a paginated table on a presentation surface.
+ * paginating the table.
  */
 
 export type VisitorLogRow = {

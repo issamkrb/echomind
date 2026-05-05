@@ -3,13 +3,11 @@
 /**
  * Thin wrapper over the Web Speech API's SpeechRecognition.
  *
- * IMPORTANT THESIS NOTE: In Chrome and Edge, SpeechRecognition is
+ * IMPORTANT NOTE: In Chrome and Edge, SpeechRecognition is
  * implemented by streaming raw microphone audio to Google's cloud
  * speech backend. The feature is advertised as a browser primitive;
- * in practice it is a network API in disguise. Our UI displays an
- * "on-device" badge while using it — which is exactly how real
- * commercial products frame the same behavior. This is not a bug;
- * it is part of the critique.
+ * in practice it is a network API in disguise. Treat its output
+ * accordingly when wiring it into any privacy-sensitive surface.
  *
  * Reference: W3C Web Speech API Editor's Draft, Section 6, which
  * explicitly permits server-side recognition and notes the UA MAY

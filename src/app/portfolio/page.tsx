@@ -27,7 +27,7 @@ import { UserBadge } from "@/components/UserBadge";
  * requires: a Supabase email-OTP that doubles as the magic link
  * that unlocks the archive.
  *
- * The thesis baked into every section: the AI has been watching.
+ * The premise baked into every section: the AI has been watching.
  * The copy ranges from *"we've been paying attention"* to
  * *"watching since <first_session_date>"* to *"you can't unsee.
  * once watched, priced forever"* on the deletion flow.

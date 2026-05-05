@@ -433,8 +433,8 @@ export function computePortfolio(params: {
 
   // Asking price — stacks on top of summed revenue estimates so the
   // operator page reads as a premium over the per-session figures
-  // the admin dashboard already shows. Matches the thesis that
-  // "bundled" is worth more than "per-row".
+  // the admin dashboard already shows. Bundled rows price higher
+  // than per-row.
   const summedRevenue = rows.reduce(
     (s, r) => s + (r.revenue_estimate ?? 0),
     0

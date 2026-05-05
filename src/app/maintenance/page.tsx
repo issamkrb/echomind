@@ -1,5 +1,3 @@
-import Link from "next/link";
-
 /**
  * /maintenance — soft landing for the `maintenance_mode` kill-switch.
  *
@@ -10,7 +8,7 @@ import Link from "next/link";
  *
  * The voice intentionally stays inside Echo's idiom — calm, almost
  * tender — rather than the usual "We'll be right back" SaaS
- * boilerplate. Operator-side maintenance, consumer-side warmth.
+ * boilerplate.
  */
 
 export const metadata = {
@@ -29,17 +27,12 @@ export default function MaintenancePage() {
         </h1>
         <p className="mt-4 text-zinc-400 text-sm leading-relaxed">
           A short pause while we tend to the system. Your past
-          sessions and letters are safe — they just aren't reachable
-          from this address right now.
+          sessions and letters are safe — they just aren&apos;t
+          reachable from this address right now.
         </p>
         <p className="mt-8 text-zinc-500 text-xs">
           come back in a little while.
         </p>
-        <div className="mt-10 text-[10px] uppercase tracking-[0.25em] text-zinc-600">
-          <Link href="/ethics" className="hover:text-zinc-400">
-            about this project →
-          </Link>
-        </div>
       </div>
     </main>
   );

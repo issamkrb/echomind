@@ -213,11 +213,6 @@ function PremiumAdjustmentLetterInner() {
 
       {/* meta footer outside the letter card */}
       <div className="max-w-[760px] mx-auto mt-6 text-center text-[12px] text-neutral-700">
-        <p className="italic">
-          This is a piece of speculative design. BlueShield Health Mutual is
-          fictional. The mechanism described here — emotion-derived
-          underwriting using third-party behavioral data — is not.
-        </p>
         <div className="mt-3 flex justify-center gap-3 text-[12px] print:hidden">
           <Link
             href={`/partner-portal${token ? `?token=${encodeURIComponent(token)}` : ""}`}

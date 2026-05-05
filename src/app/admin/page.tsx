@@ -22,10 +22,8 @@ import { MarketTape } from "@/components/MarketTape";
 import { AdminTopNav } from "@/components/AdminTopNav";
 
 /**
- * /admin — read-only live dashboard of every session this app has
- * ever captured. Intended to be shown live during the presentation
- * AFTER the audience has tried the demo, to prove that the data was
- * really harvested into Frankfurt.
+ * /admin — operator dashboard. Read/moderation surface over every
+ * session captured by the app.
  *
  * Access is gated by a shared ?token= query param checked server-side.
  * If the token is missing or wrong, the API returns 401/403 and this

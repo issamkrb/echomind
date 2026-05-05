@@ -2,7 +2,7 @@
  * Tiny zero-dep user-agent classifier. Returns a short human label
  * like "Chrome on macOS" / "Safari on iOS" / "Firefox on Linux" so
  * the visitor-logs table doesn't have to ship a full UA-parser
- * library to the server. Designed for a presentation dashboard,
+ * library to the server. Designed for the operator dashboard,
  * not for analytics-grade fingerprinting.
  *
  * The detection order matters: Edge spoofs Chrome/Safari, Brave
